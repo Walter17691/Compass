@@ -22,11 +22,14 @@ const kpiValueText = (label) => kpiWrapper(label).children[1].textContent;
 const noop = () => {};
 const baseProps = {
   cases: [
-    { id: 'c1', employeeName: 'Ada Lovelace', caseType: 'Grievance', dateReceived: '2026-01-01' },
-    { id: 'c2', employeeName: 'Ada Lovelace', caseType: 'Misconduct', dateReceived: '2026-02-01' },
+    { id: 'c1', employeeId: 'uuid-ada', employeeName: 'Ada Lovelace', caseType: 'Grievance', dateReceived: '2026-01-01' },
+    { id: 'c2', employeeId: 'uuid-ada', employeeName: 'Ada Lovelace', caseType: 'Misconduct', dateReceived: '2026-02-01' },
   ],
   getCaseStage: () => 'open',
-  employeeRecords: [],
+  // Phase E0.7 — the panel resolves the repeat employee's LABEL from the roster
+  // by uuid, so the roster must contain them. Previously the name on the case was
+  // both the identity and the label.
+  employeeRecords: [{ id: 'uuid-ada', name: 'Ada Lovelace' }],
   setReportNarrative: noop,
   reportNarrative: '',
   setActiveCaseId: noop,

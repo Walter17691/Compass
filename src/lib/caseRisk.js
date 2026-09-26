@@ -101,7 +101,15 @@ export function computeCaseRisk(cs, { allegations = [], caseSignals = [], cases 
   // function rather than reading the field directly. Reading c.stage
   // here meant an already-closed grievance could permanently, un-
   // dismissably flag this risk against an unrelated current case.
-  const grievanceElsewhere = cases.find(c => c.id !== cs.id && c.employeeName === cs.employeeName && getProcessType(c.caseType).id === "grievance" && getCaseStage(c) !== "closed");
+  //
+  // Phase E0.7 — this matched on employee_name, so a grievance belonging to a
+  // same-named COLLEAGUE raised a risk flag on this case and linked straight to
+  // their file. Now keyed on the canonical employee, and skipped entirely when
+  // this case has none: a missing signal is recoverable, a confidently wrong one
+  // that points at another person's grievance is not.
+  const grievanceElsewhere = cs.employeeId
+    ? cases.find(c => c.id !== cs.id && c.employeeId === cs.employeeId && getProcessType(c.caseType).id === "grievance" && getCaseStage(c) !== "closed")
+    : null;
   if (grievanceElsewhere) {
     items.push(riskItem("outstanding_grievance", "This employee has another open grievance", null, [{ kind: "case", id: grievanceElsewhere.id, label: grievanceElsewhere.employeeName }]));
   }
@@ -113,8 +121,16 @@ export function computeCaseRisk(cs, { allegations = [], caseSignals = [], cases 
   // health context is typically relevant — flagging this on, say, a
   // straightforward conduct case would be noise, not signal.
   if (HEALTH_RELEVANT_PROCESS_TYPES.includes(getProcessType(cs.caseType).id)) {
-    const employeeNotes = wellbeingNotes.filter(n => n.employeeName === cs.employeeName);
-    if (!employeeNotes.length) {
+    // Phase E0.7 — canonical only. Wellbeing is the most sensitive collection in
+    // the product; matching it by name let one person's health context suppress
+    // or raise a risk flag on a colleague's case.
+    const employeeNotes = cs.employeeId
+      ? wellbeingNotes.filter(n => n.employeeId === cs.employeeId)
+      : [];
+    // Only assert "nothing recorded" when we could actually have looked. For a
+    // legacy case with no canonical employee the honest answer is silence, not
+    // "no wellbeing context exists".
+    if (cs.employeeId && !employeeNotes.length) {
       items.push(riskItem("missing_medical_info", "No wellbeing or medical context recorded for this employee", null, []));
     }
     const openAdjustmentNote = employeeNotes.find(n => n.type === "adjustment" && n.followUpDate && !n.followUpDone);

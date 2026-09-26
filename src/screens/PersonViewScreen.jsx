@@ -1,6 +1,7 @@
 import { SCREENS, MEETING_TYPES } from '../constants';
 import { authedFetch } from '../lib/authedFetch';
 import { signatureStatusLabel } from '../lib/eSignature';
+import { getEmployeeContext, hasUnattributedRecords } from '../lib/employeeContext';
 
 // Integrations & Workflow Automation (Phase 5, IP27, §21) — same widened
 // signing_requests status vocabulary as MeetingsTab.jsx's own badge.
@@ -13,9 +14,38 @@ const SIGN_STATUS_STYLE = {
   expired: { color: "#6B6375", bg: "#F5F1EA" },
 };
 
-export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSetup, getEmployeeRecord, editingEmployeeRecord, setEditingEmployeeRecord, editJobTitle, setEditJobTitle, editStartDate, setEditStartDate, editLocation, setEditLocation, locations, upsertEmployeeRecord, deleteEmployeeRecord, confirmDialog, showToast, setActiveCaseId, setActiveCaseStage, getCaseStatus, fmtDate, setReviewOutput, setMeetingType, setCaseInfo, employmentProfileLoading, setEmploymentProfileLoading, employmentProfileOutput, setEmploymentProfileOutput, getCaseStage, setLetterOutput, org, user, promptDialog }) {
-  const empName = activePerson;
-  const empCases = cases.filter(c=>c.employeeName===empName);
+// ─────────────────────────────────────────────────────────────────────────
+// Phase E0.7 — the person is a UUID.
+//
+// This screen used to BE a name: `const empName = activePerson` followed by
+// `cases.filter(c => c.employeeName === empName)`. Everything on it — cases,
+// meetings, evidence, the employee profile, the portal invite, and an AI
+// "Pattern Analysis / Risk Assessment" prompt — was assembled from that one
+// string comparison. Two colleagues sharing a display name shared all of it.
+//
+// It now composes a canonical context from employee_id. Legacy name-only records
+// are NOT shown here: they are real, and they remain reachable through Cases and
+// the reconciliation workbench, but Compass cannot say they are this person's, so
+// presenting them on their file would be an assertion it has not earned.
+//
+// This is identity composition, not authorisation: every collection arrives
+// already filtered by RLS on its way to this client.
+// ─────────────────────────────────────────────────────────────────────────
+export function PersonViewScreen({ employeeId, employeeRecords = [], wellbeingNotes = [], concernReferrals = [], dsarRequests = [], isHR = false, cases, setScreen, setMeetingSetup,
+  // getEmployeeRecord is deliberately NOT a prop any more. It is the legacy
+  // name lookup (findEmployeeByName), and it returns whichever record happens to
+  // be first when two employees share a name. This screen resolves its employee
+  // by UUID, so removing the prop makes the name lookup unavailable here rather
+  // than merely unused.
+  editingEmployeeRecord, setEditingEmployeeRecord, editJobTitle, setEditJobTitle, editStartDate, setEditStartDate, editLocation, setEditLocation, locations, upsertEmployeeRecord, deleteEmployeeRecord, confirmDialog, showToast, setActiveCaseId, setActiveCaseStage, getCaseStatus, fmtDate, setReviewOutput, setMeetingType, setCaseInfo, employmentProfileLoading, setEmploymentProfileLoading, employmentProfileOutput, setEmploymentProfileOutput, getCaseStage, setLetterOutput, org, user, promptDialog }) {
+  const ctx = getEmployeeContext(employeeId, { employeeRecords, cases, wellbeingNotes, concernReferrals, dsarRequests });
+  const employee = ctx.employee;
+  // The display label, resolved from the roster. Never used to select records.
+  const empName = employee?.name || "";
+  const empCases = ctx.cases;
+  // Meetings are reached THROUGH the case, which is authoritative parentage
+  // (case.employee_id). Meeting identity itself is E2; nothing here matches a
+  // meeting to a person by name.
   const allMeetings = empCases.flatMap(cs=>(cs.meetings||[]).map(m=>({...m,caseId:cs.id,caseType:cs.caseType}))).sort((a,b)=>new Date(b.date)-new Date(a.date));
   const activeCases = empCases.filter(cs=>cs.stage!=="closed");
   const closedCases = empCases.filter(cs=>cs.stage==="closed");
@@ -63,7 +93,7 @@ export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSet
             style={{background:"none",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 16px",fontSize:13,color:"#6B6375",fontWeight:500,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
             Invite to portal
           </button>
-          <button onClick={()=>{setMeetingSetup(p=>({...p,employee:empName,employeeJobTitle:getEmployeeRecord(empName)?.jobTitle||""}));setScreen(SCREENS.HOME+"_meeting");}}
+          <button onClick={()=>{setMeetingSetup(p=>({...p,employee:empName,employeeJobTitle:employee?.jobTitle||""}));setScreen(SCREENS.HOME+"_meeting");}}
             style={{background:"#7C5CFC",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
             + New meeting
           </button>
@@ -74,7 +104,9 @@ export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSet
 
         {/* Employee details */}
         {(()=>{
-          const rec = getEmployeeRecord(empName)||{};
+          // By UUID. getEmployeeRecord(name) is the legacy name lookup and
+          // returns whichever record happens to be first when a name repeats.
+          const rec = employee || {};
           const editing = editingEmployeeRecord;
           const setEditing = setEditingEmployeeRecord;
           const tenure = rec.startDate?(()=>{
@@ -123,6 +155,60 @@ export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSet
             </div>
           );
         })()}
+
+        {/* ── Phase E0.7 — the three record types this screen never showed ──────
+            Wellbeing, referrals and DSAR requests were simply absent, so a
+            person's file was incomplete as well as name-keyed. They appear only
+            where a canonical employee_id links them, and only for HR: these
+            collections arrive already filtered by their own RLS (all three are
+            HR-only at the database), and this gate keeps the UI honest about it
+            rather than relying on the array happening to be empty. */}
+        {isHR&&ctx.wellbeingNotes.length>0&&(
+          <div style={{marginBottom:24}}>
+            <div style={{fontSize:12,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>Wellbeing notes ({ctx.wellbeingNotes.length})</div>
+            {ctx.wellbeingNotes.map(n=>(
+              <div key={n.id} style={{background:"#fff",border:"1px solid #EDE5D8",borderRadius:8,padding:"10px 14px",marginBottom:6}}>
+                <div style={{fontSize:13,color:"#1A1535"}}>{n.type||"Note"} · {n.date||"No date"}</div>
+                {/* Content is deliberately not rendered here — this is a link to
+                    the Wellbeing screen, not a second disclosure surface. */}
+                <div style={{fontSize:11,color:"#6B6375",marginTop:2}}>Recorded on this note as “{n.employeeName||"(no name)"}”</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {isHR&&ctx.concernReferrals.length>0&&(
+          <div style={{marginBottom:24}}>
+            <div style={{fontSize:12,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>Concern referrals ({ctx.concernReferrals.length})</div>
+            {ctx.concernReferrals.map(r=>(
+              <div key={r.id} style={{background:"#fff",border:"1px solid #EDE5D8",borderRadius:8,padding:"10px 14px",marginBottom:6}}>
+                <div style={{fontSize:13,color:"#1A1535"}}>{r.concernType||"Concern"} · {r.status||"new"}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {isHR&&ctx.dsarRequests.length>0&&(
+          <div style={{marginBottom:24}}>
+            <div style={{fontSize:12,fontWeight:600,color:"#9B9098",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:12}}>Subject access requests ({ctx.dsarRequests.length})</div>
+            {ctx.dsarRequests.map(d=>(
+              <div key={d.id} style={{background:"#fff",border:"1px solid #EDE5D8",borderRadius:8,padding:"10px 14px",marginBottom:6}}>
+                <div style={{fontSize:13,color:"#1A1535"}}>Received {d.receivedDate||"—"} · due {d.dueDate||"—"} · {d.status||"open"}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* An employee with nothing canonically attributed is VALID, not broken.
+            Production is almost entirely unreconciled synthetic history, so this
+            is the common state — and E1 must be able to say so plainly. */}
+        {ctx.isEmpty&&(
+          <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"18px 20px",marginBottom:16}}>
+            <div style={{fontSize:13,color:"#1A1535",marginBottom:4}}>No recorded activity yet.</div>
+            <div style={{fontSize:12,color:"#6B6375",lineHeight:1.6}}>
+              Nothing has been linked to this employee record.
+              {isHR&&hasUnattributedRecords(ctx)&&" Some older records in this organisation have not yet been linked to a canonical employee — they are not shown here because Compass cannot confirm whose they are."}
+            </div>
+          </div>
+        )}
 
         {/* Active cases */}
         {activeCases.length>0&&(
@@ -203,7 +289,12 @@ export function PersonViewScreen({ activePerson, cases, setScreen, setMeetingSet
                       return "Case: "+(cs.caseType||"HR Matter")+" ("+stage+") | Opened: "+(cs.dateReceived||cs.createdAt||"Unknown")+" | Outcome: "+outcome+" | Meetings: "+mtgs+(cs.investigationReport?" | Investigation report on file":"");
                     }).join(" ;; ");
                     const evidence = empCases.flatMap(cs=>(cs.evidence||[]).map(e=>e.name||e.type)).filter(Boolean).join(", ")||"None";
-                    const empRec = getEmployeeRecord(empName)||{};
+                    // Phase E0.7 — by UUID. Note the bigger fix is above: this
+                    // prompt's Pattern Analysis and Risk Assessment are built from
+                    // empCases, which was a NAME match and is now canonical. Two
+                    // same-named colleagues could previously be profiled as one
+                    // person, with a merged disciplinary pattern and risk rating.
+                    const empRec = employee || {};
                     const tenure = empRec.startDate?(()=>{const d=new Date(empRec.startDate);const now=new Date();const months=(now.getFullYear()-d.getFullYear())*12+(now.getMonth()-d.getMonth());return months>=12?Math.floor(months/12)+" years":months+" months";})():"Unknown";
                     const prompt = "You are a senior UK HR professional. Generate a comprehensive employment profile report for: "+empName+". Job title: "+(empRec.jobTitle||"Not recorded")+". Start date: "+(empRec.startDate||"Not recorded")+". Length of service: "+tenure+". Location: "+(empRec.location||"Not recorded")+". Total cases: "+empCases.length+". Active: "+activeCases.length+". Total meetings: "+allMeetings.length+". Evidence on file: "+evidence+". Case history: "+caseHistory+". Write a professional employment profile with sections: 1) Employment Summary (include length of service, job title, location) 2) Case History Overview 3) Pattern Analysis 4) Current Position and Outstanding Matters 5) Risk Assessment 6) Recommended Next Steps. Be factual, objective, ACAS-compliant. Reference length of service where it affects statutory rights. Use professional HR language.";
                     const response = await authedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:prompt}]})});

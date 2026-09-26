@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { computeCaseRisk, categoryLabel } from '../lib/caseRisk';
 
-const baseCase = { id: 'case1', employeeName: 'Jordan Test', caseType: 'misconduct', evidence: [], stage: 'investigation' };
+// Phase E0.7 — "the same employee" is now a shared employee_id, not a shared
+// name. These fixtures carry both: the uuid is identity, the name is the display
+// snapshot, exactly as production rows do.
+const EMP = 'uuid-jordan';
+const OTHER_EMP = 'uuid-someone-else';
+const baseCase = { id: 'case1', employeeId: EMP, employeeName: 'Jordan Test', caseType: 'misconduct', evidence: [], stage: 'investigation' };
 
 describe('computeCaseRisk — procedural risk and conflict of interest', () => {
   it('lists an open procedural guardrail signal under procedural risk', () => {
@@ -121,13 +126,13 @@ describe('computeCaseRisk — delay', () => {
 
 describe('computeCaseRisk — outstanding grievance', () => {
   it('flags when the same employee has another open grievance case', () => {
-    const cases = [baseCase, { id: 'case2', employeeName: 'Jordan Test', caseType: 'grievance', stage: 'investigation' }];
+    const cases = [baseCase, { id: 'case2', employeeId: EMP, employeeName: 'Jordan Test', caseType: 'grievance', stage: 'investigation' }];
     const items = computeCaseRisk(baseCase, { cases });
     expect(items).toContainEqual(expect.objectContaining({ category: 'outstanding_grievance' }));
   });
 
   it('does not flag a closed grievance case', () => {
-    const cases = [baseCase, { id: 'case2', employeeName: 'Jordan Test', caseType: 'grievance', stage: 'closed' }];
+    const cases = [baseCase, { id: 'case2', employeeId: EMP, employeeName: 'Jordan Test', caseType: 'grievance', stage: 'closed' }];
     expect(computeCaseRisk(baseCase, { cases }).find(i => i.category === 'outstanding_grievance')).toBeUndefined();
   });
 
@@ -146,7 +151,7 @@ describe('computeCaseRisk — outstanding grievance', () => {
   // real "Close case" action in the app.
   it('does not flag a grievance genuinely closed (explicit stage), even with no separate cs.status field', () => {
     const resolvedGrievance = {
-      id: 'case2', employeeName: 'Jordan Test', caseType: 'grievance', stage: 'closed',
+      id: 'case2', employeeId: EMP, employeeName: 'Jordan Test', caseType: 'grievance', stage: 'closed',
       meetings: [{ type: 'Grievance Hearing', letterOutput: 'Outcome: not upheld', signStatus: 'signed' }],
     };
     const cases = [baseCase, resolvedGrievance];
@@ -155,7 +160,7 @@ describe('computeCaseRisk — outstanding grievance', () => {
 
   it('DOES flag a grievance whose outcome letter is signed but never explicitly closed — signing is not closing', () => {
     const signedButNotClosed = {
-      id: 'case2', employeeName: 'Jordan Test', caseType: 'grievance',
+      id: 'case2', employeeId: EMP, employeeName: 'Jordan Test', caseType: 'grievance',
       meetings: [{ type: 'Grievance Hearing', letterOutput: 'Outcome: not upheld', signStatus: 'signed' }],
     };
     const cases = [baseCase, signedButNotClosed];
@@ -163,8 +168,30 @@ describe('computeCaseRisk — outstanding grievance', () => {
   });
 
   it('does not flag a different employee’s grievance', () => {
-    const cases = [baseCase, { id: 'case2', employeeName: 'Someone Else', caseType: 'grievance', stage: 'investigation' }];
+    const cases = [baseCase, { id: 'case2', employeeId: OTHER_EMP, employeeName: 'Someone Else', caseType: 'grievance', stage: 'investigation' }];
     expect(computeCaseRisk(baseCase, { cases }).find(i => i.category === 'outstanding_grievance')).toBeUndefined();
+  });
+
+  it('does NOT flag a same-NAMED colleague\'s grievance (Phase E0.7)', () => {
+    // The defect this migration closes. Two different people, one display name:
+    // the grievance belongs to the colleague, and flagging it here would both
+    // invent a risk and link straight into another person's case file.
+    const cases = [
+      baseCase,
+      { id: 'case2', employeeId: OTHER_EMP, employeeName: 'Jordan Test', caseType: 'grievance', stage: 'investigation' },
+    ];
+    const items = computeCaseRisk(baseCase, { cases, wellbeingNotes: [{ employeeId: EMP, employeeName: 'Jordan Test', type: 'chat', content: 'x' }] });
+    expect(items.some(i => i.id === 'outstanding_grievance')).toBe(false);
+  });
+
+  it('a LEGACY case with no canonical employee raises no employee-scoped signal', () => {
+    // Silence is the honest answer: Compass cannot say who the case is about, so
+    // it must not claim either that a grievance exists or that none does.
+    const legacy = { ...baseCase, employeeId: null };
+    const cases = [legacy, { id: 'case2', employeeId: EMP, employeeName: 'Jordan Test', caseType: 'grievance', stage: 'investigation' }];
+    const items = computeCaseRisk(legacy, { cases, wellbeingNotes: [] });
+    expect(items.some(i => i.id === 'outstanding_grievance')).toBe(false);
+    expect(items.some(i => i.id === 'missing_medical_info')).toBe(false);
   });
 });
 
@@ -182,19 +209,19 @@ describe('computeCaseRisk — missing medical info and reasonable adjustments', 
   });
 
   it('does not flag missing medical info when a wellbeing note exists for the employee', () => {
-    const wellbeingNotes = [{ employeeName: 'Jordan Test', type: 'chat', content: 'x' }];
+    const wellbeingNotes = [{ employeeId: EMP, employeeName: 'Jordan Test', type: 'chat', content: 'x' }];
     const items = computeCaseRisk(attendanceCase, { wellbeingNotes });
     expect(items.find(i => i.category === 'missing_medical_info')).toBeUndefined();
   });
 
   it('flags an outstanding reasonable-adjustment follow-up', () => {
-    const wellbeingNotes = [{ employeeName: 'Jordan Test', type: 'adjustment', content: 'Discussed reduced hours', followUpDate: '2026-08-20', followUpDone: false }];
+    const wellbeingNotes = [{ employeeId: EMP, employeeName: 'Jordan Test', type: 'adjustment', content: 'Discussed reduced hours', followUpDate: '2026-08-20', followUpDone: false }];
     const items = computeCaseRisk(attendanceCase, { wellbeingNotes });
     expect(items).toContainEqual(expect.objectContaining({ category: 'reasonable_adjustment', detail: 'Discussed reduced hours' }));
   });
 
   it('does not flag a reasonable-adjustment note once its follow-up is done', () => {
-    const wellbeingNotes = [{ employeeName: 'Jordan Test', type: 'adjustment', content: 'x', followUpDate: '2026-08-20', followUpDone: true }];
+    const wellbeingNotes = [{ employeeId: EMP, employeeName: 'Jordan Test', type: 'adjustment', content: 'x', followUpDate: '2026-08-20', followUpDone: true }];
     const items = computeCaseRisk(attendanceCase, { wellbeingNotes });
     expect(items.find(i => i.category === 'reasonable_adjustment')).toBeUndefined();
   });

@@ -7,8 +7,34 @@ import { EmployeeSelect } from '../components/EmployeeSelect';
 
 export function WellbeingScreen({ employeeRecords = [], isHR = false, onRequestCreateEmployee, wellbeingNotes, activeWellbeing, wellbeingView, setActiveWellbeing, setWellbeingView, toggleFollowUpDone, wellbeingForm, setWellbeingForm, addWellbeingNote }) {
   const typeColors = {"chat":"#7C5CFC","eap":"#4A7C6F","adjustment":"#5E627A","crisis":"#E8622A","return":"#D4882A","checkin":"#888"};
-  const allEmployees = [...new Set(wellbeingNotes.map(n=>n.employeeName))];
-  const employeeNotes = activeWellbeing ? wellbeingNotes.filter(n=>n.employeeName===activeWellbeing).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)) : [];
+  // ── Phase E0.7 — people come from CANONICAL IDENTITY, not from names ──────
+  //
+  // This built its list of "employees" as `new Set(notes.map(n => n.employeeName))`
+  // and then matched notes back by that string. Two colleagues sharing a display
+  // name shared one wellbeing file — the single most sensitive record type in the
+  // product, routinely touching health and disability.
+  //
+  // The write side has captured a canonical uuid since E0.6; the read side threw
+  // it away. It no longer does. Notes with no employee_id are LEGACY: they are
+  // listed separately and never attached to anyone by name, because a wrong
+  // attribution here discloses one person's health information to a colleague's
+  // file. Access is unchanged — this table is HR-only and stays that way.
+  const attributed = wellbeingNotes.filter(n => n && n.employeeId);
+  const legacyNotes = wellbeingNotes.filter(n => n && !n.employeeId);
+  const allEmployees = [...new Map(
+    attributed.map(n => [n.employeeId, {
+      id: n.employeeId,
+      // The label comes from the roster where we have it, so a renamed employee
+      // reads correctly; the note's own stored name is the point-in-time
+      // snapshot and is shown on the note itself.
+      name: (employeeRecords.find(e => e && e.id === n.employeeId)?.name) || n.employeeName || "(unnamed)",
+    }])
+  ).values()].sort((a, b) => a.name.localeCompare(b.name));
+  // activeWellbeing is now an employee UUID, never a name.
+  const employeeNotes = activeWellbeing
+    ? attributed.filter(n => n.employeeId === activeWellbeing).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))
+    : [];
+  const activeEmployeeLabel = allEmployees.find(e => e.id === activeWellbeing)?.name || "";
   const overdueFollowUps = wellbeingNotes.filter(n=>!n.followUpDone&&n.followUpDate&&new Date(n.followUpDate.split("/").reverse().join("-"))<new Date());
 
   return(
@@ -108,13 +134,13 @@ export function WellbeingScreen({ employeeRecords = [], isHR = false, onRequestC
             <div style={{fontSize:10,color:"#6B6880",fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:12}}>Employees ({allEmployees.length})</div>
             {allEmployees.length===0&&<div style={{fontSize:12,color:"#5A5570"}}>No wellbeing notes yet</div>}
             {allEmployees.map(emp=>{
-              const empNotes = wellbeingNotes.filter(n=>n.employeeName===emp);
+              const empNotes = attributed.filter(n=>n.employeeId===emp.id);
               const hasOverdue = empNotes.some(n=>!n.followUpDone&&n.followUpDate&&new Date(n.followUpDate.split("/").reverse().join("-"))<new Date());
               return(
-                <button key={emp} onClick={()=>{setActiveWellbeing(emp);setWellbeingView("employee");}}
-                  style={{width:"100%",background:activeWellbeing===emp?"#7C5CFC18":"none",border:"1px solid",borderColor:activeWellbeing===emp?"#7C5CFC33":"transparent",borderRadius:7,padding:"10px 12px",marginBottom:4,textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <button key={emp.id} onClick={()=>{setActiveWellbeing(emp.id);setWellbeingView("employee");}}
+                  style={{width:"100%",background:activeWellbeing===emp.id?"#7C5CFC18":"none",border:"1px solid",borderColor:activeWellbeing===emp.id?"#7C5CFC33":"transparent",borderRadius:7,padding:"10px 12px",marginBottom:4,textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div>
-                    <div style={{fontSize:14,color:"#1A1535",fontWeight:activeWellbeing===emp?600:400}}>{emp}</div>
+                    <div style={{fontSize:14,color:"#1A1535",fontWeight:activeWellbeing===emp.id?600:400}}>{emp.name}</div>
                     <div style={{fontSize:10,color:"#6B6880",marginTop:2}}>{empNotes.length} note{empNotes.length!==1?"s":""}</div>
                   </div>
                   {hasOverdue&&<div role="img" aria-label="Has an overdue follow-up" title="Has an overdue follow-up" style={{width:7,height:7,borderRadius:"50%",background:"#D4882A"}}/>}
@@ -139,17 +165,36 @@ export function WellbeingScreen({ employeeRecords = [], isHR = false, onRequestC
         {/* Notes view */}
         <div>
           {!activeWellbeing&&wellbeingView!=="new"&&(
-            <Card style={{textAlign:"center",padding:"40px 20px",background:"#F5F1EA"}}>
-              <div style={{fontSize:14,color:"#6B6880",marginBottom:8}}>Select an employee to view their wellbeing history</div>
-              <div style={{fontSize:12,color:"#5A5570"}}>Or click "+ Add note" to log a new wellbeing conversation</div>
-            </Card>
+            <>
+              <Card style={{textAlign:"center",padding:"40px 20px",background:"#F5F1EA"}}>
+                <div style={{fontSize:14,color:"#6B6880",marginBottom:8}}>Select an employee to view their wellbeing history</div>
+                <div style={{fontSize:12,color:"#5A5570"}}>Or click "+ Add note" to log a new wellbeing conversation</div>
+              </Card>
+              {/* Phase E0.7 — legacy notes are disclosed, not hidden and not
+                  attached. They are real records HR can still reach; what Compass
+                  cannot say is WHOSE they are, so they are counted rather than
+                  filed under a name that might belong to someone else. */}
+              {legacyNotes.length>0&&(
+                <Card style={{marginTop:12,background:"#FDFAF5"}}>
+                  <div style={{fontSize:12,color:"#6B6375",lineHeight:1.6}}>
+                    <strong>{legacyNotes.length} older note{legacyNotes.length===1?"":"s"} {legacyNotes.length===1?"is":"are"} not linked to an employee record.</strong>{" "}
+                    {legacyNotes.length===1?"It was":"They were"} recorded against a name only, so {legacyNotes.length===1?"it is":"they are"} not
+                    shown under any employee — attaching {legacyNotes.length===1?"it":"them"} by name could file one person's
+                    wellbeing history against a colleague.
+                  </div>
+                </Card>
+              )}
+            </>
           )}
 
           {activeWellbeing&&employeeNotes.length>0&&(
             <div>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",fontWeight:600}}>{activeWellbeing}</div>
-                <Btn onClick={()=>{setWellbeingForm(p=>({...p,employeeName:activeWellbeing}));setWellbeingView("new");}} style={{padding:"6px 14px",fontSize:12}}>+ Add note</Btn>
+                {/* The heading renders the LABEL; activeWellbeing is a uuid. */}
+                <div style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",fontWeight:600}}>{activeEmployeeLabel}</div>
+                {/* Prefills BOTH the canonical id and its label, so adding a note
+                    from an employee's own page cannot produce a name-only note. */}
+                <Btn onClick={()=>{setWellbeingForm(p=>({...p,employeeId:activeWellbeing,employeeName:activeEmployeeLabel}));setWellbeingView("new");}} style={{padding:"6px 14px",fontSize:12}}>+ Add note</Btn>
               </div>
               {employeeNotes.map(note=>{
                 const typeColor = typeColors[note.type]||"#7C5CFC";
@@ -191,7 +236,7 @@ export function WellbeingScreen({ employeeRecords = [], isHR = false, onRequestC
 
           {activeWellbeing&&employeeNotes.length===0&&(
             <Card style={{textAlign:"center",padding:"32px",background:"#F5F1EA"}}>
-              <div style={{fontSize:13,color:"#6B6880",marginBottom:12}}>No notes yet for {activeWellbeing}</div>
+              <div style={{fontSize:13,color:"#6B6880",marginBottom:12}}>No notes yet for {activeEmployeeLabel}</div>
               <Btn onClick={()=>{setWellbeingForm(p=>({...p,employeeName:activeWellbeing}));setWellbeingView("new");}}>Add first note</Btn>
             </Card>
           )}

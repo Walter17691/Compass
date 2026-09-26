@@ -227,8 +227,16 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
     audit?.("Bulk case export", `${chosen.length} case${chosen.length!==1?"s":""} exported as JSON`, null, { dataUsed: chosen.map(c=>c.employeeName).join(", ") });
     showToast(`Exported ${chosen.length} case${chosen.length!==1?"s":""}`);
   };
-  const allEmployees = [...new Set(filteredCases.map(cs=>cs.employeeName))];
-  const { visible: employees, hasMore, loadMore, total } = useLoadMore(allEmployees, 15);
+  // Phase E0.7 — grouping for DISPLAY, but the grouping key was an identity
+  // decision: two colleagues sharing a display name collapsed into one header
+  // with a merged case count. Grouped on the canonical employee where there is
+  // one; legacy name-only cases are grouped per CASE so none of them is silently
+  // pooled with somebody else's. The header still shows the name.
+  const employeeGroups = [...new Map(filteredCases.map(cs => [
+    cs.employeeId || `legacy:${cs.id}`,
+    { key: cs.employeeId || `legacy:${cs.id}`, employeeId: cs.employeeId || null, name: cs.employeeName || "(no name recorded)" },
+  ])).values()];
+  const { visible: employees, hasMore, loadMore, total } = useLoadMore(employeeGroups, 15);
   return (
     <div style={{minHeight:"100vh",background:COLOR.paper,fontFamily:FONT.sans}}>
       <div style={{background:COLOR.surface,borderBottom:`1px solid ${COLOR.borderFaint}`,padding:"16px 28px"}}>
@@ -389,16 +397,16 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
         )}
         {(()=>{
           return employees.map(emp=>{
-            const empCases = filteredCases.filter(cs=>cs.employeeName===emp);
+            const empCases = filteredCases.filter(cs=>(cs.employeeId||`legacy:${cs.id}`)===emp.key);
             const activeCount = empCases.filter(cs=>getCaseStage(cs)!=="closed").length;
             return(
-              <div key={emp} style={{marginBottom:SPACE.xl}}>
+              <div key={emp.key} style={{marginBottom:SPACE.xl}}>
                 {/* Same-employee grouping (Compass Design Vision, §1) — a
                     light-touch header, not a nested card: initials in a
                     neutral (not decorative-purple) circle, name, and a
                     plain count line. */}
                 <div style={{display:"flex",alignItems:"baseline",gap:10,marginBottom:2,paddingBottom:6,borderBottom:`1px solid ${COLOR.border}`}}>
-                  <span style={{fontSize:14,fontWeight:600,color:COLOR.ink}}>{emp}</span>
+                  <span style={{fontSize:14,fontWeight:600,color:COLOR.ink}}>{emp.name}</span>
                   <span style={{...TYPE.metadata,color:COLOR.inkFaint}}>{empCases.length} proceeding{empCases.length!==1?"s":""}{activeCount>0?" · "+activeCount+" active":""}</span>
                 </div>
                 {empCases.map(cs=>{

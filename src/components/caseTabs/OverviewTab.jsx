@@ -123,7 +123,7 @@ function isRiskExposureRelevant(cs, caseCtx, processTypeId) {
 function keyDateRelevance(cs, caseCtx, wellbeingNotes, processTypeId) {
   const probationEndDate = caseCtx.empRecord?.probationEndDate ? new Date(caseCtx.empRecord.probationEndDate) : null;
   const healthRelevant = HEALTH_RELEVANT_PROCESS_TYPES.includes(processTypeId)
-    || (wellbeingNotes || []).some(n => n.employeeName === cs.employeeName);
+    || (cs.employeeId ? (wellbeingNotes || []).some(n => n.employeeId === cs.employeeId) : false);
   return {
     fitNoteEndDate: !!cs.fitNoteEndDate || healthRelevant,
     probationReviewDate: !!cs.probationReviewDate || processTypeId === "probation" || (!!probationEndDate && probationEndDate > new Date()),
@@ -191,7 +191,7 @@ export function OverviewTab({
   const [suspensionRevealed, setSuspensionRevealed] = useState(false);
   const effectiveDateRelevance = { ...dateRelevance, suspensionReviewDate: dateRelevance.suspensionReviewDate || suspensionRevealed };
   const visibleDateFields = KEY_DATE_FIELDS.filter(d => effectiveDateRelevance[d.field]);
-  const showOh = !!cs.ohProcess?.currentStep || !!cs.ohReferralDate || HEALTH_RELEVANT_PROCESS_TYPES.includes(processTypeId) || (caseData.wellbeingNotes||[]).some(n=>n.employeeName===cs.employeeName);
+  const showOh = !!cs.ohProcess?.currentStep || !!cs.ohReferralDate || HEALTH_RELEVANT_PROCESS_TYPES.includes(processTypeId) || (cs.employeeId ? (caseData.wellbeingNotes||[]).some(n=>n.employeeId===cs.employeeId) : false);
   // Phase 6.5 hardening (Batch 12) — deliberately NOT switched to
   // dateMath.daysBetween: this is a fractional-YEARS estimate (divided
   // by 365.25, itself already an approximation), not a calendar-day

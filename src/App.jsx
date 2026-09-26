@@ -307,6 +307,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     return {
       screen: params.get('screen') || SCREENS.HOME,
       caseId: params.get('case') || null,
+      employeeId: params.get('employee') || null,
       meetingId: params.get('meeting') || null,
       // Phase 4C.3 refresh fix — which store owns the meeting the URL names.
       // Explicit, so recovery never has to guess from a missing case.
@@ -1000,6 +1001,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [homeChatLoading, setHomeChatLoading] = useState(false);
   const [openCases, setOpenCases] = useState({});
   const [activeCaseId, setActiveCaseId] = useState(() => readNavFromUrl().caseId);
+  // Phase E0.7 — an employee UUID, never a name. Renamed from activePerson so no
+  // reader could keep treating it as a display string: the old name would have
+  // gone on compiling everywhere it was used, silently.
+  //
+  // Declared HERE, beside activeCaseId, because the URL-sync effect below reads
+  // it. Leaving it further down the component produced a real
+  // react-hooks/immutability error ("accessed before it is declared"), which is
+  // the compiler pointing out that the effect could see a stale value.
+  const [activeEmployeeId, setActiveEmployeeId] = useState(() => readNavFromUrl().employeeId);
 
   // Respond to Back/Forward: read the URL the browser just navigated to
   // and mirror it into state, tagging the source so the effect below
@@ -1026,6 +1036,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     const params = new URLSearchParams();
     params.set('screen', screen);
     if (screen === SCREENS.CASE_VIEW && activeCaseId) params.set('case', activeCaseId);
+    // Phase E0.7 — a person was not in the URL at all, so refreshing Person View
+    // lost who you were looking at. It is the UUID, never the name: a name in a
+    // route is an identifier that changes when somebody marries.
+    if (screen === SCREENS.PERSON_VIEW && activeEmployeeId) params.set('employee', activeEmployeeId);
     // P1 remediation — the live meeting screen carries its authoritative
     // identity, so a refresh can recover the exact meeting rather than
     // guessing. caseId + meetingId is the only recovery key; nothing is
@@ -1049,7 +1063,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     // entry that just makes Back need an extra press for no visible change.
     if (nextSearch === window.location.search) return;
     window.history.pushState(null, '', `${window.location.pathname}${nextSearch}`);
-  }, [screen, activeCaseId, caseInfo.caseId, caseInfo.meetingId, caseInfo.meetingHome]);
+  }, [screen, activeCaseId, activeEmployeeId, caseInfo.caseId, caseInfo.meetingId, caseInfo.meetingHome]);
 
   // Human UAT remediation, Batch 1 hardening round 2 — the signature-sync
   // effect that used to live here (checks pending meeting signatures
@@ -1080,7 +1094,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen, activeCaseId]);
 
-  const [activePerson, setActivePerson] = useState(null);
   const [activeCaseStage, setActiveCaseStage] = useState("investigation");
   const [showAppealInput, setShowAppealInput] = useState({});
   const [showEvidencePanel, setShowEvidencePanel] = useState({});
@@ -1458,7 +1471,14 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // follow-up meeting on an ongoing investigation — not just witness
       // interviews. Bounded like buildHardenedCaseContext elsewhere:
       // titles/short excerpts only, never a full case dump.
-      const linkedCaseForContext = cases.find(c=>c.id===caseInfo._linkedCaseId) || cases.find(c=>c.employeeName.toLowerCase()===caseInfo.employee.trim().toLowerCase());
+      // Phase E0.7 — this fell back to `cases.find(c => c.employeeName === …)`
+      // when no explicit link existed, which selected WHICH CASE the model reads
+      // allegations and cross-meeting context from. With two same-named people it
+      // would have fed one employee's allegations into the other's meeting.
+      // Parentage is authoritative (caseInfo.caseId), so there is no need to
+      // guess, and no name fallback remains anywhere in the three context
+      // builders that used this shape.
+      const linkedCaseForContext = cases.find(c=>c.id===(caseInfo.caseId||caseInfo._linkedCaseId));
       let crossMeetingContext = "";
       if(linkedCaseForContext) {
         const openInconsistencies = openSignalsForCase(caseSignals, linkedCaseForContext.id, "inconsistency");
@@ -3477,7 +3497,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     });
     employeeRecords.forEach(r => {
       if((r.name||"").toLowerCase().includes(ql) && !cases.some(c=>c.employeeName===r.name))
-        results.push({type:"employee", title:r.name, sub:[r.jobTitle,r.department].filter(Boolean).join(" · ")||"Employee record, no case yet"});
+        // Phase E0.7 — the result carries the employee UUID. `r` is already the
+        // roster row, so the id was in hand and was simply discarded; navigating
+        // by title meant the only search result type that resolved by name.
+        results.push({type:"employee", employeeId:r.id, title:r.name, sub:[r.jobTitle,r.department].filter(Boolean).join(" · ")||"Employee record, no case yet"});
     });
     dsarRequests.forEach(req => {
       if((req.employeeName||"").toLowerCase().includes(ql))
@@ -3985,7 +4008,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     saveWellbeingNoteToDB(note);
     setWellbeingForm({employeeId:null,employeeName:"",type:"chat",date:"",manager:"",content:"",followUpDate:"",supportOffered:"",confidential:true});
     setWellbeingView("employee");
-    setActiveWellbeing(f.employeeName);
+    setActiveWellbeing(f.employeeId);
     audit("Wellbeing note added (confidential)", f.employeeName);
   };
 
@@ -7686,7 +7709,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       gaps.push("Action identified but not yet actioned: "+s.description);
     });
 
-    const linkedCase = cases.find(c=>c.id===caseInfo._linkedCaseId) || cases.find(c=>c.employeeName.toLowerCase()===caseInfo.employee.trim().toLowerCase());
+    const linkedCase = cases.find(c=>c.id===(caseInfo.caseId||caseInfo._linkedCaseId));
     if(linkedCase) {
       allegationsForCase(allegations, linkedCase.id).forEach(a => {
         const words = (a.title||"").toLowerCase().split(/\W+/).filter(w=>w.length>3);
@@ -7870,7 +7893,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       // off before awaiting the full record so both stream concurrently;
       // resolved with its own try/catch so a failure here never blocks or
       // taints the main record generation — this panel just stays empty.
-      const linkedCaseForSummary = cases.find(c=>c.id===caseInfo._linkedCaseId) || cases.find(c=>c.employeeName.toLowerCase()===caseInfo.employee.trim().toLowerCase());
+      const linkedCaseForSummary = cases.find(c=>c.id===(caseInfo.caseId||caseInfo._linkedCaseId));
       const allegationTitlesForSummary = linkedCaseForSummary ? allegationsForCase(allegations, linkedCaseForSummary.id).map(a=>a.title) : [];
       const summaryPromise = streamClaude(
         `You are Compass, an Employee Relations copilot writing a short internal triage summary of a meeting — distinct from the full formal record, meant to be scanned in seconds by someone who wasn't in the room. Use concise bullet points under these headings only, in this order: ## Key Facts Established ## New Information ## Disputed Points ## Potential Inconsistencies ## New Witnesses or Evidence Mentioned ## Outstanding Questions ## Actions Required ## Potential Impact on Existing Allegations. Omit a heading entirely if it has nothing to report — never write "None" or leave a heading with no content. No preamble, no bold, no emoji, no tables.\n\n${REVIEW_EVIDENTIAL_CONTRACT}\n\nApplying that to these headings: Key Facts Established carries only what the material actually establishes — a participant asserting something is not enough on its own, and anything still contested belongs under Disputed Points. New Witnesses or Evidence Mentioned records that evidence or an issue was RAISED, without implying it is proven. Outstanding Questions keeps unresolved matters as questions rather than resolving them. Actions Required is a procedural checklist written as Confirm..., Check..., Verify..., Establish..., Review..., Consider... or Record... — never use it to decide an unresolved factual or legal question. Potential Impact stays conditional wherever its premise is unresolved: write "If records confirm that the policy was not communicated before the incident, consider whether that affects the basis for the original decision", never "The failure to communicate the policy undermines the original decision."`,
@@ -8074,9 +8097,19 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       }
     }
 
-    const employeeName = caseInfo.employee?.trim();
-    if(employeeName) {
-      const sameEmployee = cases.filter(c => c.id !== excludeId && c.employeeName === employeeName);
+    // Phase E0.7 — this counted "previous cases for this employee" by comparing
+    // employee_name, and fed the result into the RISK-SCORING prompt. Two people
+    // sharing a display name therefore shared a disciplinary history: the model
+    // would be told "this is case 3 for this employee" when it was case 1 for
+    // them and case 2 for a colleague. That is not display text; it is identity
+    // logic with a direct effect on a risk assessment.
+    //
+    // It is now counted on the canonical employee. Where the active case has no
+    // canonical employee (a legacy, unreconciled case) the sentence is OMITTED
+    // rather than reconstructed by name — a missing fact is recoverable, a
+    // confidently wrong one is not.
+    if(activeCase?.employeeId) {
+      const sameEmployee = cases.filter(c => c.id !== excludeId && c.employeeId === activeCase.employeeId);
       if(sameEmployee.length > 0) {
         parts.push(`This is case ${sameEmployee.length + 1} for this employee — ${sameEmployee.length} previous case${sameEmployee.length === 1 ? "" : "s"} on file.`);
       }
@@ -11055,7 +11088,7 @@ Please produce:
       )}
 
             {screen===SCREENS.PEOPLE&&(
-              <PeopleScreen cases={cases} setActivePerson={setActivePerson} setScreen={setScreen} setCaseInfo={setCaseInfo} setMeetingSetup={setMeetingSetup} />
+              <PeopleScreen cases={cases} employeeRecords={employeeRecords} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} dsarRequests={dsarRequests} setActiveEmployeeId={setActiveEmployeeId} setScreen={setScreen} setCaseInfo={setCaseInfo} setMeetingSetup={setMeetingSetup} />
             )}
 
 
@@ -11064,11 +11097,15 @@ Please produce:
       {/* ══ PERSON VIEW ══ */}
       {screen===SCREENS.PERSON_VIEW&&(
         <PersonViewScreen
-          activePerson={activePerson}
+          employeeId={activeEmployeeId}
+          employeeRecords={employeeRecords}
+          wellbeingNotes={wellbeingNotes}
+          concernReferrals={concernReferrals}
+          dsarRequests={dsarRequests}
+          isHR={isHR}
           cases={cases}
           setScreen={setScreen}
           setMeetingSetup={setMeetingSetup}
-          getEmployeeRecord={getEmployeeRecord}
           editingEmployeeRecord={editingEmployeeRecord}
           setEditingEmployeeRecord={setEditingEmployeeRecord}
           editJobTitle={editJobTitle}
@@ -11245,7 +11282,7 @@ Please produce:
       )}
 
       {screen===SCREENS.SEARCH&&(
-        <SearchScreen searchQuery={searchQuery} setSearchQuery={setSearchQuery} runSearch={runSearch} searchResults={searchResults} setScreen={setScreen} setExpandedCases={setExpandedCases} cases={cases} setViewMeeting={setViewMeeting} setViewCaseId={setViewCaseId} dueSoon={dueSoon} setActivePerson={setActivePerson} />
+        <SearchScreen searchQuery={searchQuery} setSearchQuery={setSearchQuery} runSearch={runSearch} searchResults={searchResults} setScreen={setScreen} setExpandedCases={setExpandedCases} cases={cases} setViewMeeting={setViewMeeting} setViewCaseId={setViewCaseId} dueSoon={dueSoon} setActiveEmployeeId={setActiveEmployeeId} />
       )}
 
       <Suspense fallback={<div style={{textAlign:"center",padding:80}}><span className="pu" style={{color:"#7C5CFC",fontSize:24}}>●</span></div>}>
@@ -11311,7 +11348,7 @@ Please produce:
             reportNarrative, setReportNarrative, getCaseStage, getNextStep, fmtDate, loadJsPDF,
             org, user, memberName: member?.name||user?.email,
           }}
-          nav={{ setScreen, setActiveCaseId, setActiveCaseStage, setActivePerson, setCasesInitialFilters: setCasesDeepLinkFilters }}
+          nav={{ setScreen, setActiveCaseId, setActiveCaseStage, setActiveEmployeeId, setCasesInitialFilters: setCasesDeepLinkFilters }}
         />
       )}
 

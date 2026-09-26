@@ -217,7 +217,10 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   // it from the overdue banner/Settings list/digest with no changes
   // needed to any of those three.
   const openChecklist = meetings.flatMap(m=>(m.nextSteps||[]).map((s,idx)=>({...s, meetingId:m.id, idx})).filter(s=>!s.done));
-  const repeatCount = cases.filter(c=>c.employeeName===cs.employeeName).length;
+  // Phase E0.7 — "Nth case for X" counted by name, so two same-named colleagues
+  // inflated each other's count. Canonical only; a legacy case reports 1 (itself)
+  // rather than a number assembled from string matches.
+  const repeatCount = cs.employeeId ? cases.filter(c=>c.employeeId===cs.employeeId).length : 1;
   const caseAllegations = allegationsForCase(allegations, cs.id);
   const caseTaskList = tasksForCase(caseTasks, cs.id);
   const nextActionSignal = openSignalsForCase(caseSignals, cs.id, "next_action")[0];

@@ -5,7 +5,7 @@ import { useLoadMore } from '../hooks/useLoadMore';
 import { useDebounce } from '../hooks/useDebounce';
 import { COLOR, FONT } from '../styles/tokens';
 
-export function SearchScreen({ searchQuery, setSearchQuery, runSearch, searchResults, setScreen, setExpandedCases, cases, setViewMeeting, setViewCaseId, dueSoon, setActivePerson }) {
+export function SearchScreen({ searchQuery, setSearchQuery, runSearch, searchResults, setScreen, setExpandedCases, cases, setViewMeeting, setViewCaseId, dueSoon, setActiveEmployeeId }) {
   const { visible: visibleResults, hasMore, loadMore, total } = useLoadMore(searchResults, 20);
   // Phase 6.5 hardening (closes Prompt 11 audit finding 10.3, MEDIUM) —
   // runSearch scans every case's meetings/records/letters/evidence in
@@ -39,7 +39,13 @@ export function SearchScreen({ searchQuery, setSearchQuery, runSearch, searchRes
             const typeColors={case:"#7C5CFC",record:"#D4882A",letter:"#5E627A",transcript:"#888",evidence:"#1A7A4A",employee:"#B87520",dsar:"#C84B2F"};
             return(
               <button key={i} onClick={()=>{
-                if(r.type==="employee") { setActivePerson(r.title); setScreen(SCREENS.PERSON_VIEW); return; }
+                if(r.type==="employee") {
+                  // Phase E0.7 — navigate by UUID. Two employees may answer to
+                  // one name once the unique-name constraint is removed, and a
+                  // name-navigated result could not tell them apart.
+                  if(!r.employeeId) return;
+                  setActiveEmployeeId(r.employeeId); setScreen(SCREENS.PERSON_VIEW); return;
+                }
                 if(r.type==="dsar") { setScreen(SCREENS.DSAR); return; }
                 setScreen(SCREENS.CASES);
                 setExpandedCases(e=>({...e,[r.caseId]:true}));

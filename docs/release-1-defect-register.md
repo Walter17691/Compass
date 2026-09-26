@@ -942,6 +942,126 @@ analysis for the whole file — read lint **per rule**, never by total.
   previous organisation's meetings for one frame after an org switch. Replaced by
   deriving "loading" from a result that carries its own `orgId`. Back to 9.
 
+### Phase E0.7 — UUID employee read model (2026-09-26)
+- **STATUS: DEPLOYED / VERIFIED. NO MIGRATION.** Entirely application-side.
+  Production identical before and after: 2,960 cases · **0** attributed ·
+  wellbeing 126/**0** · referrals 110/**0** · DSAR 140/**0** · 2,685 employee
+  records · 890 embedded meetings · 2 table meetings · `meetings` still has **no**
+  `employee_id` · 23 policies on the identity tables, unchanged ·
+  `UNIQUE(org_id,name)` intact · **0** identity audit rows.
+- **CORRECTION ACCEPTED.** E0.6 listed "reconciliation has not been run" as an E1
+  blocker. It is not. An employee with nothing canonically attributed should have
+  an empty file, and that is truthful. The real blocker was readers
+  reconstructing a person from name equality — which is what this closes.
+
+#### What the audit found that the E0.6 inventory had missed
+- **`PeopleScreen` did not read the roster at all.** A "person" was literally
+  `new Set(cases.map(c => c.employeeName))`. Two colleagues sharing a name
+  collapsed into ONE row with merged history and one link; a typo invented a
+  person; the **396 employees with no case were invisible**; and the row key and
+  its navigation were both the name.
+- **`PersonViewScreen` *was* a name.** `const empName = activePerson` then
+  `cases.filter(c => c.employeeName === empName)`, and everything on the screen
+  derived from that one comparison. Wellbeing, referrals and DSAR were **not
+  queried at all** — incomplete as well as name-keyed.
+- **THE REAL AI LEAK** — `PersonViewScreen`'s employment profile builds a prompt
+  asking for **"Pattern Analysis"** and a **"Risk Assessment"** from those
+  name-matched cases and posts it to `/api/chat`. Two same-named colleagues were
+  profiled as one person with a merged disciplinary pattern.
+- **A substring matcher whose result reaches a WRITE.**
+  `matchCaseByEmployeeNameWithConfidence` used `.find()` on both tiers, so
+  `"Sarah"` resolved to whichever Sarah came first — and an **exact** match did
+  the same whenever two people share a name. The result flows through the command
+  bar into `createCaseTask`, so it was writing a task onto a case picked at
+  random from the matches.
+- **`caseRisk`** raised *"This employee has another open grievance"* from a name
+  match **and linked straight into that case** — potentially a colleague's
+  grievance — and matched wellbeing notes by name to decide whether health context
+  existed.
+- **`ErReportScreen`** counted repeat employees by name, inventing a
+  repeat-offender pattern that did not exist, and linked through by name.
+- **`CaseViewScreen`** rendered "Nth case for X" from a name count.
+- **A person was not in the URL at all**, so refreshing Person View lost them.
+
+#### The read primitive
+`src/lib/employeeContext.js` — `getEmployeeContext(employeeId, authorisedData)`
+and `buildEmployeeRoster(...)`. **Identity composition, not authorisation:** every
+collection is passed in already filtered by RLS, so it can only ever narrow what
+the viewer could already see. No fetching, no service role, **no name branch at
+all** — asserted structurally, so a fallback cannot be reintroduced by accident.
+Meetings are absent, deferred to E2. `isEmpty` is a valid state.
+
+#### What changed
+| Consumer | Class | Change |
+|---|---|---|
+| `PeopleScreen` | **A** | roster by uuid; row key + navigation are uuids; same-named rows flagged |
+| `PersonViewScreen` | **A** | `employeeId` prop + `getEmployeeContext`; gained wellbeing/referrals/DSAR; `getEmployeeRecord` prop **removed** so the name lookup is unavailable |
+| AI employment profile | **A** | now canonical, by fixing the cases it reads |
+| `WellbeingScreen` | **A** | grouped by `employee_id`; `activeWellbeing` is a uuid; legacy notes disclosed, attached to nobody |
+| `CasesScreen` | **A** | grouped canonically; legacy cases group per case so none is pooled with a stranger |
+| `caseRisk` | **A** | grievance + wellbeing signals canonical; **silent** when identity is unknown |
+| `CaseViewScreen` repeat count | **A** | canonical; a legacy case reports 1 |
+| `OverviewTab` wellbeing checks | **A** | canonical |
+| `ErReportScreen` | **A/E** | canonical grouping and uuid navigation; unattributed cases counted separately |
+| `getCaseHistoryContext` | **A** | canonical; **omits** the sentence for a legacy case rather than broadening by name |
+| 3 cross-meeting AI context builders | **A** | resolve the case by authoritative parentage; no name fallback |
+| `matchCaseByEmployeeName*` | **C** | **ambiguity now fails closed** — several matches return `ambiguous` with no case |
+| `SearchScreen` employee result | **A** | carries and navigates by uuid |
+| URL routing | **A** | `?employee=<uuid>`, and the state is **initialised** from it so a cold load resolves |
+| `appealLinkCandidates` | **D** | re-audited, **unchanged** — narrows a list a human picks from, writes nothing |
+| `caseContext.js` | **B** | display only; verified |
+
+#### Two defects I introduced and fixed inside the phase
+- **`immutability` went 22 → 23.** The compiler reported *"`activeEmployeeId` is
+  accessed before it is declared"* — the URL-sync effect read state declared
+  further down the component, i.e. the effect could see a stale value. Fixed by
+  declaring it beside `activeCaseId`, which also let it be **initialised from the
+  URL** and made deep-link restore actually work. Back to 22.
+- A redundant `urlEmployeeIdRef` left `no-unused-vars` at 119; removed, back to 118.
+
+#### Evidence
+`src/test/uuidEmployeeReadModel.test.jsx` (36) plus extensions to
+`PeopleScreen` (+4), `WellbeingScreen` (+4) and `caseRisk` (+2) — **28 of 28
+mutations caught**, each asserted applied. Full suite **5,449 / 311 files**.
+Build clean. Lint **161/9**, identical to E0.6 rule-by-rule. **API routes 12/12,
+none added. No migration, no policy, no data write.**
+- **A mutation exposed a weak assertion again**: hiding the legacy-notes
+  disclosure behind `{false&&(...)}` left the source strings intact, so a
+  string-based test still passed. Replaced with a **behavioural** render test. Same
+  family as the E0.6 `if false and <cond>` finding — asserting that text exists is
+  not asserting that it renders.
+- The duplicate-name proof is by fixture, as required: two employees, one name,
+  and every collection proven disjoint.
+
+#### Remaining name-as-identity consumers
+- **`api/portal/_case-list.js:17`** gathers a portal user's cases by
+  `employee_name` (email is only a post-filter), and **`_case-detail.js:44`** is
+  the entire access boundary for a caller-supplied case id. These are **name
+  comparisons acting as authorisation**. Out of E0.7 scope per Part Q — they do
+  not participate in People/Person View — and recorded as a **pre-portal
+  hardening blocker**. `api/portal/_accept-invite.js` still has **no test**.
+- `getEmployeeRecord(name)` remains at ~11 call sites (`CaseViewScreen`,
+  `MeetingsTab`, `OpenInCompassScreen`, and `App.jsx:8605`'s
+  `buildEmployeeSnapshot`, which stamps a name-resolved snapshot **permanently**
+  into saved meetings — E2, since it writes into `cases.meetings`).
+- `?employee=<name>` HRIS/Outlook deep link — an **external** lookup from a system
+  that only knows a name. It cannot seed case creation (E0.5A.1) and establishes
+  no identity. Kept as a lookup.
+- The four analytics SQL functions, each `join employee_records on er.name =
+  c.employee_name` — **still the hard prerequisite** before duplicate names.
+- DSAR's non-case collections (starters, leavers, signing, portal, org membership)
+  remain name-keyed because those tables have no employee column.
+- Display-only name uses across ~40 files: deliberately untouched.
+
+#### Remaining blockers
+- **Before E1:** none in the read model. Residual: the portal authorisation
+  comparisons above, and `_accept-invite.js` being untested.
+- **Before E2:** `signing_requests` needs `case_id`+`meeting_id`; meeting
+  identity; `buildEmployeeSnapshot`'s name-resolved meeting snapshot; the portal
+  identity bridge.
+- **Before duplicate names:** the four analytics functions; DSAR's non-case
+  collections; then `UNIQUE(org_id,name)` itself.
+
 ### Phase E0.6 — canonical employee identity completion (2026-09-26)
 - **STATUS: DEPLOYED / VERIFIED.** Two migrations applied:
   `employee_identity_correction_2026_09_26` (functions only, no DDL) and

@@ -10,7 +10,7 @@ import { OverviewTab } from '../components/caseTabs/OverviewTab.jsx';
 // props are now 9 grouped objects (cs stays flat). Each group defaults
 // to {} in the component itself.
 const noop = () => {};
-const cs = { id: 'c1', caseType: 'misconduct', employeeName: 'Sam Employee' };
+const cs = { id: 'c1', employeeId: 'uuid-sam', caseType: 'misconduct', employeeName: 'Sam Employee' };
 
 const baseProps = {
   cs,
@@ -134,7 +134,8 @@ describe('OverviewTab — contextual visibility of risk & key dates (UAT Product
   });
 
   it('shows fit note/OH fields for a misconduct case when real wellbeing notes exist for this employee', () => {
-    const wellbeingNotes = [{ employeeName: cs.employeeName, type: 'general', content: 'Employee mentioned a health concern.' }];
+    // Phase E0.7 — "this employee" is the canonical uuid now, not the name.
+    const wellbeingNotes = [{ employeeId: cs.employeeId, employeeName: cs.employeeName, type: 'general', content: 'Employee mentioned a health concern.' }];
     render(<OverviewTab {...baseProps} caseData={{ ...baseProps.caseData, wellbeingNotes }} />);
     expect(screen.getByLabelText('Fit note expires')).toBeInTheDocument();
     expect(screen.getByLabelText('OH referral date')).toBeInTheDocument();

@@ -134,7 +134,7 @@ export function InsightsScreen({
                 setActiveCaseId={nav.setActiveCaseId}
                 setActiveCaseStage={nav.setActiveCaseStage}
                 setScreen={nav.setScreen}
-                setActivePerson={nav.setActivePerson}
+                setActiveEmployeeId={nav.setActiveEmployeeId}
                 getNextStep={reporting.getNextStep}
                 fmtDate={reporting.fmtDate}
                 loadJsPDF={reporting.loadJsPDF}

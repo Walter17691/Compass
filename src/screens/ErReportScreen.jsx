@@ -35,7 +35,7 @@ import { ReportsFilterBar } from '../components/reports/ReportsFilterBar';
 // activity within the selected period. Location/case-type filters apply
 // to both kinds equally (a genuine, meaningful scope), only the date
 // dimension is restricted to period metrics.
-export function ErReportScreen({ cases, getCaseStage, employeeRecords, dueSoon, onViewCases, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActivePerson, getNextStep, fmtDate, loadJsPDF, caseThemes, organisationThemes, isHR }) {
+export function ErReportScreen({ cases, getCaseStage, employeeRecords, dueSoon, onViewCases, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActiveEmployeeId, getNextStep, fmtDate, loadJsPDF, caseThemes, organisationThemes, isHR }) {
   const [dateRangeId, setDateRangeId] = useState(DEFAULT_DATE_RANGE_ID);
   const [location, setLocation] = useState("");
   const [caseType, setCaseType] = useState("");
@@ -106,9 +106,25 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, dueSoon, 
 
   // ── Repeat employees (unchanged from before — HR-only, never a
   // manager/individual league table; see this file's own prior history) ──
-  const casesByEmployee = {};
-  currentCases.forEach(cs => { casesByEmployee[cs.employeeName] = (casesByEmployee[cs.employeeName] || 0) + 1; });
-  const repeatEmployees = Object.entries(casesByEmployee).filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]);
+  // Phase E0.7 — this keyed by employee_name, so two colleagues sharing a display
+  // name were counted as ONE repeat employee. In an ER report that is not a
+  // cosmetic error: it invents a repeat-offender pattern that does not exist, and
+  // the row linked through to a merged Person View.
+  //
+  // Counted on the canonical employee. Legacy cases with no employee_id are
+  // counted separately and are NOT presented as a person, because Compass cannot
+  // say which person they describe.
+  const casesByEmployee = new Map();
+  let unattributedCaseCount = 0;
+  currentCases.forEach(cs => {
+    if (!cs.employeeId) { unattributedCaseCount += 1; return; }
+    const prev = casesByEmployee.get(cs.employeeId) || { count: 0, employeeId: cs.employeeId };
+    casesByEmployee.set(cs.employeeId, { ...prev, count: prev.count + 1 });
+  });
+  const repeatEmployees = [...casesByEmployee.values()]
+    .filter(e => e.count > 1)
+    .map(e => ({ ...e, name: (employeeRecords || []).find(r => r && r.id === e.employeeId)?.name || "(unnamed employee)" }))
+    .sort((a, b) => b.count - a.count);
 
   const activeCases = currentCases.filter(cs => getCaseStage(cs) !== "closed");
   const activeCasesTable = useLoadMore(activeCases, 20);
@@ -265,14 +281,17 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, dueSoon, 
             <div style={{ fontSize: 11, fontWeight: 600, color: COLOR.inkFaint, letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 4 }}>Patterns — current</div>
             <div style={{ fontFamily: FONT.serif, fontSize: 18, fontWeight: 400, color: COLOR.ink, marginBottom: 16 }}>Repeat cases</div>
             {repeatEmployees.length === 0 ? (
-              <div style={{ fontSize: 13, color: COLOR.inkFaint }}>No employees with multiple cases</div>
-            ) : repeatEmployees.slice(0, 5).map(([name, count], i) => (
+              <div style={{ fontSize: 13, color: COLOR.inkFaint }}>
+                No employees with multiple cases
+                {unattributedCaseCount > 0 && ` · ${unattributedCaseCount} case${unattributedCaseCount === 1 ? "" : "s"} not yet linked to an employee record`}
+              </div>
+            ) : repeatEmployees.slice(0, 5).map(({ name, count, employeeId }, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: i < repeatEmployees.length - 1 ? `1px solid ${COLOR.borderFaint}` : "none" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{ width: 28, height: 28, borderRadius: "50%", background: COLOR.purpleTint, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: COLOR.purple, flexShrink: 0 }}>
                     {name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
                   </div>
-                  <button onClick={() => { setActivePerson(name); setScreen(SCREENS.PERSON_VIEW); }} style={{ fontSize: 12, color: COLOR.purple, background: "none", border: "none", cursor: "pointer", fontFamily: FONT.sans, fontWeight: 500, textAlign: "left" }}>{name}</button>
+                  <button onClick={() => { setActiveEmployeeId(employeeId); setScreen(SCREENS.PERSON_VIEW); }} style={{ fontSize: 12, color: COLOR.purple, background: "none", border: "none", cursor: "pointer", fontFamily: FONT.sans, fontWeight: 500, textAlign: "left" }}>{name}</button>
                 </div>
                 <span style={{ fontSize: 11, color: COLOR.amber, background: COLOR.amberTint, borderRadius: RADIUS.pill, padding: "2px 8px", fontWeight: 600 }}>{count} cases</span>
               </div>

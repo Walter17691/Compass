@@ -21,14 +21,32 @@
 // that only want the case, not the confidence (matchCaseByEmployeeName,
 // kept as the stable existing contract every pre-IP9 call site already
 // uses) just unwrap `.case`.
+// Phase E0.7 — AMBIGUITY NOW FAILS CLOSED.
+//
+// Both tiers used `.find()`, which returns the FIRST match and discards the fact
+// that there were others. So "Sarah" resolved to whichever Sarah came first in
+// the array, and — worse — an EXACT match did the same whenever two colleagues
+// share a display name. This resolver's result reaches createCaseTask via the
+// command bar, so "the first one" was writing a task onto a case picked at
+// random from the matches.
+//
+// The input here is a name a human (or an LLM reading an email) supplied, so
+// matching on a name is legitimate: this is a search, not an identity claim. What
+// is not legitimate is resolving a tie silently. More than one match now returns
+// `confidence: "ambiguous"` with NO case, and callers must ask.
 export function matchCaseByEmployeeNameWithConfidence(cases, employeeName) {
   const needle = (employeeName || "").trim().toLowerCase();
   if (!needle) return { case: null, confidence: "none" };
   const list = cases || [];
-  const exact = list.find(c => c.employeeName?.trim().toLowerCase() === needle);
-  if (exact) return { case: exact, confidence: "high" };
-  const partial = list.find(c => c.employeeName?.toLowerCase().includes(needle));
-  if (partial) return { case: partial, confidence: "medium" };
+
+  const exact = list.filter(c => c.employeeName?.trim().toLowerCase() === needle);
+  if (exact.length === 1) return { case: exact[0], confidence: "high" };
+  if (exact.length > 1) return { case: null, confidence: "ambiguous", matches: exact };
+
+  const partial = list.filter(c => c.employeeName?.toLowerCase().includes(needle));
+  if (partial.length === 1) return { case: partial[0], confidence: "medium" };
+  if (partial.length > 1) return { case: null, confidence: "ambiguous", matches: partial };
+
   return { case: null, confidence: "none" };
 }
 
