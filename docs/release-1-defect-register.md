@@ -1044,6 +1044,12 @@ none added. No migration, no policy, no data write.**
   `MeetingsTab`, `OpenInCompassScreen`, and `App.jsx:8605`'s
   `buildEmployeeSnapshot`, which stamps a name-resolved snapshot **permanently**
   into saved meetings — E2, since it writes into `cases.meetings`).
+- **`HomeMeetingScreen.jsx:71`** — the ONE identity read left in an active screen:
+  prior-meeting context in the new-meeting form, matched against the name the user
+  typed into that form. It waits for E2 by necessity, not by preference: it reads
+  MEETINGS, and the meeting-setup form has no canonical employee field until E2
+  gives meetings an employee. Verified as the single surviving `employeeName===`
+  in the deployed App chunk.
 - `?employee=<name>` HRIS/Outlook deep link — an **external** lookup from a system
   that only knows a name. It cannot seed case creation (E0.5A.1) and establishes
   no identity. Kept as a lookup.
@@ -1057,8 +1063,9 @@ none added. No migration, no policy, no data write.**
 - **Before E1:** none in the read model. Residual: the portal authorisation
   comparisons above, and `_accept-invite.js` being untested.
 - **Before E2:** `signing_requests` needs `case_id`+`meeting_id`; meeting
-  identity; `buildEmployeeSnapshot`'s name-resolved meeting snapshot; the portal
-  identity bridge.
+  identity; `buildEmployeeSnapshot`'s name-resolved meeting snapshot;
+  `HomeMeetingScreen`'s prior-meeting context; a canonical employee field on the
+  meeting-setup form; the portal identity bridge.
 - **Before duplicate names:** the four analytics functions; DSAR's non-case
   collections; then `UNIQUE(org_id,name)` itself.
 
