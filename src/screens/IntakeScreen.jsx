@@ -1,7 +1,13 @@
 import { SCREENS } from '../constants';
 import { InfoIcon } from '../components/Icons';
+import { EmployeeSelect } from '../components/EmployeeSelect';
 
-export function IntakeScreen({ setScreen, intake, setIntake, cases, saveCases }) {
+// Phase E0.5A — this path and the "+ New case" modal now share ONE employee
+// selection contract. They had diverged badly: the modal at least upserted an
+// employee record, while this screen created a case with no employee record at
+// all, no job title, no location and a different case-type vocabulary. A case
+// created here produced a People-screen "person" backed by nothing.
+export function IntakeScreen({ setScreen, intake, setIntake, cases, saveCases, employeeRecords = [], isHR = false, showToast, audit }) {
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
 
@@ -28,16 +34,17 @@ export function IntakeScreen({ setScreen, intake, setIntake, cases, saveCases })
           <div style={{fontSize:12,fontWeight:600,color:"#9B9098",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:16}}>Employee details</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
             <div>
-              <label htmlFor="intake-employee" style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:6}}>Employee name</label>
-              <input id="intake-employee" value={intake.employee} onChange={e=>setIntake(p=>({...p,employee:e.target.value}))}
-                placeholder="Full name"
-                list="intake-employee-list"
-                style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box"}}
-                onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.background="#FFFFFF";}}
-                onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.background="#FDFAF5";}}/>
-              <datalist id="intake-employee-list">
-                {[...new Set(cases.map(cs=>cs.employeeName).filter(Boolean))].map(n=><option key={n} value={n}/>)}
-              </datalist>
+              {/* The employee is SELECTED from the canonical roster — the same
+                  component the "+ New case" modal uses, so the two paths cannot
+                  drift apart on identity again. */}
+              <EmployeeSelect
+                inputId="intake-employee"
+                employeeRecords={employeeRecords}
+                value={intake.employeeId || null}
+                canCreateEmployee={isHR}
+                onRequestCreate={()=>{ setScreen(SCREENS.SETTINGS); showToast?.("Add the employee in Settings → Employee records, then create the case."); }}
+                onChange={(id, employee)=>setIntake(p=>({...p, employeeId:id, employee:employee?.name || ""}))}
+              />
             </div>
             <div>
               <label htmlFor="intake-manager" style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:6}}>HR manager (you)</label>
@@ -118,10 +125,15 @@ export function IntakeScreen({ setScreen, intake, setIntake, cases, saveCases })
 
         {/* Submit */}
         <button
-          disabled={!intake.employee.trim()||!intake.type}
+          disabled={!intake.employeeId||!intake.type}
           onClick={()=>{
+            // A canonical employee is required. The previous guard was a non-empty
+            // name string, which is how this path contributed to the 650
+            // unreconciled subjects.
+            if(!intake.employeeId) return;
             const newCase = {
               id: crypto.randomUUID(),
+              employeeId: intake.employeeId,
               employeeName: intake.employee.trim(),
               manager: intake.manager,
               email: "",
@@ -135,10 +147,12 @@ export function IntakeScreen({ setScreen, intake, setIntake, cases, saveCases })
               createdAt: new Date().toISOString(),
             };
             saveCases([...cases, newCase]);
-            setIntake({employee:"",manager:"",issue:"",type:"",dateReceived:new Date().toISOString().split("T")[0],description:"",referredBy:"",urgent:false});
+            // Phase E0.5A — same identity provenance as the "+ New case" path.
+            audit?.("Case created", `${intake.employee.trim()} — employee ${intake.employeeId}`, newCase.id);
+            setIntake({employee:"",employeeId:null,manager:"",issue:"",type:"",dateReceived:new Date().toISOString().split("T")[0],description:"",referredBy:"",urgent:false});
             setScreen(SCREENS.CASES);
           }}
-          style={{width:"100%",background:(!intake.employee.trim()||!intake.type)?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:10,padding:"14px",fontSize:15,color:(!intake.employee.trim()||!intake.type)?"#9B9098":"#FFFFFF",fontWeight:600,cursor:(!intake.employee.trim()||!intake.type)?"not-allowed":"pointer",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif",boxShadow:(!intake.employee.trim()||!intake.type)?"none":"0 4px 16px rgba(124,92,252,0.25)"}}>
+          style={{width:"100%",background:(!intake.employeeId||!intake.type)?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:10,padding:"14px",fontSize:15,color:(!intake.employeeId||!intake.type)?"#9B9098":"#FFFFFF",fontWeight:600,cursor:(!intake.employeeId||!intake.type)?"not-allowed":"pointer",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif",boxShadow:(!intake.employeeId||!intake.type)?"none":"0 4px 16px rgba(124,92,252,0.25)"}}>
           Create case file →
         </button>
         <p style={{textAlign:"center",fontSize:12,color:"#9B9098",marginTop:12}}>You can start a meeting from the case file once it's created</p>

@@ -11,7 +11,11 @@ describe('IntakeScreen — field labelling (Phase 6.5, Batch 13)', () => {
 
   it('associates every text field with its real, visible label', () => {
     render(<IntakeScreen setScreen={()=>{}} intake={intake} setIntake={()=>{}} cases={[]} saveCases={()=>{}} />);
-    expect(screen.getByLabelText('Employee name')).toBeInTheDocument();
+    // Phase E0.5A — the free-text "Employee name" field was replaced by the shared
+    // EmployeeSelect, whose label is "Employee" because the user now picks a
+    // person rather than typing a name. The guarantee this test protects — every
+    // field has a real, associated, visible label — is unchanged.
+    expect(screen.getByLabelText('Employee')).toBeInTheDocument();
     expect(screen.getByLabelText('HR manager (you)')).toBeInTheDocument();
     expect(screen.getByLabelText('Date received')).toBeInTheDocument();
     expect(screen.getByLabelText('Referred by')).toBeInTheDocument();

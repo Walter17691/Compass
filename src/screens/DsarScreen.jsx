@@ -111,7 +111,7 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverIn
             requires reconciliation" over disclosing the wrong person's history. */}
         {compiled&&!compiled.identityRequiresReconciliation&&<Btn variant="secondary" onClick={()=>{downloadJson(compiled, `DSAR_${req.employeeName.replace(/\s+/g,"_")}_${req.receivedDate}.json`);audit?.("DSAR response downloaded", req.employeeName);}}>Download response package</Btn>}
         {compiled&&compiled.identityRequiresReconciliation&&(
-          <span style={{fontSize:12,color:"#C84B2F",alignSelf:"center"}}>Download blocked — identity requires reconciliation</span>
+          <span style={{fontSize:12,color:"#C84B2F",alignSelf:"center"}}>Download blocked — employee identity requires reconciliation</span>
         )}
         {!req.extended&&req.status!=="completed"&&<Btn variant="ghost" onClick={handleExtend}>Extend deadline</Btn>}
       </div>
@@ -127,10 +127,15 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverIn
             </div>
           )}
           {compiled.identityStatus==="unreconciled"&&(
-            <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
-              <WarningIcon size={14} color="#B87520" style={{flexShrink:0,marginTop:1}}/>
-              <div style={{fontSize:12,color:"#6B6375"}}>
-                <strong>No employee record on file for this name.</strong> These records were gathered by name alone. Check they all belong to the same person before sending.
+            <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FEF0EB",border:"1px solid #F0C4B0",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
+              <WarningIcon size={14} color="#C84B2F" style={{flexShrink:0,marginTop:1}}/>
+              <div style={{fontSize:12,color:"#C84B2F"}}>
+                {/* E0.5A — this state now BLOCKS. The wording says what Compass
+                    could not establish, and deliberately does NOT suggest the
+                    records are missing or incomplete: they are all present, and
+                    nothing has been deleted. What is missing is the link between
+                    them and a canonical employee. */}
+                <strong>Employee identity requires reconciliation — this response cannot be downloaded.</strong> These records were gathered by matching the name "{req.employeeName}", and there is no canonical employee record to confirm they all belong to one person. Nothing is missing and nothing has been removed. Link this person to an employee record, then compile again.
               </div>
             </div>
           )}

@@ -8,6 +8,10 @@ export function mapCaseRow(row) {
     employeeName: row.employee_name,
     email: row.employee_email || row.email || "",
     meetings: row.meetings || [],
+    // Phase E0.5A — the canonical employee identity. NULL for a legacy case, and
+    // NULL must never be reinterpreted as a new or unknown employee, nor resolved
+    // by name: reconciliation (E0.5B) is an explicit human act.
+    employeeId: row.employee_id || null,
     evidence: row.evidence || [],
     stage: row.stage || "open",
     caseType: row.case_type || "",

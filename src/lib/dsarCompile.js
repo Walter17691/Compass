@@ -190,7 +190,12 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
   const identityStatus = classifyIdentityByName(employeeRecords, employeeName, {
     emailEvidence: [...distinctCaseEmails],
   });
-  const identityRequiresReconciliation = identityStatus === IDENTITY.AMBIGUOUS;
+  // E0.5A — fails closed on BOTH unsafe states. AMBIGUOUS means Compass would be
+  // guessing between real people; UNRECONCILED means it cannot establish which
+  // canonical employee these name-matched records belong to at all. Neither is a
+  // basis for disclosing somebody's employment history. Only RESOLVED exports.
+  const identityRequiresReconciliation =
+    identityStatus === IDENTITY.AMBIGUOUS || identityStatus === IDENTITY.UNRECONCILED;
   const canonicalEmployeeIds = matchingEmployeeRecords.map(r => r.id).filter(Boolean);
 
   const otherNames = new Set();

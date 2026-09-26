@@ -8,7 +8,7 @@ import { addCalendarMonth, toISODateLocal } from './lib/dates';
 import { addWorkingDays } from './lib/dateMath';
 import { fetchAllPages } from './lib/paginatedFetch';
 import { ls, lsSet, orgScopedKey, clearAllOrgScopedData, capRecentForCache } from './lib/storage';
-import { findEmployeeByName, EMPLOYMENT_STATUSES } from './lib/employeeRecords';
+import { findEmployeeByName, findEmployeeById, EMPLOYMENT_STATUSES } from './lib/employeeRecords';
 import { computeDueSoon, computeAuthoritativeAppealDeadline } from './lib/deadlines';
 import { mapCaseRow } from './lib/caseMapping';
 import { isLetterApproved, createLetterApproval } from './lib/letterApproval';
@@ -144,6 +144,7 @@ const CalendarScreen = lazy(() => import('./screens/CalendarScreen').then(m => (
 const MeetingsScreen = lazy(() => import('./screens/MeetingsScreen').then(m => ({default: m.MeetingsScreen})));
 import { OnboardingWizard } from './screens/OnboardingWizard';
 import { CommandBarModal } from './screens/CommandBarModal';
+import { EmployeeSelect } from './components/EmployeeSelect';
 import { HandoffModal } from './screens/HandoffModal';
 import { AppealOfficerModal } from './screens/AppealOfficerModal';
 import { ReassignCaseModal } from './screens/ReassignCaseModal';
@@ -1594,6 +1595,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         org_id: org.id,
         employee_name: caseObj.employeeName,
         employee_email: caseObj.email || "",
+        // Phase E0.5A — the canonical employee. Undefined for a legacy case, and
+        // `?? null` rather than `|| null` so a genuinely absent value writes NULL
+        // without disturbing the 2,960 historical rows that have none.
+        employee_id: caseObj.employeeId ?? null,
         // The ONLY source of this column anywhere in the app, and it is guarded.
         meetings: safeCase.meetings || [],
         evidence: caseObj.evidence || [],
@@ -2237,10 +2242,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const meetingEndedRef = useRef(false);
   const [showCasePrompt, setShowCasePrompt] = useState(false);
   const [casePromptName, setCasePromptName] = useState("");
+  // Phase E0.5A — the canonical employee this case will belong to. The NAME above
+  // is now only a display snapshot derived from the selection; this uuid is the
+  // identity, and a case cannot be created without it.
+  const [casePromptEmployeeId, setCasePromptEmployeeId] = useState(null);
 
   const closeCasePrompt = () => {
     setShowCasePrompt(false);
     setCasePromptName("");
+    setCasePromptEmployeeId(null);
     setNewCaseJobTitle("");
     setNewCaseStartDate("");
     setNewCaseLocation("");
@@ -10352,29 +10362,30 @@ Please produce:
               <button onClick={closeCasePrompt} aria-label="Close" style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098",lineHeight:1}}>×</button>
             </div>
 
-            {/* Employee name with lookup */}
+            {/* Phase E0.5A — the employee is SELECTED from the canonical roster.
+                This was a free-text input with a datalist sourced from existing
+                CASES, so an imported employee never autocompleted, any typo
+                created a new person, and the only submit guard was a non-empty
+                string. Identity is now a uuid the user picked. */}
             <div style={{marginBottom:14}}>
-              <label htmlFor="case-prompt-name" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:5}}>Employee name</label>
-              <input
-                id="case-prompt-name"
-                value={casePromptName}
-                onChange={e=>{
-                  setCasePromptName(e.target.value);
-                  const rec = getEmployeeRecord(e.target.value.trim());
-                  if(rec) {
-                    setNewCaseJobTitle(rec.jobTitle||"");
-                    setNewCaseStartDate(rec.startDate||"");
-                    setNewCaseLocation(rec.location||"");
+              <EmployeeSelect
+                inputId="case-prompt-name"
+                employeeRecords={employeeRecords}
+                value={casePromptEmployeeId}
+                canCreateEmployee={isHR}
+                onRequestCreate={()=>{ setScreen(SCREENS.SETTINGS); showToast("Add the employee in Settings → Employee records, then create the case."); }}
+                onChange={(id, employee)=>{
+                  setCasePromptEmployeeId(id);
+                  // The name is carried for display/snapshot only — it is derived
+                  // FROM the selection, never the other way round.
+                  setCasePromptName(employee?.name || "");
+                  if(employee) {
+                    setNewCaseJobTitle(employee.jobTitle||"");
+                    setNewCaseStartDate(employee.startDate||"");
+                    setNewCaseLocation(employee.location||"");
                   }
                 }}
-                placeholder="Full name"
-                list="employee-suggestions"
-                style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:"DM Sans,system-ui,sans-serif",color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}
               />
-              <datalist id="employee-suggestions">
-                {[...new Set(cases.map(c=>c.employeeName).filter(Boolean))].map(n=><option key={n} value={n}/>)}
-              </datalist>
-              {getEmployeeRecord(casePromptName.trim())&&<div style={{fontSize:11,color:"#1A7A4A",marginTop:4}}>Employee record found — details pre-filled</div>}
             </div>
 
             {/* Job title + start date */}
@@ -10457,15 +10468,22 @@ Please produce:
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
               <button onClick={closeCasePrompt} style={{fontSize:13,padding:"10px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#FFFFFF",cursor:"pointer",color:"#6B6375",fontFamily:"DM Sans,system-ui,sans-serif"}}>Cancel</button>
               <button
-                disabled={!casePromptName.trim()}
+                disabled={!casePromptEmployeeId}
                 onClick={()=>{
-                  const name = casePromptName.trim();
-                  if(!name) return;
-                  // Save/update employee record
-                  upsertEmployeeRecord(name,{jobTitle:newCaseJobTitle,startDate:newCaseStartDate,location:newCaseLocation});
-                  // Create case
+                  // Phase E0.5A — a canonical employee is required. The previous
+                  // guard was `!casePromptName.trim()`, so any typed string could
+                  // create a case and, with it, a new "person".
+                  if(!casePromptEmployeeId) return;
+                  const selectedEmployee = findEmployeeById(employeeRecords, casePromptEmployeeId);
+                  if(!selectedEmployee) { showToast("Select an employee before creating the case.", "error"); return; }
+                  const name = selectedEmployee.name;
+                  // No upsertEmployeeRecord here any more: the employee already
+                  // exists — that is what selecting one means — and writing to the
+                  // roster from a case form is how (org_id, name) became a de facto
+                  // identity key in the first place.
                   const newCase = {
                     id: crypto.randomUUID(),
+                    employeeId: casePromptEmployeeId,
                     employeeName: name,
                     email: "",
                     caseType: newCaseType,
@@ -10502,6 +10520,10 @@ Please produce:
                     priority: newCasePriority,
                   };
                   saveCases([...cases, newCase]);
+                  // Phase E0.5A — identity provenance. Records WHICH canonical employee the
+                  // case was created for and the display name at that moment, alongside the
+                  // actor and timestamp audit() already stamps. No case content is copied in.
+                  audit("Case created", `${name} — employee ${casePromptEmployeeId}`, newCase.id);
                   // Process Intelligence (P18) — auto-initialise the
                   // default tasks from this process type's own org-
                   // configured template, if one exists. The rest of the
@@ -10527,7 +10549,7 @@ Please produce:
                   setScreen(SCREENS.CASE_VIEW);
                   showToast("Case created");
                 }}
-                style={{fontSize:13,padding:"10px 20px",background:!casePromptName.trim()?"#B8A9F8":"#7C5CFC",border:"none",borderRadius:8,color:"#fff",cursor:!casePromptName.trim()?"not-allowed":"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}
+                style={{fontSize:13,padding:"10px 20px",background:!casePromptEmployeeId?"#B8A9F8":"#7C5CFC",border:"none",borderRadius:8,color:"#fff",cursor:!casePromptEmployeeId?"not-allowed":"pointer",fontWeight:600,fontFamily:"DM Sans,system-ui,sans-serif"}}
               >Create case</button>
             </div>
           </div>
@@ -10957,7 +10979,7 @@ Please produce:
       )}
 {/* ══ INTAKE ══ */}
       {screen===SCREENS.INTAKE&&(
-        <IntakeScreen setScreen={setScreen} intake={intake} setIntake={setIntake} cases={cases} saveCases={saveCases} />
+        <IntakeScreen setScreen={setScreen} intake={intake} setIntake={setIntake} cases={cases} saveCases={saveCases} employeeRecords={employeeRecords} isHR={isHR} showToast={showToast} audit={audit} />
       )}
 
 {/* ══ PREP ══ */}

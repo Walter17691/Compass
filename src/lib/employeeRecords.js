@@ -131,11 +131,22 @@ export function classifyIdentityByName(records, name, { emailEvidence = [] } = {
 // Fail-safe predicate. True when a name must NOT be used to gather or disclose
 // one person's records.
 //
-// UNRECONCILED is deliberately NOT treated as unsafe on its own: 650 production
-// subjects have no canonical record yet, and refusing every one of them would
-// break DSAR for most of the customer base while reconciliation is outstanding.
-// It is reported separately so the caller can warn, and so a future phase can
-// tighten it once reconciliation has run.
+// ┌─ TIGHTENED IN E0.5A — UNRECONCILED NOW FAILS CLOSED ───────────────────┐
+// │ E0 let UNRECONCILED through with a warning, reasoning that 650 of 2,939  │
+// │ production subjects are name-only and blocking them all would break DSAR │
+// │ for most of the customer base.                                           │
+// │                                                                          │
+// │ That traded a privacy guarantee for convenience, and it was the wrong    │
+// │ trade. If Compass cannot establish WHICH canonical employee owns a set of │
+// │ name-matched records, it cannot know whether it is about to hand one      │
+// │ person another person's confidential employment history. "We could not    │
+// │ establish identity" is an answer a controller can act on; an export built │
+// │ on a string match is not.                                                │
+// │                                                                          │
+// │ Both unsafe states now block. Only RESOLVED — exactly one canonical       │
+// │ employee — permits an export.                                            │
+// └─────────────────────────────────────────────────────────────────────────┘
 export function identityRequiresReconciliation(records, name, opts) {
-  return classifyIdentityByName(records, name, opts) === IDENTITY.AMBIGUOUS;
+  const status = classifyIdentityByName(records, name, opts);
+  return status === IDENTITY.AMBIGUOUS || status === IDENTITY.UNRECONCILED;
 }

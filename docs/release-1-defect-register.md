@@ -942,6 +942,57 @@ analysis for the whole file — read lint **per rule**, never by total.
   previous organisation's meetings for one frame after an org switch. Replaced by
   deriving "loading" from a result that carries its own `orgId`. Back to 9.
 
+### Phase E0.5A — new-write employee identity (2026-09-26)
+- **STATUS: DEPLOYED / VERIFIED.** Migration
+  `case_employee_identity_2026_09_26` applied. **0 of 2,960 historical cases
+  backfilled.** No meeting, RLS, recipe or case-type change.
+- **Why before reconciliation.** E0 established identity, but Compass was still
+  *manufacturing* identity debt: both case-creation paths took the employee name as
+  free text, their autocomplete came from existing **cases** rather than the
+  roster, one path upserted an employee record by `(org_id, name)` and the other
+  created none at all. Reconciling 650 historical subjects while that continued
+  would be bailing with the tap running.
+- **`cases.employee_id uuid NULL → employee_records(id) ON DELETE RESTRICT`**, plus
+  `cases_org_employee_idx (org_id, employee_id)` — the employee-centric lookup
+  `cases.employee_name` has never had an index for. RESTRICT, not CASCADE: deleting
+  an employee must never silently erase the HR cases concerning them.
+- **Database guarantees (trigger `cases_employee_parentage_guard_trg`):** cross-org
+  parentage impossible, on INSERT and UPDATE, **never exempted for any role**; and
+  **fill-once** semantics — `NULL → value` permitted (the transition E0.5B needs),
+  `value → NULL` and `value → other` rejected. Deliberately **not**
+  `protect_immutable_columns`, which blocks every change including the fill.
+- **ONE shared selector** (`components/EmployeeSelect.jsx`) used by **both** paths,
+  so they cannot diverge on identity again. It searches the **roster**, not cases —
+  which is what makes the 396 employees with no case selectable at all. It returns
+  a **uuid on an explicit human pick**; typing alone selects nothing *even on an
+  exact name match*, because "the string matched" is the mistake being corrected.
+  Two same-named employees render distinguishably (`Sales Manager · Manchester ·
+  #1042` vs `Team Leader · Leeds · #2841`) and are labelled *"another employee
+  shares this name"*.
+- **No free-text identity fallback for anyone.** A non-HR user gets a route
+  (*"ask an HR Director or HR Manager to add them"*), never a creation button;
+  creation rights stay as E0 left them.
+- **`+ New case` no longer writes to the employee roster.** `upsertEmployeeRecord`
+  is gone from that handler — writing to the roster from a case form is how
+  `(org_id, name)` became a de facto identity key.
+- **A real gap found and closed:** **neither** creation path audited case creation
+  at all. Both now record `audit("Case created", "<name> — employee <uuid>", caseId)`
+  — which employee, the display name at that moment, plus the actor and timestamp
+  `audit()` already stamps, and no case content.
+- **P1 privacy tightening (Step 0).** E0 let `UNRECONCILED` DSAR identity export
+  with a warning, reasoning that 650 of 2,939 subjects are name-only. That traded a
+  privacy guarantee for convenience and was the wrong trade. **Both unsafe states
+  now fail closed** — only `RESOLVED` exports. The copy says what could not be
+  established and explicitly does **not** imply data is missing.
+- **Evidence** `src/test/caseEmployeeIdentity.test.jsx` — 37 tests, **10 of 10
+  mutations caught**; plus **9 database proofs** (cross-org rejected, nonexistent
+  employee rejected, same-org accepted, `UUID→UUID` rejected, `UUID→NULL` rejected,
+  `NULL→UUID` permitted, legacy rows unaffected, employee deletion **REJECTED by
+  ON DELETE RESTRICT**).
+- **`UNIQUE(org_id, name)` still not dropped.** The four live analytics functions
+  remain temporarily name-joined; **their migration is a hard prerequisite to
+  removing name uniqueness** and is a gate on that phase.
+
 ### Phase E0 — employee identity foundation (2026-09-26)
 - **STATUS: DEPLOYED / VERIFIED.** Migration
   `20260926… employee_identity_foundation_2026_09_26` applied. No identity

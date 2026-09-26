@@ -127,7 +127,7 @@ describe('12/13. the DSAR identity gate', () => {
     const screen = readFileSync('src/screens/DsarScreen.jsx', 'utf8');
     // The download button is conditional on identity being resolvable.
     expect(screen).toContain('compiled&&!compiled.identityRequiresReconciliation&&<Btn');
-    expect(screen).toContain('Download blocked — identity requires reconciliation');
+    expect(screen).toContain('Download blocked — employee identity requires reconciliation');
     // And the previous shape — an unconditional download — is gone.
     expect(screen).not.toContain('{compiled&&<Btn variant="secondary" onClick={()=>{downloadJson(');
   });
@@ -139,16 +139,30 @@ describe('12/13. the DSAR identity gate', () => {
     expect(out.canonicalEmployeeIds).toEqual(['emp-cccc']);
   });
 
-  it('13. legacy name-only data is reported as unreconciled, and does NOT block', () => {
-    // 650 of 2,939 production subjects have no canonical employee record. Blocking
-    // them all would break DSAR for most of the customer base while reconciliation
-    // is outstanding, so this warns rather than refusing.
+  it('13. legacy name-only data is UNRECONCILED and now FAILS CLOSED (E0.5A)', () => {
+    // TIGHTENED IN E0.5A. E0 let this through with a warning, reasoning that 650 of
+    // 2,939 production subjects are name-only. That traded a privacy guarantee for
+    // convenience. If Compass cannot establish which canonical employee owns a set
+    // of name-matched records, it must not disclose them.
     const out = compileSubjectData('Someone With No Record', base);
     expect(out.identityStatus).toBe(IDENTITY.UNRECONCILED);
-    expect(out.identityRequiresReconciliation).toBe(false);
+    expect(out.identityRequiresReconciliation).toBe(true);
     expect(out.canonicalEmployeeIds).toEqual([]);
     const screen = readFileSync('src/screens/DsarScreen.jsx', 'utf8');
-    expect(screen).toContain('No employee record on file for this name');
+    expect(screen).toContain('Employee identity requires reconciliation');
+    // The copy must not imply data is missing — it is all there; the LINK is not.
+    expect(screen).toContain('Nothing is missing and nothing has been removed');
+  });
+
+  it('13b. ONLY resolved identity permits an export', () => {
+    const records = [JOHN_A, JOHN_B, DANA];
+    // resolved -> allowed
+    expect(identityRequiresReconciliation(records, 'Dana Keys')).toBe(false);
+    // ambiguous -> blocked
+    expect(identityRequiresReconciliation(records, 'John Smith')).toBe(true);
+    // unreconciled -> blocked
+    expect(identityRequiresReconciliation(records, 'Nobody At All')).toBe(true);
+    expect(identityRequiresReconciliation([], 'Anyone')).toBe(true);
   });
 
   it('13. conflicting email evidence reads as ambiguous even with one record', () => {

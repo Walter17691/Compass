@@ -61,6 +61,9 @@ describe('mapCaseRow', () => {
       employeeName: 'Jane Doe',
       email: 'jane@example.com',
       meetings: [{ id: 'm1' }],
+      // Phase E0.5A — the fullRow fixture has no employee_id, so the canonical
+      // identity maps to null. A legacy case is exactly this shape.
+      employeeId: null,
       evidence: [{ id: 'e1' }],
       stage: 'investigation',
       caseType: 'misconduct',
@@ -111,6 +114,7 @@ describe('mapCaseRow', () => {
       employeeName: undefined,
       email: '',
       meetings: [],
+      employeeId: null,   // Phase E0.5A — canonical employee, NULL for a legacy case
       evidence: [],
       stage: 'open',
       caseType: '',

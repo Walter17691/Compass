@@ -21,7 +21,10 @@ const baseProps = {
   extendDsarRequest: noop,
   promptDialog: async () => null,
   cases: [],
-  employeeRecords: [],
+  // E0.5A — the subject needs a CANONICAL employee record, because DSAR now fails
+  // closed when identity cannot be established. An empty roster means
+  // UNRECONCILED, which is exactly the state that must block.
+  employeeRecords: [{ id: 'emp-sam', name: 'Sam Employee', jobTitle: 'Analyst', location: 'London' }],
   starterInstances: [],
   leaverInstances: [],
   wellbeingNotes: [],
