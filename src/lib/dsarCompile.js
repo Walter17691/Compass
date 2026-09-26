@@ -134,11 +134,39 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
   // is the DSAR compiler's established pattern, not a new inference: it is not
   // being used to grant access (RLS does that, and never reads a name), only to
   // decide what to disclose to a subject who has asked.
-  const subjectStandaloneMeetings = standaloneMeetings.filter(m => m?.employeeName === employeeName);
+  const subjectStandaloneMeetings = standaloneMeetings.filter(m => nameMatchesSubject(m?.employeeName));
   const onboarding = starterInstances.filter(s => s.name === employeeName);
   const offboarding = leaverInstances.filter(s => s.name === employeeName);
-  const subjectWellbeingNotes = wellbeingNotes.filter(n => n.employeeName === employeeName);
-  const subjectConcernReferrals = concernReferrals.filter(r => r.employeeName === employeeName);
+  // ── Phase E0.6 — canonical routes where one now exists ───────────────────
+  //
+  // wellbeing_notes and concern_referrals gained employee_id. Where the subject
+  // is canonically identified, selection uses the id and a same-name row that has
+  // NOT been attributed is NOT swept in — the same rule as cases. Where no
+  // canonical id is known the historical name behaviour is unchanged, so a DSAR
+  // for an unreconciled subject still returns what it always did.
+  const canonicalOrLegacy = (rows, nameOf) => {
+    if (!canonicalEmployeeId) return rows.filter(r => nameMatchesSubject(nameOf(r)));
+    return rows.filter(r => r?.employeeId === canonicalEmployeeId);
+  };
+  // Same-name rows left unattributed. Metadata only, and reported rather than
+  // silently dropped: the record exists, it simply has not been confirmed to be
+  // this person's.
+  const unattributedSameName = (rows, nameOf, describe) => (
+    canonicalEmployeeId
+      ? rows.filter(r => r && !r.employeeId && nameMatchesSubject(nameOf(r))).map(describe)
+      : []
+  );
+
+  const subjectWellbeingNotes = canonicalOrLegacy(wellbeingNotes, n => n?.employeeName);
+  const subjectConcernReferrals = canonicalOrLegacy(concernReferrals, r => r?.employeeName);
+  const unattributedWellbeingNotes = unattributedSameName(
+    wellbeingNotes, n => n?.employeeName,
+    n => ({ id: n.id, type: n.type, date: n.date, employeeName: n.employeeName })
+  );
+  const unattributedConcernReferrals = unattributedSameName(
+    concernReferrals, r => r?.employeeName,
+    r => ({ id: r.id, concernType: r.concernType, status: r.status, createdAt: r.createdAt, employeeName: r.employeeName })
+  );
   const subjectAllegations = allegations.filter(a => subjectCaseIds.has(a.caseId));
   const subjectCaseSignals = caseSignals.filter(s => subjectCaseIds.has(s.caseId));
   const subjectCaseTasks = caseTasks.filter(t => subjectCaseIds.has(t.caseId));
@@ -411,10 +439,50 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
     // a display name cannot be audited later.
     caseIdentityBasis: canonicalEmployeeId ? "employee_id" : "employee_name",
     canonicalEmployeeId: canonicalEmployeeId || null,
-    // Everything outside `cases` is still name-keyed, because no other table
-    // has an employee column yet. Stated so the limitation is visible in the
-    // artefact itself rather than known only to whoever wrote the compiler.
+    // ── Phase E0.6 — per-collection identity basis ────────────────────────
+    // Superseding E0.5B's single flag. Three collections now have a canonical
+    // route; the rest are still name-keyed because their tables have no employee
+    // column. Stated per collection so the limitation is visible in the artefact
+    // itself rather than known only to whoever wrote the compiler.
+    identityBasisByCollection: {
+      cases: canonicalEmployeeId ? "employee_id" : "employee_name",
+      wellbeingNotes: canonicalEmployeeId ? "employee_id" : "employee_name",
+      concernReferrals: canonicalEmployeeId ? "employee_id" : "employee_name",
+      // Derived through their case, which is the authoritative parent.
+      allegations: "case_id", caseTasks: "case_id", caseSignals: "case_id", hrReviewRequests: "case_id",
+      // No employee column exists on these tables at all.
+      onboarding: "employee_name", offboarding: "employee_name",
+      signingRequests: "employee_name", portalAccounts: "employee_name",
+      orgMembership: "employee_name", redundancyCases: "employee_name",
+      // Meetings are deferred to E2 — see standaloneMeetingsDisposition below.
+      standaloneMeetings: "employee_name",
+    },
+    // Kept for compatibility with readers written against E0.5B.
     nonCaseIdentityBasis: "employee_name",
+    // Same-name rows in the newly-parented collections that have NOT been
+    // attributed to this employee. Metadata only, and reported rather than
+    // silently dropped — the record exists, it just is not confirmed as theirs.
+    unattributedWellbeingNotes,
+    unattributedConcernReferrals,
+    // ── The standalone-meeting limitation, stated rather than hidden ───────
+    //
+    // public.meetings has NO employee_id: meeting identity is deferred to E2 as
+    // one coherent migration. So a table-resident meeting cannot be canonically
+    // attributed to this subject, and name-matching it would be exactly the
+    // inference this programme removes.
+    //
+    // The package therefore must NOT claim to contain all of an employee's
+    // meeting data. This flag exists so the UI can say so out loud.
+    standaloneMeetingsDisposition: {
+      basis: null,
+      canonicallyAttributable: false,
+      included: subjectStandaloneMeetings.length,
+      // TRUE whenever no standalone meetings were supplied to the compiler,
+      // which in production is always: no caller passes them. The package must
+      // therefore never be described as a complete meeting history.
+      excluded: standaloneMeetings.length === 0,
+      note: "Meetings held outside a case are NOT included in this package. public.meetings carries no canonical employee reference until Phase E2, so Compass cannot confirm which employee record such a meeting belongs to, and will not attribute one by name. This package is complete for cases and case-owned records; it may be incomplete for meetings held outside a case.",
+    },
     // Same-name records deliberately EXCLUDED. Metadata only — these may
     // belong to somebody else, so no content is carried here. Reported so that
     // exclusion can never be mistaken for the records not existing.

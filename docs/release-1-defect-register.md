@@ -942,6 +942,183 @@ analysis for the whole file — read lint **per rule**, never by total.
   previous organisation's meetings for one frame after an org switch. Replaced by
   deriving "loading" from a result that carries its own `orgId`. Back to 9.
 
+### Phase E0.6 — canonical employee identity completion (2026-09-26)
+- **STATUS: DEPLOYED / VERIFIED.** Two migrations applied:
+  `employee_identity_correction_2026_09_26` (functions only, no DDL) and
+  `employee_owned_objects_2026_09_26` (three nullable columns, three indexes,
+  one guard, three triggers).
+- **PRODUCTION UNCHANGED.** 2,960 cases · **0** with `employee_id` · 2,685
+  employee records · 890 embedded meetings · 2 table meetings ·
+  `cases.updated_at` max `2026-09-25 14:23:20.9` · **0** identity audit rows ·
+  wellbeing 126 / referrals 110 / DSAR 140 / starters 105 / leavers 107 /
+  signing 104 all unchanged with **0 attributions** · RLS policy counts
+  byte-identical before and after. **No backfill. No reconciliation.**
+
+#### PART A — the correction operation (closes E0.5B's hard gate)
+- **`correct_case_employee(case, new_employee, reason)` — HR DIRECTOR ONLY.**
+  The role is checked literally (`v_member.role <> 'hr_director'`), **not** via
+  `is_hr_role()`, which would admit an HR Manager. Reconciliation answers "who is
+  this unattributed record about?" from nothing; correction **overrules a
+  colleague's recorded decision** and moves a case between two real people's
+  Employee Files, so it sits one rung higher.
+- **The exemption mechanism, and why it is the narrowest available.** A
+  transaction-local GUC (`compass.correcting_case_employee`) carrying the **case
+  id**, not a boolean — so the door it opens admits exactly one row. Written only
+  by the function, read only by the trigger, reset on **both** the success and
+  conflict paths so it cannot be reused for a second row.
+  - **A client cannot set it:** `set_config` lives in `pg_catalog`, which
+    PostgREST does not expose for RPC, and **no function in `public` wraps it** —
+    verified against the live database, not assumed.
+  - Rejected alternatives recorded in the migration: `disable trigger`
+    (table-wide, needs ownership), delete-and-reinsert (destroys history), a
+    boolean flag (would unlock every row in the transaction).
+- **The invariant is NOT weakened globally.** A plain UPDATE still cannot do
+  `UUID → UUID` or `UUID → NULL`. **`UUID → NULL` stays blocked for every caller
+  including the correction** — no ordinary "unlink" was implemented, as directed.
+  **Tenancy is checked OUTSIDE the exemption**, so the door cannot move a case to
+  another tenant's employee.
+- **Audit records what it replaced:** old uuid **and old display name** (captured
+  *before* the write, or the trail would hold a uuid nobody can read and lose the
+  only human-readable trace if that employee is later deleted), new uuid, new
+  name, the historical `employee_name`, the reason, actor and timestamp. No case
+  narrative. `Employee identity corrected` joins `log_audit_event`'s
+  **reserved-action list** — proven unforgeable.
+- **UX:** HR Director only, in the reconciliation workbench, deliberately **not**
+  styled as an ordinary "Edit". Shows current employee, new employee, a mandatory
+  reason, and an explicit confirmation naming **both** people with employee
+  numbers. An HR Manager sees the resolved identity and **no control**.
+- **18 database proofs, all rolled back:** HR Director **CAN**; hr_manager,
+  location_manager, line_manager, investigator, legal_reviewer, auditor,
+  non-member and unauthenticated **all REFUSED**; cross-org REFUSED; blank,
+  whitespace-only and too-short reasons REFUSED; same-employee REFUSED;
+  `employee_name` UNCHANGED; stage/type/outcome UNCHANGED; audit correct; **plain
+  UPDATE `UUID→UUID` REFUSED**, **`UUID→NULL` REFUSED**, **a GUC naming a
+  different case REFUSED**; the door **shut again** after the correction; forging
+  via the generic RPC REFUSED.
+
+#### PART B — the employee-owned object inventory
+| Object | Class | Decision |
+|---|---|---|
+| `wellbeing_notes` (126) | **A** employee-owned | **employee_id ADDED** |
+| `dsar_requests` (140) | **A** employee-owned | **employee_id ADDED**, permanently nullable |
+| `concern_referrals` (110) | **A** pre-case context | **employee_id ADDED**, captured at triage |
+| `hr_review_requests` (138) | **C** case-owned | derive via `case_id → employee_id`; no column |
+| `signing_requests` (104) | **C** by intent | **BLOCKED ON E2** — see below |
+| `starter_instances` (105) | **E** legacy | **no column — nothing writes the table** |
+| `leaver_instances` (107) | **E** legacy | **no column — nothing writes the table** |
+| `employee_portal_accounts` (0) / `invites` (1) | **D** auth identity | deferred, reported |
+| `redundancy_cases` (0) | **B** snapshot | cannot take a scalar column |
+| `public.meetings`, embedded meetings | **F** | **HARD DEFER to E2** |
+| `allegations`, `case_tasks`, `case_signals`, `case_views`, `case_access`, `case_themes` | **C** | derive via case |
+
+- **`signing_requests` — the finding that changed the plan.** The brief assumed it
+  could derive identity through `case + meeting`. It has **neither `case_id` nor
+  `meeting_id`**. Association exists only in the opposite direction — the
+  `signId` is written into the meeting object inside `cases.meetings` JSONB —
+  which is why `api/signing.js` cannot audit against a case and why the employee
+  portal falls back to matching on **email**. The correct fix is `case_id` +
+  `meeting_id`; that is **meeting parentage**, hard-deferred to E2, and doing it
+  here would pre-empt the migration E2 must perform coherently. Adding
+  `employee_id` instead would create two truths and still leave the artefact
+  unreachable from its own case.
+- **`starter_instances` / `leaver_instances` — zero write paths.** The writers
+  were deleted in Phase 7.5C with `NewStarterScreen`; only the loaders remain so
+  DSAR can read historical records. A foreign key on a table nothing writes buys
+  nothing. Restated: a leaver instance is **not** the same fact as
+  `employment_status = 'leaver'`, and no automatic transition exists.
+- **Portal accounts/invites — audited weakness reported, not silently patched.**
+  Acceptance is bridged by **EMAIL**: `_accept-invite.js` verifies
+  `auth.users.email = invite.email` via the admin API and copies `employee_name`
+  verbatim. So the chain is token + email match + a name HR typed by hand, and a
+  mistyped address yields a fully "verified" account bound to the wrong person.
+  The remedy is an explicit `employee_id` captured when HR issues the invite and
+  propagated at acceptance — **not** an email join, **not** a silent backfill.
+  Deferred deliberately: it changes the portal's identity bridge and needs its own
+  security proof and UAT. 0 accounts, 1 invite in production.
+  - Also noted: **`api/portal/_accept-invite.js` has no test at all.**
+
+#### PART C — new-write identity
+- **Wellbeing notes now require a canonical employee.** The most sensitive
+  employee-owned record in the product was filed against a free-text name, on a
+  screen that was not even given the roster. It now uses the **one shared
+  `EmployeeSelect`**, and a note without an employee is refused.
+- **DSAR records the canonical subject** — and **can still be raised for someone
+  not on the roster**, via an explicit, clearly-labelled escape. That is a legal
+  duty, not a convenience: refusing to record a DSAR would put a data-modelling
+  preference above an obligation. The old `<datalist>` of names (which threw every
+  uuid away) is gone.
+- **Referrals capture identity at TRIAGE, not submission** — deliberately. A
+  referral is raised by any org member, commonly a line manager with **no roster
+  access and nobody to pick from**; gating submission would either block managers
+  from reporting a concern or force the roster open to everyone. The uuid HR
+  already selects at triage is now written back onto the referral, which it never
+  was before.
+- **Database invariants, proven per table (14 rolled-back proofs):** cross-org
+  INSERT **REFUSED** on all three; same-org accepted; `UUID → NULL` **REFUSED**;
+  `UUID → other UUID` **REFUSED**; legacy `NULL → UUID` **PERMITTED** (the
+  attribution path); and a DSAR with **no** subject id still insertable.
+- These tables get **no correction exemption** — they have no correction
+  operation, and a door with no authorised key is worse than no door because a
+  later reader assumes one exists.
+
+#### A real defect found and closed
+`ReviewScreen`'s non-HR **"Request HR review"** resolved the case by
+**employee-name equality** and passed `null` when it missed. A `case_id`-null
+`hr_review_requests` row is **permanently invisible to every client** (that
+table's SELECT policy is an `EXISTS` on `cases`), so a manager's request for help
+**silently vanished** — and where two people share a name it could attach to the
+wrong person's case. Parentage now comes from the meeting's own authoritative
+identity, and a request with no case is refused out loud. **The `cases` prop was
+removed from `ReviewScreen` entirely**: it existed only to support that lookup, so
+removing it makes the mistake structurally unavailable rather than merely fixed.
+
+#### PART D — DSAR identity completion
+- Cases, wellbeing notes and concern referrals now select by **`employee_id`**
+  when the subject is canonically identified. A same-name row that has **not**
+  been attributed is **neither absorbed nor hidden** — reported as metadata only.
+- The package states its basis **per collection** (`identityBasisByCollection`):
+  `employee_id` for the three adopted objects, `case_id` for case-owned ones,
+  `employee_name` for tables with no employee column.
+- **Standalone-meeting disposition — a genuine completeness gap, now stated
+  rather than hidden.** `standaloneMeetings` has been in `compileSubjectData`'s
+  signature since Phase 4C.1 but **no caller ever passed it**, so every package
+  has silently omitted meetings held outside a case. It is **still not passed**,
+  now as a recorded position with two reasons: (1) `public.meetings` has no
+  `employee_id` until E2, so the only basis would be the name — the inference this
+  programme removes; (2) the discovery gateway is **metadata-only by design**, so
+  disclosing content needs a new read path that belongs with meeting identity in
+  E2. The package and the DSAR screen both say plainly that meetings outside a
+  case are **not included**, so it is never presented as a complete record.
+- Fail-closed identity gating unchanged: only `RESOLVED` exports.
+
+#### Evidence
+`employeeIdentityCorrection.test.jsx` (37) + `employeeOwnedObjects.test.jsx` (34)
+= **71 new tests; 26 of 26 mutations caught**, each **asserted applied** first.
+Full suite **5,402 / 310 files**. Build clean. **API routes 12/12, none added** —
+the correction is an RPC precisely because of that cap.
+- **A mutation exposed a real test weakness.** Disabling the `UUID → NULL` branch
+  as `if false and <cond>` left the error MESSAGE in place, so asserting the
+  message could not detect the guarantee being lost. The assertion now pins the
+  **condition** with nothing permitted in front of it.
+- **Lint 161 errors / 9 warnings**, read by rule — identical to E0.5B, `immutability`
+  22, `set-state-in-effect` 8. No rule disabled. (`set-state-in-effect` remains 8
+  rather than 9 for the reason recorded under E0.5B: lost analysis, not a fix,
+  with a compensating test.)
+- **Method note:** prose assertions against multi-line SQL/JS comments now run on
+  a view with comment markers AND newlines stripped. Asserting an exact substring
+  across a wrapped comment is brittle in a way unrelated to the guarantee.
+
+#### Remaining gates
+- **Before E1:** correction now exists ✔; but non-case tables still lack employee
+  columns, reconciliation has not been RUN, and `_accept-invite.js` is untested.
+- **Before E2:** `signing_requests` needs `case_id` + `meeting_id`; meeting
+  identity itself.
+- **Before duplicate names:** the four analytics functions
+  (`org_event_correlation`, `org_insights_overview`, `org_theme_root_cause`,
+  `org_trend_detection`) remain name-joined — **still the hard prerequisite** —
+  plus the remaining name-as-identity read consumers in People, Person View,
+  Wellbeing grouping, Cases, appeal linking and search.
+
 ### Phase E0.5B — employee identity reconciliation workbench (2026-09-26)
 - **STATUS: DEPLOYED / READY FOR HUMAN UAT.** Migration
   `employee_reconciliation_2026_09_26` applied: **one function, no DDL** — no

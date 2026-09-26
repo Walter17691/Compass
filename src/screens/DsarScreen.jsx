@@ -9,6 +9,7 @@ import { authedFetch } from '../lib/authedFetch';
 import { WarningIcon } from '../components/Icons';
 import { PageHeader } from '../components/design/PageHeader';
 import { COLOR, RADIUS, FONT } from '../styles/tokens';
+import { EmployeeSelect } from '../components/EmployeeSelect';
 
 const STATUS_LABEL = { received:"Received", in_progress:"In progress", ready_to_send:"Ready to send", completed:"Completed" };
 
@@ -49,7 +50,31 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverIn
       const r = await authedFetch(`/api/portal/dsar-lookup?orgId=${encodeURIComponent(orgId)}&employeeName=${encodeURIComponent(req.employeeName)}`);
       if (r.ok) { const d = await r.json(); signingRequests = d.signingRequests || []; portalAccounts = d.portalAccounts || []; portalInvites = d.portalInvites || []; profiles = d.profiles || []; caseViews = d.caseViews || []; }
     } catch (e) { console.error('dsar-lookup failed:', e.message); }
-    setCompiled(compileSubjectData(req.employeeName, { cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, signingRequests, portalAccounts, dsarRequests, orgMembers, profiles, caseViews, portalInvites, orgEvents, improvementInitiatives, managerCapabilityInsights, organisationThemes, caseAccess, redundancyCases }));
+    setCompiled(compileSubjectData(req.employeeName, {
+      // Phase E0.6 — the canonical subject, where the request recorded one. With
+      // it, cases/wellbeing/referrals are selected by employee_id and a same-name
+      // record that has not been attributed is reported rather than absorbed.
+      canonicalEmployeeId: req.employeeId || null,
+      // Phase E0.6 — standaloneMeetings is STILL not passed, and that is now a
+      // stated position rather than an oversight.
+      //
+      // The audit finding: this parameter has existed since Phase 4C.1 but no
+      // caller ever supplied it, so every package has silently omitted meetings
+      // held outside a case. It is a genuine completeness gap — that content is
+      // unambiguously the employee's personal data.
+      //
+      // It is NOT closed here, deliberately. Two reasons, in order:
+      //   1. public.meetings has no employee_id until E2, so the only available
+      //      basis is the name on the meeting — the inference this programme
+      //      exists to remove. Compass would be guessing whose record it is.
+      //   2. The existing discovery gateway is metadata-only by design (no
+      //      record, transcript, summary or notes). Disclosing the content needs
+      //      a new content-bearing read path, which belongs with meeting identity
+      //      in E2 rather than bolted on here.
+      //
+      // So the package REPORTS the exclusion instead of pretending completeness —
+      // see standaloneMeetingsDisposition, surfaced on this screen below.
+      cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, signingRequests, portalAccounts, dsarRequests, orgMembers, profiles, caseViews, portalInvites, orgEvents, improvementInitiatives, managerCapabilityInsights, organisationThemes, caseAccess, redundancyCases }));
     setCompiling(false);
     // Phase 6.5 hardening (data-lifecycle review) — "DSAR generated" is
     // one of the privacy actions this whole review was asked to make
@@ -139,6 +164,31 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverIn
               </div>
             </div>
           )}
+          {/* Phase E0.6 — a scope statement, not a warning. The package is
+              complete for cases and case-owned records but NOT for meetings held
+              outside a case, and a reviewer about to send a DSAR response needs to
+              know that before they describe it as complete. */}
+          {compiled.standaloneMeetingsDisposition?.excluded&&(
+            <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
+              <WarningIcon size={14} color="#6B6375" style={{flexShrink:0,marginTop:1}}/>
+              <div style={{fontSize:12,color:"#6B6375",lineHeight:1.6}}>
+                <strong>Meetings held outside a case are not included.</strong> Compass cannot yet confirm which
+                employee record such a meeting belongs to, and will not attribute one by name. Check whether any
+                exist for this person before treating this package as their complete record.
+              </div>
+            </div>
+          )}
+          {compiled.unattributedWellbeingNotes?.length>0&&(
+            <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
+              <WarningIcon size={14} color="#6B6375" style={{flexShrink:0,marginTop:1}}/>
+              <div style={{fontSize:12,color:"#6B6375",lineHeight:1.6}}>
+                <strong>{compiled.unattributedWellbeingNotes.length} wellbeing note{compiled.unattributedWellbeingNotes.length===1?"":"s"} recorded under this name {compiled.unattributedWellbeingNotes.length===1?"is":"are"} not included.</strong>{" "}
+                {compiled.unattributedWellbeingNotes.length===1?"It has":"They have"} not been confirmed as belonging to this
+                employee, so {compiled.unattributedWellbeingNotes.length===1?"it is":"they are"} left out rather than
+                risk disclosing another person's record.
+              </div>
+            </div>
+          )}
           {compiled.possibleNameCollision&&!compiled.identityRequiresReconciliation&&(
             <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FEF0EB",border:"1px solid #F0C4B0",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
               <WarningIcon size={14} color="#C84B2F" style={{flexShrink:0,marginTop:1}}/>
@@ -206,7 +256,9 @@ function RequestDetail({ req, cases, employeeRecords, starterInstances, leaverIn
 }
 
 export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest, extendDsarRequest, promptDialog, cases, employeeRecords, starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, orgMembers, orgEvents, improvementInitiatives, managerCapabilityInsights, organisationThemes, caseAccess, redundancyCases, orgId, audit, setScreen }) {
-  const [form, setForm] = useState({ employeeName:"", requestedBy:"", receivedDate:new Date().toISOString().split("T")[0] });
+  const [form, setForm] = useState({ employeeId:null, employeeName:"", requestedBy:"", receivedDate:new Date().toISOString().split("T")[0] });
+  // Explicit, and deliberately not inferred from an empty roster match.
+  const [offRoster, setOffRoster] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
   const sorted = [...dsarRequests].sort((a,b)=>{
@@ -234,9 +286,44 @@ export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest,
         {showForm&&(
           <Card style={{marginBottom:20}}>
             <div style={{marginBottom:12}}>
-              <label htmlFor="dsar-form-employee-name" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Employee name</label>
-              <input id="dsar-form-employee-name" list="dsar-employee-names" value={form.employeeName} onChange={e=>setForm(p=>({...p,employeeName:e.target.value}))} placeholder="e.g. Ada Lovelace" style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",boxSizing:"border-box",color:"#1A1535"}}/>
-              <datalist id="dsar-employee-names">{employeeRecords.map(r=><option key={r.name} value={r.name}/>)}</datalist>
+              {/* Phase E0.6 — was a free-text input with a <datalist> of names,
+                  which threw the uuid away and made the subject a string.
+                  The canonical path is now first.
+
+                  The off-roster escape below is NOT a convenience: a DSAR may
+                  legitimately concern a former employee with no record, or
+                  someone whose identity is precisely what is in dispute.
+                  Refusing to record the request would block a legal obligation
+                  on a data-modelling preference. So the name-only route stays —
+                  chosen deliberately, and clearly marked as unidentified. */}
+              {!offRoster ? (
+                <>
+                  <EmployeeSelect
+                    inputId="dsar-form-employee-name"
+                    label="Employee"
+                    employeeRecords={employeeRecords}
+                    value={form.employeeId || null}
+                    onChange={(id, employee)=>setForm(p=>({...p, employeeId:id, employeeName:employee?.name||""}))}
+                  />
+                  <button type="button" onClick={()=>{ setOffRoster(true); setForm(p=>({...p, employeeId:null, employeeName:""})); }}
+                    style={{marginTop:6,background:"none",border:"none",padding:0,fontSize:12,color:"#6B6375",textDecoration:"underline",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                    This person is not on the employee roster
+                  </button>
+                </>
+              ) : (
+                <>
+                  <label htmlFor="dsar-form-employee-name" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Subject name (not on the roster)</label>
+                  <input id="dsar-form-employee-name" value={form.employeeName} onChange={e=>setForm(p=>({...p,employeeName:e.target.value,employeeId:null}))} placeholder="e.g. a former employee" style={{width:"100%",fontSize:13,border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",boxSizing:"border-box",color:"#1A1535"}}/>
+                  <div style={{fontSize:12,color:"#6B6375",marginTop:6,lineHeight:1.5}}>
+                    Recorded by name only. Compass cannot confirm which employee record this is, so the response
+                    package will not be assembled from a canonical identity.
+                  </div>
+                  <button type="button" onClick={()=>{ setOffRoster(false); setForm(p=>({...p, employeeName:"", employeeId:null})); }}
+                    style={{marginTop:6,background:"none",border:"none",padding:0,fontSize:12,color:"#6B6375",textDecoration:"underline",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                    Choose from the employee roster instead
+                  </button>
+                </>
+              )}
             </div>
             <div style={{marginBottom:12}}>
               <label htmlFor="dsar-form-requested-by" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Requested by (optional, if different from employee)</label>

@@ -125,6 +125,17 @@ export function canManageDirectorTier(actingRole, targetCurrentRole) {
   return targetCurrentRole !== "hr_director";
 }
 
+// Phase E0.6 — correcting an ESTABLISHED employee identity moves a case between
+// two real people's Employee Files, overruling a colleague's recorded decision.
+// Deliberately narrower than isHrRole(): an HR Manager may reconcile an
+// unattributed case but may not overturn one that is already attributed.
+//
+// Mirrors `v_member.role <> 'hr_director'` in correct_case_employee(). As ever,
+// the database is the enforcement; this only decides what the UI offers.
+export function canCorrectEmployeeIdentity(role) {
+  return role === "hr_director";
+}
+
 // Roles with org-wide visibility into confidential cases, matching
 // has_confidential_case_oversight() in the migration.
 export function hasConfidentialOversight(role) {

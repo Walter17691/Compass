@@ -3,8 +3,9 @@ import { DateInput } from '../components/DateInput';
 import { Btn, Card, Badge } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
 import { PageHeader } from '../components/design/PageHeader';
+import { EmployeeSelect } from '../components/EmployeeSelect';
 
-export function WellbeingScreen({ wellbeingNotes, activeWellbeing, wellbeingView, setActiveWellbeing, setWellbeingView, toggleFollowUpDone, wellbeingForm, setWellbeingForm, addWellbeingNote }) {
+export function WellbeingScreen({ employeeRecords = [], isHR = false, onRequestCreateEmployee, wellbeingNotes, activeWellbeing, wellbeingView, setActiveWellbeing, setWellbeingView, toggleFollowUpDone, wellbeingForm, setWellbeingForm, addWellbeingNote }) {
   const typeColors = {"chat":"#7C5CFC","eap":"#4A7C6F","adjustment":"#5E627A","crisis":"#E8622A","return":"#D4882A","checkin":"#888"};
   const allEmployees = [...new Set(wellbeingNotes.map(n=>n.employeeName))];
   const employeeNotes = activeWellbeing ? wellbeingNotes.filter(n=>n.employeeName===activeWellbeing).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)) : [];
@@ -44,9 +45,20 @@ export function WellbeingScreen({ wellbeingNotes, activeWellbeing, wellbeingView
           <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:16,color:"#1A1535",margin:"0 0 16px",fontWeight:600}}>Add wellbeing note</h3>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
             <div>
-              <label htmlFor="wellbeing-employee-name" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Employee name *</label>
-              <input id="wellbeing-employee-name" placeholder="e.g. James Wilson" value={wellbeingForm.employeeName} onChange={e=>setWellbeingForm(p=>({...p,employeeName:e.target.value}))}
-                style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"9px 12px",fontSize:14,color:"#1A1535",outline:"none",boxSizing:"border-box"}} />
+              {/* Phase E0.6 — was a free-text name. A wellbeing note is the most
+                  sensitive employee-owned record in the product, and it used to
+                  be filed against whatever string somebody typed. The canonical
+                  employee is now chosen from the roster; the name still travels
+                  with the note as its display snapshot. */}
+              <EmployeeSelect
+                inputId="wellbeing-employee-name"
+                label="Employee *"
+                employeeRecords={employeeRecords}
+                value={wellbeingForm.employeeId || null}
+                canCreateEmployee={isHR}
+                onRequestCreate={onRequestCreateEmployee}
+                onChange={(id, employee)=>setWellbeingForm(p=>({...p, employeeId:id, employeeName:employee?.name||""}))}
+              />
             </div>
             <div>
               <label htmlFor="wellbeing-type" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6880",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5}}>Note type</label>

@@ -85,8 +85,8 @@ import { buildReviewDraft, restorableDraft, markDraftEdited, supersedeReviewDraf
 import { splitMeetingRecord } from './lib/meetingRecordSections';
 import { mergeSuggestions, suggestionKey } from './lib/suggestionIdentity';
 import { appealLinkCandidates } from './lib/appealLink';
-import { reconcileCaseEmployeeWrite, describeReconcileOutcome, shouldReloadAfter } from './lib/reconciliationWrites';
-import { isHrRole, CASE_ACCESS_LEVEL_LABELS } from './lib/roles';
+import { reconcileCaseEmployeeWrite, describeReconcileOutcome, shouldReloadAfter, correctCaseEmployeeWrite, describeCorrectionOutcome, CORRECT_RESULT } from './lib/reconciliationWrites';
+import { isHrRole, CASE_ACCESS_LEVEL_LABELS, canCorrectEmployeeIdentity } from './lib/roles';
 import { computeSelectionScore } from './lib/redundancyScoring';
 import { parseCsv, toCsv, csvRowsToObjects } from './lib/csv';
 import { authedFetch } from './lib/authedFetch';
@@ -723,6 +723,27 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     await createEmployeeRecord(trimmed, {});
     await loadEmployeeRecords();
     showToast(`Added ${trimmed}. Now confirm which cases belong to them.`);
+  };
+
+  // ── Phase E0.6 — correct an ALREADY-established employee identity ─────────
+  //
+  // HR DIRECTOR only, enforced by correct_case_employee() itself. The gate below
+  // decides what the UI offers; it is not the boundary, and the database refuses
+  // an HR Manager regardless of what this client believes.
+  const correctCaseEmployee = async (legacyCase, employee, reason) => {
+    setReconcilingCaseId(legacyCase?.id || null);
+    try {
+      const outcome = await correctCaseEmployeeWrite({
+        supabase, caseId: legacyCase?.id, employeeId: employee?.id, reason,
+      });
+      const said = describeCorrectionOutcome(outcome, employee?.name || "");
+      if(outcome.result === CORRECT_RESULT.OK || outcome.result === CORRECT_RESULT.CHANGED_UNDERNEATH) {
+        await loadCasesFromDB();
+      }
+      showToast(said.message, said.tone === "error" ? "error" : undefined);
+    } finally {
+      setReconcilingCaseId(null);
+    }
   };
 
   // ── Phase E0.5B — reconcile ONE historical case to a canonical employee ───
@@ -2815,7 +2836,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   }, [isHR]);
 
   const [activeWellbeing, setActiveWellbeing] = useState(null); // employee name being viewed
-  const [wellbeingForm, setWellbeingForm] = useState({employeeName:"",type:"chat",date:"",manager:"",content:"",followUpDate:"",supportOffered:"",confidential:true});
+  const [wellbeingForm, setWellbeingForm] = useState({employeeId:null,employeeName:"",type:"chat",date:"",manager:"",content:"",followUpDate:"",supportOffered:"",confidential:true});
   const [wellbeingView, setWellbeingView] = useState("list"); // list|new|employee
 
   // ── Allegations (case-scoped issues under investigation) ──
@@ -3632,7 +3653,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       const {data, error} = await fetchAllPages((from, to) => supabase.from('dsar_requests').select('*').eq('org_id', org.id).order('id', {ascending:true}).range(from, to));
       if(error) { console.error('loadDsarRequests', error); markLoadIssue('DSAR requests'); return; }
       if(data) setDsarRequests(data.map(r=>({
-        id:r.id, employeeName:r.employee_name, requestedBy:r.requested_by,
+        id:r.id, employeeId:r.employee_id||null, employeeName:r.employee_name, requestedBy:r.requested_by,
         receivedDate:r.received_date, dueDate:r.due_date, status:r.status,
         completedDate:r.completed_date, notes:r.notes,
         reviewedFlaggedSections:r.reviewed_flagged_sections, createdAt:r.created_at,
@@ -3641,13 +3662,17 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     } catch(e) { console.error('loadDsarRequests', e); markLoadIssue('DSAR requests'); }
   };
 
-  const createDsarRequest = async ({employeeName, requestedBy, receivedDate}) => {
+  const createDsarRequest = async ({employeeId, employeeName, requestedBy, receivedDate}) => {
     if(!org?.id || !employeeName?.trim() || !receivedDate) return;
     const dueDate = addCalendarMonth(receivedDate);
     if(!dueDate) { showToast("Invalid received date", "error"); return; }
     try {
       const {data, error} = await supabase.from('dsar_requests').insert({
         org_id: org.id,
+        // Phase E0.6 — the canonical subject where one was chosen. Deliberately
+        // nullable: a DSAR may concern someone with no employee record, and
+        // refusing to record it would block a legal obligation.
+        employee_id: employeeId || null,
         employee_name: employeeName.trim(),
         requested_by: requestedBy||null,
         received_date: receivedDate,
@@ -3656,7 +3681,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       }).select().single();
       if(error) throw error;
       setDsarRequests(p=>[...p, {
-        id:data.id, employeeName:data.employee_name, requestedBy:data.requested_by,
+        id:data.id, employeeId:data.employee_id||null, employeeName:data.employee_name, requestedBy:data.requested_by,
         receivedDate:data.received_date, dueDate:data.due_date, status:data.status,
         completedDate:data.completed_date, notes:data.notes,
         reviewedFlaggedSections:data.reviewed_flagged_sections, createdAt:data.created_at,
@@ -3901,7 +3926,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       if(data) {
         data.forEach(r => { wellbeingNoteVersionRef.current[r.id] = r.updated_at; });
         saveWellbeingNotes(data.map(r=>({
-          id:r.id, employeeName:r.employee_name, type:r.type, date:r.date, manager:r.manager,
+          id:r.id, employeeId:r.employee_id||null, employeeName:r.employee_name, type:r.type, date:r.date, manager:r.manager,
           content:r.content, supportOffered:r.support_offered, followUpDate:r.follow_up_date,
           followUpDone:r.follow_up_done, confidential:r.confidential,
           createdBy:r.created_by, createdAt:r.created_at,
@@ -3918,7 +3943,10 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(!org?.id) return Promise.resolve();
     const fields = {
       org_id: org.id,
-      employee_name: note.employeeName, type: note.type||'chat', date: note.date||null,
+      // Phase E0.6 — employee_id is the identity; employee_name remains the
+    // display snapshot recorded at the time.
+    employee_id: note.employeeId ?? null,
+    employee_name: note.employeeName, type: note.type||'chat', date: note.date||null,
       manager: note.manager||null, content: note.content, support_offered: note.supportOffered||null,
       follow_up_date: note.followUpDate||null, follow_up_done: !!note.followUpDone,
       confidential: note.confidential!==false, created_by: note.createdBy||null,
@@ -3940,6 +3968,10 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
 
   const addWellbeingNote = () => {
     const f = wellbeingForm;
+    // Phase E0.6 — a NEW wellbeing note must name a canonical employee. The
+    // form's selector cannot produce a name without an id, so this refuses only
+    // the case where nobody was picked at all.
+    if(!f.employeeId) { showToast("Select which employee this note is about.", "error"); return; }
     if(!f.employeeName.trim() || !f.content.trim()) return;
     const note = {
       id: newId("wellbeing"),
@@ -3951,7 +3983,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     };
     saveWellbeingNotes([...wellbeingNotes, note]);
     saveWellbeingNoteToDB(note);
-    setWellbeingForm({employeeName:"",type:"chat",date:"",manager:"",content:"",followUpDate:"",supportOffered:"",confidential:true});
+    setWellbeingForm({employeeId:null,employeeName:"",type:"chat",date:"",manager:"",content:"",followUpDate:"",supportOffered:"",confidential:true});
     setWellbeingView("employee");
     setActiveWellbeing(f.employeeName);
     audit("Wellbeing note added (confidential)", f.employeeName);
@@ -4283,7 +4315,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       if(data) {
         data.forEach(r => { concernReferralVersionRef.current[r.id] = r.updated_at; });
         setConcernReferrals(data.map(r=>({
-          id:r.id, employeeName:r.employee_name, concernType:r.concern_type, description:r.description,
+          id:r.id, employeeId:r.employee_id||null, employeeName:r.employee_name, concernType:r.concern_type, description:r.description,
           witnesses:r.witnesses||"", discussedWithEmployee:!!r.discussed_with_employee, involvesSafetyOrWelfare:!!r.involves_safety_or_welfare,
           immediateSafetyConcern:!!r.immediate_safety_concern,
           mayNeedFormalProcess:!!r.may_need_formal_process, evidenceDescription:r.evidence_description||"", evidenceFiles:r.evidence_files||[],
@@ -4306,7 +4338,9 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     if(!org?.id) return Promise.resolve();
     const fields = {
       org_id: org.id,
-      employee_name: referral.employeeName, concern_type: referral.concernType||null,
+      // Phase E0.6 — canonical identity, captured at triage. NULL until then.
+    employee_id: referral.employeeId ?? null,
+    employee_name: referral.employeeName, concern_type: referral.concernType||null,
       description: referral.description, witnesses: referral.witnesses||null, discussed_with_employee: !!referral.discussedWithEmployee,
       involves_safety_or_welfare: !!referral.involvesSafetyOrWelfare, immediate_safety_concern: !!referral.immediateSafetyConcern,
       may_need_formal_process: !!referral.mayNeedFormalProcess,
@@ -4445,7 +4479,11 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         createdAt: new Date().toISOString(),
       };
       saveCases([...cases, newCase]);
-      const updated = setReferralStatus(concernReferrals, referralId, "case_opened", { linkedCaseId: newCase.id });
+      // Phase E0.6 — the referral itself now records the canonical employee HR
+      // confirmed at triage. Until this phase the uuid was written only onto the
+      // case, leaving the referral permanently name-only even though a human had
+      // just identified the person.
+      const updated = setReferralStatus(concernReferrals, referralId, "case_opened", { linkedCaseId: newCase.id, employeeId: employee.id });
       setConcernReferrals(updated);
       saveConcernReferralToDB(updated.find(r=>r.id===referralId));
       // Same identity provenance as the other two migrated paths.
@@ -11178,7 +11216,7 @@ Please produce:
 
       {/* ══ REVIEW ══ */}
       {screen===SCREENS.REVIEW&&(
-        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} cases={cases} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={askCompassHistory} setAskCompassHistory={setAskCompassHistory} askCompass={askCompass} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} signatureEligible={signatureEligibleIn(cases, { caseId: caseInfo.caseId, meetingId: caseInfo.meetingId })} standalone={caseInfo.meetingHome===TABLE_HOME} onSaveAndSendForSignature={saveAndSendForSignature} draftStatus={draftStatus} onEditReviewRecord={onEditReviewRecord} onRetryReviewDraft={retryReviewDraft} advisorNotes={advisorNotes} reviewGaps={reviewGaps} riskScore={riskScore} reviewGenerationFailed={reviewGenerationFailed} onRetryGeneration={handleReview}
+        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={askCompassHistory} setAskCompassHistory={setAskCompassHistory} askCompass={askCompass} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} signatureEligible={signatureEligibleIn(cases, { caseId: caseInfo.caseId, meetingId: caseInfo.meetingId })} standalone={caseInfo.meetingHome===TABLE_HOME} onSaveAndSendForSignature={saveAndSendForSignature} draftStatus={draftStatus} onEditReviewRecord={onEditReviewRecord} onRetryReviewDraft={retryReviewDraft} advisorNotes={advisorNotes} reviewGaps={reviewGaps} riskScore={riskScore} reviewGenerationFailed={reviewGenerationFailed} onRetryGeneration={handleReview}
           meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion}
           meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion}
         />
@@ -11365,6 +11403,9 @@ Please produce:
       {/* ══ MENTAL HEALTH & WELLBEING ══ */}
       {screen===SCREENS.WELLBEING&&isHR&&(
         <WellbeingScreen
+          employeeRecords={employeeRecords}
+          isHR={isHR}
+          onRequestCreateEmployee={createEmployeeForReconciliation}
           wellbeingNotes={wellbeingNotes}
           activeWellbeing={activeWellbeing}
           wellbeingView={wellbeingView}
@@ -11391,7 +11432,7 @@ Please produce:
           org={{ org, locations, deleteLocation, addLocation, orgRoles, loadOrgRoles, orgMembers, loadOrgMembers }}
           team={{ teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, updateCaseAccessLevel, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, currentUserRole: member?.role, pendingInvites, loadPendingInvites, revokeInvite, resendInvite, resendingInviteId }}
           portal={{ portalAccounts, revokePortalAccess }}
-          reconciliation={{ cases, employeeRecords, reconcileCaseEmployee, busyCaseId: reconcilingCaseId, onRequestCreateEmployee: createEmployeeForReconciliation }}
+          reconciliation={{ cases, employeeRecords, reconcileCaseEmployee, busyCaseId: reconcilingCaseId, onRequestCreateEmployee: createEmployeeForReconciliation, canCorrectIdentity: canCorrectEmployeeIdentity(member?.role), correctCaseEmployee }}
           employeeData={{ employeeCsvFileRef, employeeCsvProcessing, handleEmployeeCsvImport, exportEmployeesCsv, caseCsvFileRef, caseCsvProcessing, handleCaseCsvImport, downloadCaseCsvTemplate }}
           branding={{ wordTemplate, setWordTemplate, orgLsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad }}
           policies={{ policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, changePolicyCategory }}

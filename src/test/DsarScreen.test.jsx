@@ -46,7 +46,10 @@ describe('DsarScreen — field labelling (Phase 6.5, Batch 13)', () => {
     const user = userEvent.setup();
     render(<DsarScreen {...baseProps} dsarRequests={[]} />);
     await user.click(screen.getByRole('button', { name: '+ Log new request' }));
-    expect(screen.getByLabelText('Employee name')).toBeInTheDocument();
+    // Phase E0.6 — the free-text "Employee name" input became a roster selector
+    // labelled "Employee". The guarantee this test defends is unchanged: every
+    // field on the form is reachable by its label.
+    expect(screen.getByLabelText('Employee')).toBeInTheDocument();
     expect(screen.getByLabelText(/Requested by/)).toBeInTheDocument();
   });
 });

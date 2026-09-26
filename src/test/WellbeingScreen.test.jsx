@@ -24,7 +24,9 @@ const baseProps = {
 describe('WellbeingScreen — field labelling (Phase 6.5, Batch 13)', () => {
   it('labels every field on the add-note form', () => {
     render(<WellbeingScreen {...baseProps} />);
-    expect(screen.getByLabelText(/Employee name/)).toBeInTheDocument();
+    // Phase E0.6 — free-text "Employee name" became a roster selector labelled
+    // "Employee *". The field is still labelled, which is what this test is for.
+    expect(screen.getByLabelText(/Employee \*/)).toBeInTheDocument();
     expect(screen.getByLabelText('Note type')).toBeInTheDocument();
     expect(screen.getByLabelText('Date')).toBeInTheDocument();
     expect(screen.getByLabelText('HR manager')).toBeInTheDocument();

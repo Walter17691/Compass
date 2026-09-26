@@ -101,3 +101,68 @@ export function describeReconcileOutcome({ result, error }, employeeName = "") {
 export function shouldReloadAfter(result) {
   return result === RECONCILE_RESULT.OK || result === RECONCILE_RESULT.ALREADY_RECONCILED;
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// CORRECTION. Phase E0.6.
+//
+// Reconciliation answers "who is this unattributed record about?" from nothing.
+// Correction OVERRULES a colleague's recorded decision and moves a case between
+// two real people's Employee Files. That is materially more sensitive, which is
+// why the database requires HR DIRECTOR — not merely HR — and a stored reason.
+//
+// As with reconciliation, none of that authority is re-checked here. The RPC is
+// the boundary; this asks it to act and reports what it said.
+// ─────────────────────────────────────────────────────────────────────────
+
+export const CORRECT_RESULT = Object.freeze({
+  OK: "ok",
+  // The identity changed underneath us while the form was open.
+  CHANGED_UNDERNEATH: "changed_underneath",
+  // Refused by the database: not an HR Director, cross-org, same employee,
+  // no established identity to correct, or a reason that says nothing.
+  REFUSED: "refused",
+  INVALID: "invalid",
+});
+
+// Mirrors the database's own threshold. Checked here ONLY so the button can be
+// disabled before a pointless round trip — the database refuses it regardless,
+// and that refusal is the rule. Keeping the number identical in both places is
+// deliberate; if they ever diverge, the database wins.
+export const MIN_CORRECTION_REASON = 10;
+
+export function correctionReasonIsUsable(reason) {
+  return typeof reason === "string" && reason.trim().length >= MIN_CORRECTION_REASON;
+}
+
+export async function correctCaseEmployeeWrite({ supabase, caseId, employeeId, reason }) {
+  if (!supabase || !caseId || !employeeId || !correctionReasonIsUsable(reason)) {
+    return { result: CORRECT_RESULT.INVALID };
+  }
+  try {
+    const { error } = await supabase.rpc("correct_case_employee", {
+      p_case_id: caseId,
+      p_new_employee_id: employeeId,
+      p_reason: reason.trim(),
+    });
+    if (!error) return { result: CORRECT_RESULT.OK };
+    if (isAlreadyReconciled(error) || error.code === ALREADY_RECONCILED_CODE) {
+      return { result: CORRECT_RESULT.CHANGED_UNDERNEATH, error };
+    }
+    return { result: CORRECT_RESULT.REFUSED, error };
+  } catch (e) {
+    return { result: CORRECT_RESULT.REFUSED, error: e };
+  }
+}
+
+export function describeCorrectionOutcome({ result, error }, employeeName = "") {
+  switch (result) {
+    case CORRECT_RESULT.OK:
+      return { tone: "success", message: `Identity corrected — this case now belongs to ${employeeName}. Both the original decision and this correction are in the audit history.` };
+    case CORRECT_RESULT.CHANGED_UNDERNEATH:
+      return { tone: "error", message: "This case's identity changed while you were correcting it. Refreshed to show the current identity." };
+    case CORRECT_RESULT.INVALID:
+      return { tone: "error", message: "Choose a different employee and give a reason of at least 10 characters." };
+    default:
+      return { tone: "error", message: "Couldn't correct this case — " + (error?.message || "please try again.") };
+  }
+}

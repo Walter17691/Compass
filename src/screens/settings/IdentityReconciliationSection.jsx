@@ -5,6 +5,7 @@ import {
   RECONCILIATION, NO_CANDIDATE, EVIDENCE,
   groupLegacyForReview, summariseGroup, describeEvidence,
 } from '../../lib/employeeReconciliation';
+import { MIN_CORRECTION_REASON, correctionReasonIsUsable } from '../../lib/reconciliationWrites';
 
 // ─────────────────────────────────────────────────────────────────────────
 // THE RECONCILIATION WORKBENCH. Phase E0.5B.
@@ -33,6 +34,13 @@ import {
 
 const PANEL = { background: "#FDFAF5", border: "1px solid #E8E0D0", borderRadius: 10, padding: "14px 16px" };
 const META = { fontSize: 12, color: "#6B6375" };
+
+// Enough to tell two people apart. Shared by the candidate rows and the
+// correction panel so the two cannot describe the same person differently.
+function describeEmployeeLine(e) {
+  return [e.jobTitle, e.location, e.employeeNumber ? `#${e.employeeNumber}` : null]
+    .filter(Boolean).join(" · ");
+}
 
 const STATE_LABEL = {
   [RECONCILIATION.CANDIDATE]: "Possible match — needs confirming",
@@ -78,9 +86,12 @@ function EvidencePanel({ legacyCase, employee, caseLocationName }) {
 }
 
 // One historical case: its own state, its own candidates, its own decision.
-function CaseRow({ legacyCase, employeeRecords, canCreateEmployee, onRequestCreateEmployee, onReconcile, busyCaseId, locationNameFor }) {
+function CaseRow({ legacyCase, employeeRecords, canCreateEmployee, onRequestCreateEmployee, onReconcile, busyCaseId, locationNameFor, canCorrect = false, onCorrect }) {
   const [manualId, setManualId] = useState(null);
   const [dismissed, setDismissed] = useState(false);
+  const [correcting, setCorrecting] = useState(false);
+  const [correctingId, setCorrectingId] = useState(null);
+  const [reason, setReason] = useState("");
   const cls = legacyCase.classification;
   const busy = busyCaseId === legacyCase.id;
   const candidates = (cls.candidateIds || [])
@@ -93,14 +104,85 @@ function CaseRow({ legacyCase, employeeRecords, canCreateEmployee, onRequestCrea
 
   if (cls.state === RECONCILIATION.RESOLVED) {
     const emp = employeeRecords.find(e => e && e.id === cls.employeeId);
+    const target = correctingId ? employeeRecords.find(e => e && e.id === correctingId) : null;
     return (
       <div style={{ ...PANEL, marginTop: 8, background: "#F4FAF6", borderColor: "#CFE6D8" }}>
-        <div style={{ fontSize: 13, color: "#1A1535" }}>
-          Reconciled to {emp ? emp.name : "an employee record"}
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13, color: "#1A1535" }}>
+              Reconciled to {emp ? emp.name : "an employee record"}
+            </div>
+            <div style={META}>{describeCase}</div>
+            {/* The historical name is NOT rewritten, so say what it still reads. */}
+            <div style={{ ...META, marginTop: 4 }}>Recorded on this case as “{legacyCase.employeeName || "(no name)"}”</div>
+          </div>
+          {/* HR DIRECTOR ONLY, and deliberately NOT styled as an ordinary
+              "Edit": this moves a case between two people's Employee Files.
+              An HR Manager sees the resolved identity above and no control. */}
+          {canCorrect && !correcting && (
+            <Btn variant="ghost" onClick={() => setCorrecting(true)}
+              style={{ padding: "4px 10px", fontSize: 12, flexShrink: 0 }}>
+              Correct employee identity
+            </Btn>
+          )}
         </div>
-        <div style={META}>{describeCase}</div>
-        {/* The historical name is NOT rewritten, so say what it still reads. */}
-        <div style={{ ...META, marginTop: 4 }}>Recorded on this case as “{legacyCase.employeeName || "(no name)"}”</div>
+
+        {correcting && (
+          <div style={{ borderTop: "1px solid #CFE6D8", marginTop: 10, paddingTop: 10 }}>
+            <div style={{ ...META, lineHeight: 1.6, marginBottom: 10 }}>
+              This changes which Employee File this historical case belongs to. The original decision and the
+              correction will both remain in the audit history.
+            </div>
+            <div style={{ ...META, marginBottom: 8 }}>
+              <strong>Current employee:</strong> {emp ? emp.name : "(unknown)"}
+              {emp && describeEmployeeLine(emp) ? ` · ${describeEmployeeLine(emp)}` : ""}
+            </div>
+            <EmployeeSelect
+              inputId={`correct-${legacyCase.id}`}
+              employeeRecords={employeeRecords}
+              value={correctingId}
+              onChange={id => setCorrectingId(id)}
+              label="New employee"
+            />
+            <div style={{ marginTop: 10 }}>
+              <label htmlFor={`correct-reason-${legacyCase.id}`} style={{ ...META, display: "block", marginBottom: 4 }}>
+                Reason for the correction
+              </label>
+              <textarea
+                id={`correct-reason-${legacyCase.id}`}
+                value={reason}
+                onChange={e => setReason(e.target.value)}
+                rows={2}
+                placeholder="Why was the original identity wrong?"
+                style={{ width: "100%", padding: "8px 10px", border: "1px solid #CFC7B8", borderRadius: 8,
+                         fontSize: 13, fontFamily: "DM Sans,system-ui,sans-serif", boxSizing: "border-box" }}
+              />
+              {reason.trim().length > 0 && !correctionReasonIsUsable(reason) && (
+                <div style={{ ...META, color: "#C84B2F" }}>
+                  Give at least {MIN_CORRECTION_REASON} characters — this is kept in the audit history.
+                </div>
+              )}
+            </div>
+            {/* Explicit confirmation naming BOTH people, so the change cannot be
+                made without reading who it moves the case from and to. */}
+            {target && correctionReasonIsUsable(reason) && (
+              <div style={{ ...META, marginTop: 10, color: "#1A1535" }}>
+                Change this case from <strong>{emp ? emp.name : "(unknown)"}{emp?.employeeNumber ? ` #${emp.employeeNumber}` : ""}</strong>
+                {" "}to <strong>{target.name}{target.employeeNumber ? ` #${target.employeeNumber}` : ""}</strong>?
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <Btn variant="secondary"
+                disabled={busy || !target || !correctionReasonIsUsable(reason)}
+                onClick={() => onCorrect(legacyCase, target, reason)}
+                style={{ padding: "6px 12px", fontSize: 12 }}>
+                {busy ? "Saving…" : "Confirm correction"}
+              </Btn>
+              <Btn variant="ghost" onClick={() => { setCorrecting(false); setCorrectingId(null); setReason(""); }}
+                style={{ padding: "6px 12px", fontSize: 12 }}>Cancel</Btn>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -149,10 +231,7 @@ function CaseRow({ legacyCase, employeeRecords, canCreateEmployee, onRequestCrea
               {candidates.map(emp => (
                 <div key={emp.id} style={{ borderTop: "1px solid #EFE8DA", paddingTop: 8, marginTop: 8 }}>
                   <div style={{ fontSize: 13, color: "#1A1535" }}>{emp.name}</div>
-                  <div style={META}>
-                    {[emp.jobTitle, emp.location, emp.employeeNumber ? `#${emp.employeeNumber}` : null]
-                      .filter(Boolean).join(" · ") || "No further details on file"}
-                  </div>
+                  <div style={META}>{describeEmployeeLine(emp) || "No further details on file"}</div>
                   <EvidencePanel legacyCase={legacyCase} employee={emp} caseLocationName={caseLocationName} />
                   <Btn variant="secondary" disabled={busy}
                     onClick={() => onReconcile(legacyCase, emp)}
@@ -195,6 +274,9 @@ export function IdentityReconciliationSection({
   cases = [], employeeRecords = [], locations = [],
   canCreateEmployee = false, onRequestCreateEmployee,
   reconcileCaseEmployee, busyCaseId = null,
+  // HR DIRECTOR only. Passed separately from canCreateEmployee (which is HR)
+  // precisely so the two authorities cannot be conflated by a later edit.
+  canCorrectIdentity = false, correctCaseEmployee,
 }) {
   const [expanded, setExpanded] = useState(null);
   const [showResolved, setShowResolved] = useState(false);
@@ -286,7 +368,8 @@ export function IdentityReconciliationSection({
                   <CaseRow key={c.id} legacyCase={c} employeeRecords={employeeRecords}
                     canCreateEmployee={canCreateEmployee} onRequestCreateEmployee={onRequestCreateEmployee}
                     onReconcile={reconcileCaseEmployee} busyCaseId={busyCaseId}
-                    locationNameFor={locationNameFor} />
+                    locationNameFor={locationNameFor}
+                    canCorrect={canCorrectIdentity} onCorrect={correctCaseEmployee} />
                 ))}
               </div>
             )}

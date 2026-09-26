@@ -5,7 +5,13 @@ import { MDRenderer } from '../components/MDRenderer';
 import { WhySourcesModal } from '../components/WhySourcesModal';
 import { AskCompassErrorBoundary } from '../components/AskCompassErrorBoundary';
 
-export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrReview, reviewOutput, reviewOutputOriginal, meetingSummary, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, signatureEligible=false, standalone=false, onSaveAndSendForSignature, draftStatus=null, onEditReviewRecord, onRetryReviewDraft, advisorNotes="", reviewGaps=[], riskScore, reviewGenerationFailed, onRetryGeneration,
+// Phase E0.6 — `cases` is deliberately NOT a prop any more. It existed solely to
+// let the non-HR "Request HR review" button find a case by employee-name
+// equality, which could attach a request to the wrong same-named person or, when
+// it missed, write a case_id-null row that no client can ever read. Removing the
+// prop makes that class of mistake structurally unavailable here: this screen
+// cannot search every case in the organisation because it is not given them.
+export function ReviewScreen({ caseInfo, meetingType, isHR, requestHrReview, reviewOutput, reviewOutputOriginal, meetingSummary, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, signatureEligible=false, standalone=false, onSaveAndSendForSignature, draftStatus=null, onEditReviewRecord, onRetryReviewDraft, advisorNotes="", reviewGaps=[], riskScore, reviewGenerationFailed, onRetryGeneration,
   meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion,
   meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion,
 }) {
@@ -62,8 +68,22 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, cases, requestHrRevi
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           {!isHR&&(
             <Btn onClick={()=>{
-              const cs=cases.find(x=>x.employeeName===caseInfo.employee?.trim());
-              requestHrReview("record",cs?.id||null,null,reviewOutput);
+              // Phase E0.6 — this resolved the case by EMPLOYEE NAME EQUALITY and
+              // passed null when it missed. A case_id-null hr_review_requests row
+              // is permanently invisible to every client, because that table's
+              // SELECT policy is an EXISTS on cases — so a manager's request for
+              // help silently vanished, and where two people share a name it
+              // could instead attach to the wrong person's case.
+              //
+              // Parentage is now taken from the meeting's own authoritative
+              // identity, the same field the save path uses, and a request with
+              // no case is refused out loud rather than written into a hole.
+              const caseId = caseInfo.caseId || caseInfo._linkedCaseId || null;
+              if(!caseId) {
+                showToast?.("Save this meeting to a case first — an HR review has to be attached to the case it concerns.", "error");
+                return;
+              }
+              requestHrReview("record",caseId,null,reviewOutput);
             }} variant="ghost" style={{fontSize:13}}>Request HR review</Btn>
           )}
           <Btn onClick={()=>setShowShareModal(true)} variant="ghost" style={{fontSize:13}}>Share</Btn>
