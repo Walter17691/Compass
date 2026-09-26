@@ -406,9 +406,27 @@ describe('15-22. non-regression', () => {
   });
 
   it('16/17/18/19. no tenancy, platform-admin, confidential or case_access change', () => {
-    // This phase ships NO migration at all.
+    // E0.5A.1 shipped NO migration — it was entirely application-side. That
+    // remains true; the file list is now an explicit allow-list rather than a
+    // date filter, because E0.5B legitimately adds one migration on the SAME
+    // date and a date filter cannot tell the two phases apart.
+    //
+    // Each entry is named so that an UNEXPECTED migration appearing in the
+    // identity programme still fails this test, which is the guarantee that
+    // actually matters: no schema change slips in unannounced.
     const supabaseFiles = readdirSync('supabase').filter(f => f.includes('2026-09-26'));
-    expect(supabaseFiles.sort()).toEqual(['case_employee_identity_2026-09-26.sql', 'employee_identity_foundation_2026-09-26.sql']);
+    expect(supabaseFiles.sort()).toEqual([
+      'case_employee_identity_2026-09-26.sql',       // E0.5A
+      'employee_identity_foundation_2026-09-26.sql', // E0
+      'employee_reconciliation_2026-09-26.sql',      // E0.5B — one function, no DDL
+    ]);
+    // And E0.5B's migration touches no table: assert it, rather than trusting
+    // the filename to describe it.
+    const recon = readFileSync('supabase/employee_reconciliation_2026-09-26.sql', 'utf8')
+      .split('\n').filter(l => !l.trim().startsWith('--')).join('\n').toLowerCase();
+    ['alter table', 'create table', 'create policy', 'drop policy'].forEach(ddl => {
+      expect(recon).not.toContain(ddl);
+    });
     const guard = readFileSync('api/_platformAdmin.js', 'utf8');
     expect(guard).toContain('employee_records');
   });

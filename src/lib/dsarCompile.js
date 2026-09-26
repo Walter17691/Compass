@@ -62,10 +62,63 @@ import { classifyIdentityByName, IDENTITY } from './employeeRecords.js';
 //    regardless of whose case it was on) is folded into the existing
 //    subjectAuditLog filter directly rather than a separate section,
 //    since it's the same shape of record either way.
-export function compileSubjectData(employeeName, { cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [], wellbeingNotes = [], concernReferrals = [], allegations = [], caseSignals = [], caseTasks = [], hrReviewRequests = [], auditLog = [], signingRequests = [], portalAccounts = [], dsarRequests = [], orgMembers = [], profiles = [], caseViews = [], portalInvites = [], orgEvents = [], improvementInitiatives = [], managerCapabilityInsights = [], organisationThemes = [], caseAccess = [], redundancyCases = [], standaloneMeetings = [] } = {}) {
-  const matchingEmployeeRecords = employeeRecords.filter(r => r.name === employeeName);
-  const employeeRecord = matchingEmployeeRecords[0] || null;
-  const subjectCases = cases.filter(c => c.employeeName === employeeName);
+export function compileSubjectData(employeeName, { canonicalEmployeeId = null, cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [], wellbeingNotes = [], concernReferrals = [], allegations = [], caseSignals = [], caseTasks = [], hrReviewRequests = [], auditLog = [], signingRequests = [], portalAccounts = [], dsarRequests = [], orgMembers = [], profiles = [], caseViews = [], portalInvites = [], orgEvents = [], improvementInitiatives = [], managerCapabilityInsights = [], organisationThemes = [], caseAccess = [], redundancyCases = [], standaloneMeetings = [] } = {}) {
+  // ── Phase E0.5B — CANONICAL IDENTITY TAKES PRECEDENCE OVER THE NAME ───────
+  //
+  // Once a case has been explicitly reconciled to a canonical employee, that
+  // employee's DSAR must be assembled from employee_id, NOT from every record
+  // that happens to share their display name.
+  //
+  // ┌─ THE TRANSITION RULE THAT MATTERS MOST ────────────────────────────────┐
+  // │ A partially reconciled employee has:                                    │
+  // │     case A → employee_id = UUID   (confirmed to be theirs)              │
+  // │     case B → employee_id = NULL   (same name, NOT confirmed)            │
+  // │                                                                         │
+  // │ Case B must NOT be silently included because the name matches — that is  │
+  // │ how one person's package comes to contain another person's history. And  │
+  // │ it must NOT be silently dropped either: it is reported as still          │
+  // │ requiring reconciliation, so nobody mistakes exclusion for absence.     │
+  // └────────────────────────────────────────────────────────────────────────┘
+  //
+  // NOTE ON REACH. Only public.cases carries employee_id today. Every other
+  // collection here (wellbeing notes, concern referrals, standalone meetings,
+  // starters/leavers, signing requests, portal accounts, org membership) is
+  // still name-keyed because those tables have no employee column at all. So
+  // canonicalisation is genuinely id-based for cases and everything derived
+  // from subjectCaseIds, and remains name-based elsewhere. That is a real
+  // limitation, stated rather than papered over, and it is why `identityBasis`
+  // is reported per-collection below.
+  const norm = v => (typeof v === "string" ? v.trim().toLowerCase() : "");
+  const nameMatchesSubject = v => norm(v) === norm(employeeName);
+
+  // Normalised, unlike the historical exact-equality match this replaces. The
+  // identity GATE (classifyIdentityByName) has always normalised, so exact
+  // matching here could classify a subject RESOLVED while finding zero roster
+  // rows — exporting nothing while reporting success. Fail-open by arithmetic.
+  const matchingEmployeeRecords = employeeRecords.filter(r => nameMatchesSubject(r?.name));
+  const employeeRecord =
+    (canonicalEmployeeId && matchingEmployeeRecords.find(r => r.id === canonicalEmployeeId))
+    || matchingEmployeeRecords[0]
+    || null;
+
+  const nameMatchedCases = cases.filter(c => nameMatchesSubject(c?.employeeName));
+  // Records that share the name but are NOT confirmed to be this person.
+  // Reported as metadata only — id, type, stage, dates. No case content leaves
+  // this bucket, because it may well belong to somebody else.
+  const unreconciledSameNameCases = canonicalEmployeeId
+    ? nameMatchedCases.filter(c => !c.employeeId).map(c => ({
+        id: c.id, caseType: c.caseType, stage: c.stage, createdAt: c.createdAt, employeeName: c.employeeName,
+      }))
+    : [];
+  // Same name, but confirmed to be a DIFFERENT canonical employee. Excluded
+  // outright and counted only — naming them would disclose the other person.
+  const otherEmployeeSameNameCount = canonicalEmployeeId
+    ? nameMatchedCases.filter(c => c.employeeId && c.employeeId !== canonicalEmployeeId).length
+    : 0;
+
+  const subjectCases = canonicalEmployeeId
+    ? cases.filter(c => c.employeeId === canonicalEmployeeId)
+    : nameMatchedCases;
   const subjectCaseIds = new Set(subjectCases.map(c => c.id));
   // Phase 4C.1 — meetings that live in public.meetings rather than inside a
   // case (see lib/meetingStore.js). A standalone meeting's transcript and record
@@ -352,6 +405,22 @@ export function compileSubjectData(employeeName, { cases = [], employeeRecords =
     identityStatus,
     identityRequiresReconciliation,
     canonicalEmployeeIds,
+    // ── Phase E0.5B provenance ────────────────────────────────────────────
+    // On what basis were the CASES in this package selected? A package that
+    // does not say whether it was assembled from a canonical identity or from
+    // a display name cannot be audited later.
+    caseIdentityBasis: canonicalEmployeeId ? "employee_id" : "employee_name",
+    canonicalEmployeeId: canonicalEmployeeId || null,
+    // Everything outside `cases` is still name-keyed, because no other table
+    // has an employee column yet. Stated so the limitation is visible in the
+    // artefact itself rather than known only to whoever wrote the compiler.
+    nonCaseIdentityBasis: "employee_name",
+    // Same-name records deliberately EXCLUDED. Metadata only — these may
+    // belong to somebody else, so no content is carried here. Reported so that
+    // exclusion can never be mistaken for the records not existing.
+    unreconciledSameNameCases,
+    unreconciledSameNameCount: unreconciledSameNameCases.length,
+    otherEmployeeSameNameCount,
     cases: casesForExport,
     // Phase 4C.1 — a top-level category, not folded into `cases`, because these
     // meetings genuinely have no case and presenting them under one would

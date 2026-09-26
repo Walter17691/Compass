@@ -85,6 +85,7 @@ import { buildReviewDraft, restorableDraft, markDraftEdited, supersedeReviewDraf
 import { splitMeetingRecord } from './lib/meetingRecordSections';
 import { mergeSuggestions, suggestionKey } from './lib/suggestionIdentity';
 import { appealLinkCandidates } from './lib/appealLink';
+import { reconcileCaseEmployeeWrite, describeReconcileOutcome, shouldReloadAfter } from './lib/reconciliationWrites';
 import { isHrRole, CASE_ACCESS_LEVEL_LABELS } from './lib/roles';
 import { computeSelectionScore } from './lib/redundancyScoring';
 import { parseCsv, toCsv, csvRowsToObjects } from './lib/csv';
@@ -625,6 +626,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [editJobTitle, setEditJobTitle] = useState("");
   const [editStartDate, setEditStartDate] = useState("");
   const [editLocation, setEditLocation] = useState("");
+  const [reconcilingCaseId, setReconcilingCaseId] = useState(null);
+
   const loadEmployeeRecords = async () => {
     if(!org?.id) return;
     try {
@@ -692,6 +695,63 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     const { error } = await supabase.from('employee_records')
       .upsert({ org_id: org.id, name, ...employeeRecordPayload(fields) }, { onConflict: 'org_id,name' });
     if(error) { console.error('createEmployeeRecord', error); showToast("Couldn't save the employee record — "+error.message, "error"); }
+  };
+
+  // Phase E0.5B — create a canonical employee for a historical subject who has
+  // none. The workbench is reached from inside Settings, so the usual "go and add
+  // them in Settings" route would send the user to where they already are.
+  //
+  // Creation stays EXPLICIT: the name is prefilled from what the reviewer typed,
+  // but an employee is only created after they confirm. It is deliberately NOT
+  // automatic — "no roster match" is never on its own a reason to mint a person,
+  // and creating one per unmatched subject would manufacture 649 employees whose
+  // existence nobody decided.
+  //
+  // Authority is unchanged: employee_records' INSERT policy is HR-only, so this
+  // adds no new power, and it creates the employee ONLY. Assigning the case to
+  // them afterwards remains a separate, explicit confirmation.
+  const createEmployeeForReconciliation = async (name) => {
+    const trimmed = (name||"").trim();
+    if(!trimmed) return;
+    const ok = await confirmDialog({
+      title: "Add a new employee?",
+      message: `This creates a new employee record for “${trimmed}”. It does not link any case to them — you will still choose which historical cases belong to this person.`,
+      confirmLabel: "Add employee",
+      cancelLabel: "Cancel",
+    });
+    if(!ok) return;
+    await createEmployeeRecord(trimmed, {});
+    await loadEmployeeRecords();
+    showToast(`Added ${trimmed}. Now confirm which cases belong to them.`);
+  };
+
+  // ── Phase E0.5B — reconcile ONE historical case to a canonical employee ───
+  //
+  // Thin on purpose. The authority is the security definer RPC
+  // (reconcile_case_employee), which re-derives the organisation from the case
+  // row and checks for itself: authenticated, HR in that org, access to that
+  // case, target employee in the same org, and case currently unreconciled. The
+  // write and its result interpretation live in lib/reconciliationWrites.js so
+  // they are directly testable and so this component gains as little as possible.
+  //
+  // No client-side audit() call: the RPC writes the audit row in the same
+  // transaction as the assignment, and 'Employee identity reconciled' is on
+  // log_audit_event's reserved list, so this client cannot forge one either.
+  //
+  // The reload afterwards is not cosmetic. cases.updated_at is NOT bumped by
+  // reconciliation, so a stale local copy would keep passing the ordinary
+  // save's updated_at guard while still believing employee_id is null — see
+  // lib/reconciliationWrites.js for what the database does about that.
+  const reconcileCaseEmployee = async (legacyCase, employee) => {
+    setReconcilingCaseId(legacyCase?.id || null);
+    try {
+      const outcome = await reconcileCaseEmployeeWrite({ supabase, caseId: legacyCase?.id, employeeId: employee?.id });
+      const said = describeReconcileOutcome(outcome, employee?.name || "");
+      if(shouldReloadAfter(outcome.result)) await loadCasesFromDB();
+      showToast(said.message, said.tone === "error" ? "error" : undefined);
+    } finally {
+      setReconcilingCaseId(null);
+    }
   };
 
   const employeeRecordPayload = (fields) => ({
@@ -11331,6 +11391,7 @@ Please produce:
           org={{ org, locations, deleteLocation, addLocation, orgRoles, loadOrgRoles, orgMembers, loadOrgMembers }}
           team={{ teamMembers, editingMember, setEditingMember, removeMember, updateMemberRole, updateCaseAccessLevel, assignLocations, inviteForm, setInviteForm, inviting, inviteMember, currentUserRole: member?.role, pendingInvites, loadPendingInvites, revokeInvite, resendInvite, resendingInviteId }}
           portal={{ portalAccounts, revokePortalAccess }}
+          reconciliation={{ cases, employeeRecords, reconcileCaseEmployee, busyCaseId: reconcilingCaseId, onRequestCreateEmployee: createEmployeeForReconciliation }}
           employeeData={{ employeeCsvFileRef, employeeCsvProcessing, handleEmployeeCsvImport, exportEmployeesCsv, caseCsvFileRef, caseCsvProcessing, handleCaseCsvImport, downloadCaseCsvTemplate }}
           branding={{ wordTemplate, setWordTemplate, orgLsSet, wordTemplateRef, handleWordTemplateUpload, letterhead, setLetterhead, letterheadRef, handleLetterheadUpload, signature, setSignature, setShowSigPad }}
           policies={{ policies, setPolicies, policyFileRef, handlePolicyUpload, policyProcessing, changePolicyCategory }}

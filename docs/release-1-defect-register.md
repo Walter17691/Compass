@@ -942,6 +942,165 @@ analysis for the whole file — read lint **per rule**, never by total.
   previous organisation's meetings for one frame after an org switch. Replaced by
   deriving "loading" from a result that carries its own `orgId`. Back to 9.
 
+### Phase E0.5B — employee identity reconciliation workbench (2026-09-26)
+- **STATUS: DEPLOYED / READY FOR HUMAN UAT.** Migration
+  `employee_reconciliation_2026_09_26` applied: **one function, no DDL** — no
+  column, no table, no policy, no trigger change.
+- **PRODUCTION UNCHANGED, before and after:** 2,960 cases, **0 with
+  `employee_id`**, 2,685 employee records, 890 embedded meetings, 2 table
+  meetings, `cases.updated_at` max still `2026-09-25 14:23:20.9`, **0** audit
+  rows with action `Employee identity reconciled`. **No reconciliation was
+  performed. No employee record was created. Nothing was backfilled.**
+
+#### The population, re-proved read-only (and it reframes the phase)
+| Measure | Value |
+|---|---|
+| Cases with `employee_id` NULL | **2,960** (2,959 with a usable name, **1 with none**) |
+| Distinct legacy subjects, org-scoped | **2,938** |
+| Subjects with exactly ONE roster name match | **2,289** (2,304 cases) |
+| Subjects with ZERO roster matches | **649** (655 cases) |
+| Subjects with MORE THAN ONE roster match | **0** — structurally impossible while `UNIQUE(org_id, name)` stands |
+| Repeated subjects | **21**, every one with exactly 2 cases |
+| Roster normalisation collisions | **0** |
+| Detectable evidence conflicts | **0** |
+
+- **THE FINDING THAT MATTERS MOST: 2,951 of the 2,960 legacy cases (99.7%) belong
+  to two organisations both named "E2E Test Org".** The only genuine customer
+  organisation, **Compass LTD, holds 9** — and all nine are UAT fixtures created
+  during this engagement (`AT - Continuity Retest`, `UAT - Fresh Golden Path 2`,
+  …) plus one other. **Compass has essentially no real customer HR history
+  awaiting reconciliation.** The 2,960/650 figures are real, but they are test
+  data, and they must not be read as a customer migration backlog.
+- **SECOND FINDING: the deterministic evidence Compass holds is, for almost
+  everything, the NAME ALONE.** `cases.employee_email` 0 of 2,960 ·
+  `cases.location_id` 3 of 2,960 · `employee_records.work_email` **0** of 2,685 ·
+  `employee_number` **14** of 2,685 · `location` **19** of 2,685 · and `cases` has
+  no `employee_number` column at all. **2,956 of 2,959 named legacy cases have no
+  evidence beyond the name.** So the workbench must not present multi-factor
+  corroboration it does not have — which is why "no comparable value held" is a
+  first-class, visible outcome and not an omitted row.
+
+#### The state model
+`UNRECONCILED` · `CANDIDATE` · `AMBIGUOUS` · `CONFLICT` · `RESOLVED`, with fixed
+precedence and a `reason` distinguishing *no roster match* from *no name at all*.
+- **Exact name equality is `CANDIDATE`, never `RESOLVED`.** Nothing in
+  `lib/employeeReconciliation.js` returns `RESOLVED` from a comparison — it is
+  reported only when READING a persisted `employee_id`.
+- `CONFLICT` means **different evidence dimensions select different employees**
+  (empty intersection), not merely a mismatched attribute. A single candidate
+  whose *location* differs is `CANDIDATE` with weak corroboration shown:
+  colleagues share a location, so location is corroboration and **never a
+  selector**.
+- `AMBIGUOUS` and `CONFLICT` are **currently unreachable in production** and
+  proven by fixtures. Implemented anyway — the alternative is a workbench whose
+  safety depends on a constraint the roadmap intends to remove.
+
+#### Grouping is not identity
+Legacy cases group by display name for review only. **Three cases reading "John
+Smith" may resolve to two different people**, so there is no group-level
+`employeeId`, no group decision, and no batch control. The UI says so to the
+reviewer: *"That does not make them the same person — confirm each one
+separately."*
+
+#### The write contract — a security definer RPC, not a client write
+`public.reconcile_case_employee(p_case_id, p_employee_id)`. No new API route:
+Vercel functions are at cap and a Postgres function costs none.
+- `org_id` is **derived from the case row**, never a parameter.
+- Checks, all in-body and all self-contained: authenticated · HR
+  (`is_hr_role`) in that org · case access (level 1, or level 2 + creator, or an
+  explicit `case_access` grant) · employee exists · employee **same org**.
+- **Optimistic concurrency as a conditional UPDATE**, not check-then-write:
+  `where id = p_case_id and employee_id is null`. A read-then-update would let
+  the loser of a race overwrite the winner. Zero rows matched ⇒ `PT409` and a
+  truthful message; the client reloads rather than retrying.
+- **Only `employee_id` is assigned.** `employee_name` is never rewritten: "John
+  A. Smith" stays "John A. Smith" when reconciled to "John Smith".
+- The audit row is written **in the same transaction**, so a successful
+  reconciliation cannot exist without it, and `Employee identity reconciled` is
+  added to `log_audit_event`'s **reserved-action list** so the generic audit RPC
+  cannot forge one.
+
+#### 13 database proofs, all in rolled-back transactions
+unauthenticated REFUSED · non-member REFUSED · **auditor, investigator,
+legal_reviewer, line_manager, location_manager each REFUSED (42501)** ·
+nonexistent case REFUSED · nonexistent employee REFUSED · **cross-org employee
+REFUSED** · HR + same org + access SUCCEEDED · `employee_name` UNCHANGED ·
+stage/type UNCHANGED · audit row written with actor and provenance · **re-reconcile
+REFUSED (PT409)** · move-to-another-employee REFUSED · **forging the action via
+`log_audit_event` REFUSED**.
+
+#### A measured surprise, corrected in code
+`cases.updated_at` is **not** bumped by reconciliation (no auto-update trigger).
+I had written the opposite in a comment. Consequence, also proven rather than
+reasoned about: a stale client still passes the ordinary save's `updated_at`
+guard while believing `employee_id` is null — and the **fill-once trigger refuses
+that write with SQLSTATE 23514**, as it refuses a different `employee_id`. A
+reconciled identity therefore cannot be erased or moved by a stale tab. The cost
+is a database-level error message on that client's unrelated save, which is a
+candidate follow-up: the case-save payload arguably should not carry
+`employee_id` when it has not changed.
+
+#### DSAR canonicalisation (the brief's CRITICAL item)
+`compileSubjectData` gains `canonicalEmployeeId`. When present, **cases are
+selected by `employee_id`**, and:
+- an unresolved same-name case is **NOT** absorbed — it is reported as
+  `unreconciledSameNameCases`, **metadata only** (id, type, stage, dates, name),
+  so exclusion is never mistaken for absence;
+- a same-name case belonging to a **different** employee is excluded and only
+  **counted** — naming it would disclose the other person;
+- the package records `caseIdentityBasis` and states that every non-case
+  collection is **still name-keyed**, because **only `public.cases` has
+  `employee_id`** — a real limitation, visible in the artefact;
+- roster matching is now **normalised**. Exact equality could classify a subject
+  `RESOLVED` while finding zero roster rows, exporting nothing while reporting
+  success — fail-open by arithmetic;
+- `AMBIGUOUS` / `UNRECONCILED` still **fail closed**, unchanged.
+
+#### Deliberately deferred, with reasons
+- **BATCH RECONCILIATION — deferred on evidence.** The only real organisation has
+  9 cases and **0 repeated subjects**, so batch would have no production work;
+  atomic multi-row semantics, per-row concurrency and per-row audit are
+  materially more surface for one saved click on 21 test subjects.
+- **CORRECTION/UNDO — designed, documented, NOT implemented**, and recorded as a
+  **HARD GATE**: *production reconciliation of real customer cases must not begin
+  until a correction operation exists.* Intended shape recorded in the migration:
+  `correct_case_employee(case, employee, reason)`, **hr_director only**, mandatory
+  stored reason, immutable audit carrying the OLD and NEW uuid, and a
+  narrowly-scoped trigger exemption designed **as a unit with the trigger**.
+
+#### Evidence
+`src/test/employeeReconciliation.test.js` (27) + `employeeReconciliationWorkbench.test.jsx` (41) — **68 tests, 25 of 25 mutations caught**. Full suite **5,331 / 308 files**. Build clean. **API routes unchanged (none added).**
+- **A mutation found a real defect.** `M4` (recording an evidence dimension even
+  when it selected nobody) was initially MISSED because my fixture used a *null*
+  email, so the guard short-circuited. The case that matters is an email matching
+  **nobody**: that would have made `dimensions.length` 2, emptied the
+  intersection, and reported **CONFLICT** — "the evidence disagrees" — when the
+  truth is simply that the email matched no one. Test added; mutation now caught.
+- Every mutation was **asserted applied** before running, per the E0.5A.1 lesson.
+
+#### Lint read BY RULE — an apparent improvement that is not one
+**161 errors / 9 warnings** (baseline 164/9; E0.5A.1 162/9). `no-unused-vars` 118,
+`immutability` **22** — so no file-wide compiler bailout. But
+`set-state-in-effect` went **9 → 8**, and that is **lost analysis, not a fix**:
+adding a second, non-effect caller of `loadCasesFromDB` makes the React Compiler
+stop reporting the error on `useEffect(() => { if(org?.id) loadCasesFromDB(); })`
+— **proven by probe**, removing the new caller restores the error at the same
+byte-identical line. A *new variant* of the callee-budget hazard: previously it
+bailed out file-wide (22 → 0, obvious); here it silenced exactly one site, so the
+total moved 162 → 161 and reads as progress. The reload call is correct and stays;
+**a compensating test now asserts that effect exists**, since lint no longer
+watches it. No lint rule disabled.
+
+#### Explicitly NOT done
+No mass reconciliation · no automatic `employee_id` assignment · no automatic
+employee creation · `UNIQUE(org_id, name)` **not** removed · no People redesign ·
+no Employee File UI (E1) · no employee-parented meetings (E2) · no meeting
+migration · no change to `public.meetings`, embedded meetings, or the two
+preserved UAT rows · no formal-workflow semantic change · the four analytics
+functions (`org_event_correlation`, `org_insights_overview`,
+`org_theme_root_cause`, `org_trend_detection`) **not** migrated and still a hard
+gate before duplicate-name support.
+
 ### Phase E0.5A.1 — close new identity leaks (2026-09-26)
 - **STATUS: DEPLOYED / VERIFIED.** **No migration** — this phase is entirely
   application-side. **No backfill, no reconciliation, no production write.**

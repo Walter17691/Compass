@@ -10,6 +10,7 @@ import { OrganisationSection } from './settings/OrganisationSection';
 import { LocationsSection } from './settings/LocationsSection';
 import { PortalAccessSection } from './settings/PortalAccessSection';
 import { EmployeeRecordsSection } from './settings/EmployeeRecordsSection';
+import { IdentityReconciliationSection } from './settings/IdentityReconciliationSection';
 import { BrandingSection } from './settings/BrandingSection';
 import { PoliciesSection } from './settings/PoliciesSection';
 import { ProcessTemplatesSection } from './settings/ProcessTemplatesSection';
@@ -41,6 +42,7 @@ export function SettingsScreen({
   team = {},
   portal = {},
   employeeData = {},
+  reconciliation = {},
   branding = {},
   policies = {},
   templates = {},
@@ -87,6 +89,15 @@ export function SettingsScreen({
     // during the same Part 6 UI/DB coordination audit as Organisation/
     // Onboarding/Offboarding.
     ...(isHR?[{id:"employee-records", label:"Employee data"}]:[]),
+    // Phase E0.5B — identity reconciliation decides WHOSE HR history a
+    // historical case is. The write is a security definer RPC
+    // (reconcile_case_employee) that re-checks HR role, case access and
+    // same-org membership itself, so the database is the real boundary here as
+    // everywhere else; this gate only stops the tab being offered. Deliberately
+    // NOT available to Location Manager, Line Manager, Investigator,
+    // Legal/Compliance Reviewer or Auditor: several of them can read cases, but
+    // reading a case is not authority to decide which person it describes.
+    ...(isHR?[{id:"identity-reconciliation", label:"Identity reconciliation"}]:[]),
     {id:"policies", label:"Policies"},
     ...(isHR?[{id:"process-templates", label:"Process templates"}]:[]),
     {id:"integrations", label:"Integrations"},
@@ -114,7 +125,7 @@ export function SettingsScreen({
   // header at all — see SettingsNav's own ungrouped-fallback rendering).
   const SETTINGS_GROUPS = [
     { label: "Organisation", sectionIds: ["organisation", "locations", "branding"] },
-    { label: "People & access", sectionIds: ["team-access", "portal-access", "employee-records"] },
+    { label: "People & access", sectionIds: ["team-access", "portal-access", "employee-records", "identity-reconciliation"] },
     { label: "Compass setup", sectionIds: ["policies", "process-templates", "integrations", "notifications", "automations"] },
     { label: "Security & data", sectionIds: ["audit-trail", "data-privacy"] },
     { label: "Support", sectionIds: ["help"] },
@@ -166,6 +177,7 @@ export function SettingsScreen({
           {active==="organisation"&&isHR&&<OrganisationSection org={org.org} orgRoles={org.orgRoles} loadOrgRoles={org.loadOrgRoles} orgMembers={org.orgMembers} loadOrgMembers={org.loadOrgMembers} showToast={showToast}/>}
           {active==="locations"&&<LocationsSection isHR={isHR} locations={org.locations} deleteLocation={org.deleteLocation} addLocation={org.addLocation}/>}
           {active==="portal-access"&&<PortalAccessSection isHR={isHR} portalAccounts={portal.portalAccounts} revokePortalAccess={portal.revokePortalAccess}/>}
+          {active==="identity-reconciliation"&&isHR&&<IdentityReconciliationSection cases={reconciliation.cases} employeeRecords={reconciliation.employeeRecords} locations={org.locations} canCreateEmployee={isHR} onRequestCreateEmployee={reconciliation.onRequestCreateEmployee} reconcileCaseEmployee={reconciliation.reconcileCaseEmployee} busyCaseId={reconciliation.busyCaseId}/>}
           {active==="employee-records"&&isHR&&<EmployeeRecordsSection employeeCsvFileRef={employeeData.employeeCsvFileRef} employeeCsvProcessing={employeeData.employeeCsvProcessing} handleEmployeeCsvImport={employeeData.handleEmployeeCsvImport} exportEmployeesCsv={employeeData.exportEmployeesCsv} caseCsvFileRef={employeeData.caseCsvFileRef} caseCsvProcessing={employeeData.caseCsvProcessing} handleCaseCsvImport={employeeData.handleCaseCsvImport} downloadCaseCsvTemplate={employeeData.downloadCaseCsvTemplate}/>}
           {/* Phase 6.5 hardening — signature/letterhead/word-template/policy
               removal are real tenant data, so these two sections get the
