@@ -101,6 +101,7 @@ export function orgScopedKey(orgId, key) {
 // authorised data (several of these — cases, wellbeing notes, employee
 // records — seed their React state straight from this cache on mount).
 export const EMPLOYEE_ROSTER_KEY = "compass_employees";
+export const CASE_CACHE_KEY = "compass_cases";
 
 export const SENSITIVE_ORG_SCOPED_KEYS = [
   "compass_cases", "compass_wellbeing", "compass_employees", "compass_redundancy",
@@ -122,8 +123,9 @@ const LEGACY_UNSCOPED_KEYS = ["compass_whistle", "compass_users", "compass_user"
 // "noorg" fallback), so splitting each real key on its first colon
 // reliably recovers the original key name to check against the
 // sensitive set, regardless of which org wrote it.
-// Phase E1.5A — the employee roster is no longer cached, and any copy an
-// existing browser already holds must be removed before it can be read.
+// Phase E1.5A / E1.5B — neither the employee roster nor the case list is cached,
+// and any copy an existing browser already holds must be removed before it can be
+// read.
 //
 // E1.5 made employee_records RLS the authoritative boundary: a Location Manager
 // sees only their locations, and an employee with no canonical location is
@@ -141,18 +143,34 @@ const LEGACY_UNSCOPED_KEYS = ["compass_whistle", "compass_users", "compass_user"
 // clearAllOrgScopedData sweeps all of them: one browser may be used across
 // several tenants. Called before the app can consume it, so a stale value cannot
 // be read even once.
-export function purgeEmployeeRosterCache() {
+// Phase E1.5B — the case cache joins the roster.
+//
+// compass_cases held up to 500 full case objects, and a case object is not a
+// summary: it carries the meeting records and transcripts, the investigation
+// report, the outcome and its warning dates, the employee's own appeal text,
+// evidence, the confidential flag, and occupational-health and fit-note dates —
+// special-category health data under UK GDPR. It seeded React state in a useState
+// initialiser exactly as the roster did, so the first paint after a permission
+// change showed cases the current authorisation may no longer permit.
+//
+// Case visibility is decided by the three-level model in the database. That
+// boundary cannot be extended by something a browser remembers, so neither key
+// is persisted and both are removed on load.
+export const NEVER_PERSIST_KEYS = [EMPLOYEE_ROSTER_KEY, CASE_CACHE_KEY];
+
+export function purgeNeverPersistCaches() {
   try {
     if (typeof localStorage === 'undefined') return 0;
+    const purge = new Set(NEVER_PERSIST_KEYS);
     let removed = 0;
     Object.keys(localStorage).forEach(k => {
       const idx = k.indexOf(':');
       const suffix = idx === -1 ? k : k.slice(idx + 1);
-      if (suffix === EMPLOYEE_ROSTER_KEY) { localStorage.removeItem(k); removed += 1; }
+      if (purge.has(suffix)) { localStorage.removeItem(k); removed += 1; }
     });
     return removed;
   } catch (e) {
-    console.error('purgeEmployeeRosterCache failed:', e);
+    console.error('purgeNeverPersistCaches failed:', e);
     return 0;
   }
 }

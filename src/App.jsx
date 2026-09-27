@@ -7,7 +7,7 @@ import { newId } from './lib/ids';
 import { addCalendarMonth, toISODateLocal } from './lib/dates';
 import { addWorkingDays } from './lib/dateMath';
 import { fetchAllPages } from './lib/paginatedFetch';
-import { ls, lsSet, orgScopedKey, clearAllOrgScopedData, capRecentForCache } from './lib/storage';
+import { ls, lsSet, orgScopedKey, clearAllOrgScopedData } from './lib/storage';
 import { findEmployeeByName, findEmployeeById, EMPLOYMENT_STATUSES } from './lib/employeeRecords';
 import { planEmployeeImport, describeImportPlan } from './lib/employeeImportIdentity';
 import { computeDueSoon, computeAuthoritativeAppealDeadline } from './lib/deadlines';
@@ -465,7 +465,19 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [policyProcessing, setPolicyProcessing] = useState(false);
 
   // ── Cases ──
-  const [cases, setCases] = useState(orgLs("compass_cases", []));
+  // Phase E1.5B — deliberately NOT seeded from localStorage.
+  //
+  // compass_cases held up to 500 full case objects, and a case object is not a
+  // summary: meeting records and transcripts, the investigation report, the
+  // outcome and its warning dates, the employee's own appeal text, evidence, the
+  // confidential flag, and occupational-health and fit-note dates — special
+  // category health data. Seeding state from it meant the first paint after a
+  // permission change showed cases the current authorisation may no longer allow.
+  //
+  // Case visibility is decided by the three-level model in the database. Nothing a
+  // browser remembers may extend it, so the list is fetched every load and never
+  // persisted. casesLoading (already present) covers the wait.
+  const [cases, setCases] = useState([]);
   // Phase 6.5 hardening (closes Prompt 11 audit finding 7.6, MEDIUM) —
   // kept in sync SYNCHRONOUSLY inside saveCases itself (not via a
   // useEffect, which only runs after React commits a render — too late
@@ -480,6 +492,9 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // the loop still eligible to fire again next cooldown cycle. Reading
   // casesRef.current instead of `cases` in a call site that loops like
   // this sees every prior iteration's own change.
+  // Seeded from `cases`, which phase E1.5B made an empty array rather than a
+  // localStorage read — so this ref can no longer start life holding cases the
+  // current user may not be authorised to see.
   const casesRef = useRef(cases);
   // Phase 6.5 hardening (P1, reliability review) — cases seeds from a
   // local cache (orgLs), so a returning user usually sees real (if
@@ -1843,8 +1858,19 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // fix (Batch 6) already stops that from being confused with "still
       // loading", but did nothing for the case where loading genuinely
       // finished, badly. markLoadIssue surfaces it via the shared banner.
-      if (error) { console.error("Load cases error:", error); markLoadIssue('cases'); }
-      else clearLoadIssue('cases');
+      // Phase E1.5B — a failed read FAILS CLOSED. This used to log the error and
+      // then carry on into data.map with whatever had accumulated, or throw on null
+      // and leave the previously-held list in state. Neither is acceptable once the
+      // list may have been narrowed by a permission change: a case must never stay
+      // on screen because the browser still remembers it.
+      if (error) {
+        console.error("Load cases error:", error);
+        markLoadIssue('cases');
+        setCases([]);
+        casesRef.current = [];
+        return;
+      }
+      clearLoadIssue('cases');
       // ensureEvidenceIds — see saveCases' own use of it (Phase 6.5
       // hardening, P0, Cluster 8): backfills a stable id onto any
       // evidence item that predates this fix, here so a legacy case's
@@ -1861,7 +1887,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       const loadedCases = data.map(mapCaseRow).map(ensureEvidenceIds);
       setCases(loadedCases);
       casesRef.current = loadedCases;
-    } catch(e) { console.error("Load cases error:", e); markLoadIssue('cases'); }
+    } catch(e) {
+      console.error("Load cases error:", e);
+      markLoadIssue('cases');
+      setCases([]);
+      casesRef.current = [];
+    }
     // finally, not just the success path — an error still means the
     // FIRST load attempt has resolved (however it went), so the "still
     // loading" state shouldn't persist forever on a failure. Only ever
@@ -1931,7 +1962,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         estimated_age_at_dismissal: caseObj.estimatedAgeAtDismissal || null,
         location_id: caseObj.locationId || (member?.role==='location_manager'&&member?.location_ids?.[0])||null,
         assigned_to: user?.id || null,
-        created_by: caseObj.createdBy || user?.id || null, // preserve the original creator across edits by other staff — the confidential-case RLS policy grants them access by this field
+        created_by: caseObj.createdBy || user?.id || null, // preserve the original creator across edits by other staff — under the three-level model, created_by is Level 2's own access path (the separate "Confidential cases restricted to authorised staff" policy was dropped in three_level_case_access_2026-09-13.sql)
         confidential: caseObj.confidential || false,
         // manager/owner_id/priority: added in supabase/case_structure_2026-08-09.sql.
         // manager was previously read/displayed/reassigned throughout the app
@@ -3134,12 +3165,9 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     const stamped = u.map(cs => ensureEvidenceIds(withStageTransitionStamp(cs, prevById.get(cs.id) || null)));
     setCases(stamped);
     casesRef.current = stamped;
-    // Phase 6.5 hardening (data-lifecycle review, closes 10.1's
-    // remainder) — the cache mirror only, not the real in-memory list or
-    // what's sent to Supabase. Bounded so a large org's case history
-    // can't grow this cached key past what localStorage can hold — see
-    // capRecentForCache's own comment.
-    orgLsSet("compass_cases", capRecentForCache(stamped, "updatedAt", 500));
+    // Phase E1.5B — the localStorage mirror is gone. It existed for a faster
+    // first paint and Supabase was always the real source of truth; bounding it to
+    // the 500 most recent cases limited the size of the problem, not its nature.
     if(org?.id) {
       if(changedId) {
         // Only sync the changed case

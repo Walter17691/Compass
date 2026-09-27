@@ -398,6 +398,100 @@ reachable only by manual database administration.
 
 ---
 
+## AD-004 — The case access boundary
+
+**Status:** **implemented** in phases E1.5A (employee roster cache) and E1.5B
+(case cache, orphaned location predicate). Recorded 2026-09-27.
+
+### Case access is the three-level model, and location is not part of it
+
+Case visibility is decided by `org_members.case_access_level` and `case_access`:
+
+| Level | Sees |
+|---|---|
+| **1** | every case in the organisation, confidential ones included |
+| **2** | cases they created, plus any case they hold `case_access` on |
+| **3** | cases they hold `case_access` on, only |
+
+Roles map to levels: `hr_director`, `hr_manager`, `legal_reviewer`, `auditor` → 1;
+`location_manager`, `line_manager` → 2; `investigator` → 3. **An unrecognised role
+falls to Level 3, never Level 1.**
+
+Enforced by a permissive base policy (own organisation *or* an explicit
+`case_access` row) **AND** restrictive per-command policies carrying the level
+rule. Postgres requires *(any permissive) AND (all restrictive)*, so the
+restrictive policies narrow the base rather than competing with it.
+
+> **An employee's location plays no part in case access.** Verified against
+> production: a Location Manager authorised for the very location a case belongs
+> to cannot see that case unless they created it or hold `case_access` on it.
+
+### Empty or NULL Location Manager location scope grants nothing
+
+**No authorised locations = no location-derived access.** This is now
+unconditionally true because there *is* no location-derived case access: a
+Location Manager with an empty list sees exactly the same set as one with
+locations — their own created cases and their explicit assignments.
+
+`can_access_case_location()` was **removed** in E1.5B rather than repaired. Its
+leading clause returned true for any caller who was not a location-scoped manager
+*with locations assigned*, so an empty `location_ids` (the column default, `'{}'`)
+passed it for every location. The audit established it was an orphan: referenced
+by zero policies, functions, views, triggers and constraints, with `EXECUTE`
+granted only to `postgres` and `service_role`. Repairing an unused fail-open
+predicate would have left a second, competing answer to a question the three-level
+model already answers — and a plausible-looking "location helper that already
+exists" is exactly what the next person reaches for.
+
+Nothing replaced it. Location-derived case access, if ever wanted, needs its own
+decision against the approved model.
+
+### Confidentiality is the same rule, not a separate one
+
+There is deliberately **no confidential-case SELECT policy.** Level 1 sees
+confidential cases under the same unconditional rule as every other case, and
+Level 2/3's confidential rule is *identical* to their ordinary rule, so a separate
+gate would only restate it. The stated goal when this was approved was **"do not
+retain a hidden role-specific confidential exception."**
+
+Consequence to keep in mind: an **HR Manager is Level 1 and does see confidential
+cases.** Confidential status restricts who may *change* a case
+(`protect_confidential_case_write`) and records sensitivity; it is not a read
+cloak. `hasConfidentialOversight()` (HR Director, Legal, Auditor) governs
+oversight features, not case readability.
+
+### Persistent browser storage cannot extend case authorisation
+
+**Neither the employee roster nor the case list is persisted client-side.**
+
+`compass_cases` held up to 500 full case objects and seeded React state in a
+`useState` initialiser, so the first paint after any load reflected whatever the
+browser last held — captured under whatever permissions applied then. A case
+object is not a summary: it carries meeting records and transcripts, the
+investigation report, the outcome and its warning dates, the employee's own appeal
+text, evidence, the confidential flag, and occupational-health and fit-note dates
+(special-category health data), plus redundancy pay and age inputs.
+
+The rules, applying to both caches:
+
+- **Never persisted.** The authoritative RLS-filtered response is the only source.
+- **Replaced, never merged.** Merging a narrower response into a broader previous
+  set preserves exactly the records the server just declined to return.
+- **Fail closed on fetch failure.** A failed load empties the list. A record must
+  never remain visible because the browser still remembers it.
+- **Purged at module load**, before any component can read it, for every
+  organisation and including un-namespaced pre-org-scoping copies. Ceasing to
+  write a key does nothing for browsers that already hold one.
+- **Cleared on authentication identity change**, not only on an explicit sign-out
+  — org-scoping is no defence when two users share one organisation.
+- Both keys stay in the global sensitive sweep as defence in depth.
+
+**RLS is never reproduced in JavaScript.** No client-side "authorised set" is
+calculated or persisted; a second copy of an authorisation rule is the copy people
+end up trusting.
+
+---
+
 ## AD-002 — A process type only receives what Compass owns for it
 
 **Status:** **implemented** in phases E1.4 (next-step guidance) and E1.4A (stage

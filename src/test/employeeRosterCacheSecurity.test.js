@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
-  purgeEmployeeRosterCache, syncAuthIdentity, clearAllOrgScopedData,
+  purgeNeverPersistCaches, syncAuthIdentity, clearAllOrgScopedData,
   orgScopedKey, lsSet, ls, SENSITIVE_ORG_SCOPED_KEYS, EMPLOYEE_ROSTER_KEY,
 } from '../lib/storage.js';
 
@@ -42,11 +42,11 @@ const ROSTER = [
 
 beforeEach(() => { localStorage.clear(); });
 
-describe('purgeEmployeeRosterCache — legacy cache invalidation', () => {
+describe('purgeNeverPersistCaches — legacy cache invalidation', () => {
   it('removes the roster this browser already holds', () => {
     lsSet(orgScopedKey(ORG_A, EMPLOYEE_ROSTER_KEY), ROSTER);
     expect(ls(orgScopedKey(ORG_A, EMPLOYEE_ROSTER_KEY), null)).toHaveLength(3);
-    expect(purgeEmployeeRosterCache()).toBe(1);
+    expect(purgeNeverPersistCaches()).toBe(1);
     expect(ls(orgScopedKey(ORG_A, EMPLOYEE_ROSTER_KEY), null)).toBeNull();
   });
 
@@ -55,36 +55,39 @@ describe('purgeEmployeeRosterCache — legacy cache invalidation', () => {
     lsSet(orgScopedKey(ORG_A, EMPLOYEE_ROSTER_KEY), ROSTER);
     lsSet(orgScopedKey(ORG_B, EMPLOYEE_ROSTER_KEY), ROSTER);
     lsSet(orgScopedKey('noorg', EMPLOYEE_ROSTER_KEY), ROSTER);
-    expect(purgeEmployeeRosterCache()).toBe(3);
+    expect(purgeNeverPersistCaches()).toBe(3);
     [ORG_A, ORG_B, 'noorg'].forEach(o =>
       expect(ls(orgScopedKey(o, EMPLOYEE_ROSTER_KEY), null), o).toBeNull());
   });
 
   it('removes an un-namespaced legacy copy from before org-scoping', () => {
     localStorage.setItem(EMPLOYEE_ROSTER_KEY, JSON.stringify(ROSTER));
-    expect(purgeEmployeeRosterCache()).toBe(1);
+    expect(purgeNeverPersistCaches()).toBe(1);
     expect(localStorage.getItem(EMPLOYEE_ROSTER_KEY)).toBeNull();
   });
 
   it('leaves every other cached key alone — this is a targeted removal', () => {
-    lsSet(orgScopedKey(ORG_A, 'compass_cases'), [{ id: 'c1' }]);
+    // compass_cases is NOT an example of an untouched key any more: phase E1.5B
+    // added it to the purge set for the same reason. Policies and templates are
+    // org configuration, not a permission-bearing record of who exists.
     lsSet(orgScopedKey(ORG_A, 'compass_policies'), [{ id: 'p1' }]);
+    lsSet(orgScopedKey(ORG_A, 'compass_starter_templates'), [{ id: 't1' }]);
     lsSet(orgScopedKey(ORG_A, EMPLOYEE_ROSTER_KEY), ROSTER);
-    purgeEmployeeRosterCache();
-    expect(ls(orgScopedKey(ORG_A, 'compass_cases'), null)).toHaveLength(1);
+    purgeNeverPersistCaches();
     expect(ls(orgScopedKey(ORG_A, 'compass_policies'), null)).toHaveLength(1);
+    expect(ls(orgScopedKey(ORG_A, 'compass_starter_templates'), null)).toHaveLength(1);
     expect(ls(orgScopedKey(ORG_A, EMPLOYEE_ROSTER_KEY), null)).toBeNull();
   });
 
   it('is safe to call when there is nothing to remove', () => {
-    expect(purgeEmployeeRosterCache()).toBe(0);
+    expect(purgeNeverPersistCaches()).toBe(0);
   });
 
   it('runs at module load in main.jsx, before any component can read it', () => {
     // Inside a component or an effect would be too late: the roster would already
     // have been read by a useState initialiser on the first render.
-    expect(mainCode).toMatch(/^purgeEmployeeRosterCache\(\)$/m);
-    const callIndex = mainCode.indexOf('purgeEmployeeRosterCache()');
+    expect(mainCode).toMatch(/^purgeNeverPersistCaches\(\)$/m);
+    const callIndex = mainCode.indexOf('purgeNeverPersistCaches()');
     const rootIndex = mainCode.indexOf('export function Root(');
     expect(callIndex).toBeGreaterThan(-1);
     expect(callIndex).toBeLessThan(rootIndex);
@@ -273,7 +276,7 @@ describe('permission changes leave nothing behind', () => {
   // A stand-in for the app's own flow: purge at load, then take the server's
   // answer as the whole truth.
   const loadRosterAfterReload = (authorisedResponse) => {
-    purgeEmployeeRosterCache();
+    purgeNeverPersistCaches();
     const initial = ls(orgScopedKey(ORG_A, EMPLOYEE_ROSTER_KEY), []);
     return { initialFromStorage: initial, roster: authorisedResponse };
   };
@@ -316,7 +319,7 @@ describe('permission changes leave nothing behind', () => {
 
   it('a failed fetch after a permission reduction yields nothing, not the old roster', () => {
     lsSet(orgScopedKey(ORG_A, EMPLOYEE_ROSTER_KEY), ROSTER);
-    purgeEmployeeRosterCache();
+    purgeNeverPersistCaches();
     // The fetch fails. The app sets []; there is no cache to fall back to either.
     const roster = [];
     expect(roster).toEqual([]);
@@ -325,7 +328,7 @@ describe('permission changes leave nothing behind', () => {
 
   it('organisation A employees cannot appear under organisation B', () => {
     lsSet(orgScopedKey(ORG_A, EMPLOYEE_ROSTER_KEY), ROSTER);
-    purgeEmployeeRosterCache();
+    purgeNeverPersistCaches();
     expect(ls(orgScopedKey(ORG_B, EMPLOYEE_ROSTER_KEY), [])).toEqual([]);
     expect(ls(orgScopedKey(ORG_A, EMPLOYEE_ROSTER_KEY), [])).toEqual([]);
   });

@@ -1,0 +1,96 @@
+-- ============================================================================
+-- Phase E1.5B — CASE ACCESS BOUNDARY — 2026-09-27
+-- ============================================================================
+-- FUNCTION-ONLY. No policy is created, altered or dropped. No table, column,
+-- index, trigger or row is touched. No customer data is read or written.
+--
+-- ┌─ WHAT THIS DOES ────────────────────────────────────────────────────────┐
+-- │ DROPS public.can_access_case_location(uuid, uuid) — an orphaned,          │
+-- │ fail-open location predicate that no longer participates in any access    │
+-- │ decision anywhere in the database.                                       │
+-- └─────────────────────────────────────────────────────────────────────────┘
+--
+-- WHY IT IS BEING REMOVED RATHER THAN REPAIRED
+--
+-- Its first clause is
+--
+--     SELECT NOT EXISTS (
+--       location_manager for this org WITH a non-empty location_ids
+--     )
+--
+-- which returns TRUE — allow everything — for any caller who is not a
+-- location_manager *with locations assigned*. Since org_members.location_ids
+-- defaults to '{}', that fail-open branch is the default state of a new row: a
+-- Location Manager who has been granted no locations would pass the predicate
+-- for every location.
+--
+-- That is a genuine defect in the function. It is not a live one.
+--
+-- Established by audit, not assumption:
+--   * 0 policies on any table reference it (searched every pg_policy USING and
+--     WITH CHECK expression in the database).
+--   * 0 other functions, 0 views, 0 materialised views, 0 triggers and 0
+--     constraints reference it.
+--   * EXECUTE is granted to `postgres` and `service_role` only — NOT to
+--     `authenticated`, so no application user can even call it.
+--   * `DROP FUNCTION` succeeds under the default RESTRICT, which Postgres would
+--     refuse if any dependent object existed.
+--
+-- It was superseded by manager_enablement_case_access_2026-08-13.sql and then
+-- fully replaced by the three-level model in three_level_case_access_2026-09-13.sql.
+-- Its JavaScript mirror, canAccessCaseLocation(), was deleted on the same date
+-- (see src/lib/roles.js). Only the SQL orphan survived.
+--
+-- Case access is decided by org_members.case_access_level and case_access:
+--
+--   Level 1  every case in the organisation, confidential ones included
+--   Level 2  cases they created, plus any case they hold case_access on
+--   Level 3  cases they hold case_access on, only
+--
+-- LOCATION IS NOT AN ACCESS PATH AT ALL. Verified against production with
+-- impersonated JWT claims: a Location Manager authorised for the very location a
+-- case belongs to still cannot see that case unless they created it or hold
+-- case_access on it — and a Location Manager with an EMPTY location list sees
+-- exactly the same set, not more. The fail-open branch is therefore unreachable.
+--
+-- Removing it is the fix. A fail-open predicate left lying around is what the
+-- next person reaches for when they want "the location helper that already
+-- exists" — which is precisely how phase E1.4's duplicate-registry defect
+-- happened. Repairing an unused function would leave a second, competing answer
+-- to a question the three-level model already answers.
+--
+-- Nothing replaces it. If location-derived case access is ever wanted, it needs
+-- its own design decision against the approved model, not a revived orphan.
+-- ============================================================================
+
+drop function if exists public.can_access_case_location(uuid, uuid);
+
+-- ============================================================================
+-- ROLLBACK (complete)
+-- ============================================================================
+-- Restores the function exactly as it was, including the fail-open branch. It
+-- would again be unreferenced by any policy, so restoring it changes no access.
+--
+--   create or replace function public.can_access_case_location(p_org_id uuid, p_location_id uuid)
+--   returns boolean
+--   language sql
+--   stable
+--   security definer
+--   set search_path to 'public'
+--   as $$
+--     SELECT NOT EXISTS (
+--       SELECT 1 FROM org_members om
+--       WHERE om.org_id = p_org_id
+--         AND om.user_id = auth.uid()
+--         AND om.role = 'location_manager'
+--         AND om.location_ids IS NOT NULL
+--         AND array_length(om.location_ids, 1) > 0
+--     )
+--     OR EXISTS (
+--       SELECT 1 FROM org_members om
+--       WHERE om.org_id = p_org_id
+--         AND om.user_id = auth.uid()
+--         AND p_location_id = ANY(om.location_ids)
+--     );
+--   $$;
+-- ============================================================================

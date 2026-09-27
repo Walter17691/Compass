@@ -9,7 +9,7 @@ import SubscribeGate from './SubscribeGate.jsx'
 import { supabase } from './supabase.js'
 import { authedFetch } from './lib/authedFetch.js'
 import { isEntitled } from './lib/plan.js'
-import { clearAllOrgScopedData, purgeEmployeeRosterCache, syncAuthIdentity } from './lib/storage.js'
+import { clearAllOrgScopedData, purgeNeverPersistCaches, syncAuthIdentity } from './lib/storage.js'
 import { CompassLogo } from './components/CompassLogo.jsx'
 import { COLOR } from './styles/tokens.js'
 
@@ -42,14 +42,14 @@ const LoadingFallback = () => (
 // createRoot(...).render(...) bootstrap side effect at the bottom of this
 // file (that line still runs exactly as before for the real app — this is
 // purely additive).
-// Phase E1.5A — remove any employee roster this browser already holds, at module
-// load, before a single component can mount and read it.
+// Phase E1.5A / E1.5B — remove any employee roster AND any case list this browser
+// already holds, at module load, before a single component can mount and read one.
 //
-// It is not enough to stop writing the key: an existing user's browser already
-// contains one, captured under whatever permissions they had at the time. This
+// It is not enough to stop writing the keys: an existing user's browser already
+// contains them, captured under whatever permissions they had at the time. This
 // runs once per page load, ahead of Compass and ahead of Login, so there is no
-// window in which a stale roster could be consumed.
-purgeEmployeeRosterCache()
+// window in which stale employee or case data could be consumed.
+purgeNeverPersistCaches()
 
 export function Root() {
   const [user, setUser] = useState(null)

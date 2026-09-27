@@ -689,7 +689,7 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
               const menuActions = [
                 { label: cs.confidential?"Remove confidentiality":"Mark confidential", onClick: async()=>{
                   const turningOn = !cs.confidential;
-                  const ok = await confirmDialog(turningOn?{title:"Mark case confidential?",message:"Only you, the case creator, and HR Directors will be able to see this case. Other HR managers will lose access unless explicitly granted."}:{title:"Remove confidentiality?",message:"This case will become visible to every HR manager in the organisation again."});
+                  const ok = await confirmDialog(turningOn?{title:"Mark case confidential?",message:"This records the case as confidential and restricts who may change it. It does not hide the case from colleagues who already have organisation-wide access."}:{title:"Remove confidentiality?",message:"This case will no longer be marked confidential."});
                   if(!ok) return;
                   saveCases(cases.map(x=>x.id===cs.id?{...x,confidential:turningOn}:x));
                   showToast(turningOn?"Case marked confidential":"Case no longer confidential");
