@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { COLOR, TYPE, FONT, SPACE, RADIUS } from '../../styles/tokens';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -26,10 +27,18 @@ const label = { ...TYPE.metadata, color: COLOR.inkSoft, display: "block", margin
 
 export function EmployeeDetailsEdit({
   employee, locations = [],
-  jobTitle, setJobTitle, startDate, setStartDate, location, setLocation,
+  jobTitle, setJobTitle, startDate, setStartDate,
+  canAssignLocation = false, onSetLocation,
   onSave, onDelete, onCancel,
 }) {
   const hasAny = !!(employee?.jobTitle || employee?.startDate || employee?.location);
+  const canonicalId = employee?.locationId || "";
+  const [chosen, setChosen] = useState(canonicalId);
+  const canonical = locations.find(l => l.id === canonicalId);
+  // Legacy free text is shown only when it exists AND says something the
+  // canonical value doesn't already say — otherwise it is noise.
+  const legacy = (employee?.location || "").trim();
+  const legacyWorthShowing = legacy && legacy.toLowerCase() !== (canonical?.name || "").toLowerCase();
   return (
     <section style={{ maxWidth: 620 }}>
       <h2 style={{ ...TYPE.sectionHeading, color: COLOR.ink, margin: `0 0 ${SPACE.lg}px` }}>Employment details</h2>
@@ -45,16 +54,61 @@ export function EmployeeDetailsEdit({
           <input id="employee-start-date" type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
             onClick={e => e.currentTarget.showPicker?.()} style={{ ...field, colorScheme: "light", cursor: "pointer" }} />
         </div>
-        <div>
-          <label htmlFor="employee-location" style={label}>Location</label>
-          <select id="employee-location" value={location} onChange={e => setLocation(e.target.value)}
-            style={{ ...field, color: location ? COLOR.ink : COLOR.inkQuiet }}>
-            <option value="">Select…</option>
-            {locations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
-            <option value="__other__">Other</option>
-          </select>
-        </div>
       </div>
+
+      {/* ── Canonical location — Phase E1.5 ──────────────────────────────────
+          Deliberately OUTSIDE the form grid and not saved by the Save button.
+          Location is the field that decides who can see this person, so it is
+          its own audited operation (set_employee_location) rather than one input
+          among three. HR only: a Location Manager editing someone in their own
+          location must not be able to move them into or out of that scope.
+
+          The legacy free-text value is shown as CONTEXT and never pre-selects
+          anything. In Compass LTD all five legacy values happen to match a
+          canonical location name exactly, which is precisely why auto-selecting
+          would feel helpful and be wrong — the match is a coincidence of
+          spelling, not a record of anyone's decision. A human confirms it. */}
+      <section style={{ borderTop: `1px solid ${COLOR.borderFaint}`, paddingTop: SPACE.lg, marginBottom: SPACE.lg }}>
+        <div style={{ ...TYPE.rowContext, color: COLOR.ink, marginBottom: SPACE.xs }}>Location</div>
+
+        {legacyWorthShowing && (
+          <p style={{ ...TYPE.metadata, color: COLOR.inkQuiet, margin: `0 0 ${SPACE.md}px`, lineHeight: 1.6 }}>
+            Previously recorded as free text: “{legacy}”. Compass won't treat that as a location on its own —
+            choose the matching location below to make it count.
+          </p>
+        )}
+
+        {canAssignLocation ? (
+          <div style={{ display: "flex", gap: SPACE.sm, alignItems: "flex-end", flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+              <label htmlFor="employee-canonical-location" style={label}>Assigned location</label>
+              <select id="employee-canonical-location" value={chosen} onChange={e => setChosen(e.target.value)}
+                style={{ ...field, color: chosen ? COLOR.ink : COLOR.inkQuiet }}>
+                <option value="">Not assigned</option>
+                {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </div>
+            {chosen !== canonicalId && (
+              <button type="button" onClick={() => onSetLocation?.(chosen || null)}
+                style={{ ...TYPE.metadata, fontWeight: 700, background: COLOR.purple, border: "none",
+                         borderRadius: RADIUS.button, padding: "8px 14px", color: COLOR.paper,
+                         cursor: "pointer", fontFamily: FONT.sans, flexShrink: 0 }}>
+                {chosen ? "Set location" : "Clear location"}
+              </button>
+            )}
+          </div>
+        ) : (
+          <p style={{ ...TYPE.rowContext, color: canonical ? COLOR.ink : COLOR.inkFaint, margin: 0 }}>
+            {canonical ? canonical.name : "Not assigned"}
+          </p>
+        )}
+
+        {!canonical && canAssignLocation && (
+          <p style={{ ...TYPE.metadata, color: COLOR.inkQuiet, margin: `${SPACE.sm}px 0 0`, lineHeight: 1.6 }}>
+            While no location is assigned, only HR can see this employee.
+          </p>
+        )}
+      </section>
 
       <div style={{ display: "flex", gap: SPACE.sm, flexWrap: "wrap" }}>
         <button type="button" onClick={onSave}

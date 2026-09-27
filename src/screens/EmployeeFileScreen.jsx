@@ -58,7 +58,8 @@ export function EmployeeFileScreen({
   // one in the product. Opened as a focused mode, never as a form on Overview.
   editing = false, setEditing,
   locations = [],
-  editJobTitle, setEditJobTitle, editStartDate, setEditStartDate, editLocation, setEditLocation,
+  editJobTitle, setEditJobTitle, editStartDate, setEditStartDate,
+  canAssignLocation = false, onSetEmployeeLocation,
   onSaveEmployee, onDeleteEmployee,
 }) {
   const file = useMemo(
@@ -107,7 +108,6 @@ export function EmployeeFileScreen({
           ? [{ label: "Edit details", onClick: () => {
                 setEditJobTitle?.(file.employee.jobTitle || "");
                 setEditStartDate?.(file.employee.startDate || "");
-                setEditLocation?.(file.employee.location || "");
                 setEditing(true);
               } }]
           : []}
@@ -122,7 +122,8 @@ export function EmployeeFileScreen({
             locations={locations}
             jobTitle={editJobTitle} setJobTitle={setEditJobTitle}
             startDate={editStartDate} setStartDate={setEditStartDate}
-            location={editLocation} setLocation={setEditLocation}
+            canAssignLocation={canAssignLocation}
+            onSetLocation={(locationId) => onSetEmployeeLocation?.(file.employee.id, locationId)}
             onSave={() => onSaveEmployee?.(file.employee)}
             onDelete={() => onDeleteEmployee?.(file.employee)}
             onCancel={() => setEditing(false)}

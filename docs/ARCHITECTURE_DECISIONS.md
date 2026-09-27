@@ -303,6 +303,101 @@ relevance only where appropriate; provenance; and explicit human decision-making
 
 ---
 
+## AD-003 — Canonical employee location, and what it does and does not authorise
+
+**Status:** **implemented** in phase E1.5 (2026-09-27).
+
+### The relationship
+
+`employee_records.location_id UUID` referencing `locations(id)` is the canonical
+current location of an employee. Same-organisation integrity is enforced by the
+database — a composite foreign key on `(location_id, org_id)` referencing
+`locations(id, org_id)` — not by application validation.
+
+`employee_records.location`, the pre-existing free-text column, is **not
+authoritative and never determines permission.** It is retained for display and
+historical context. It is not dropped, not rewritten, and deliberately **not kept
+synchronised** with `location_id`.
+
+### NULL means HR-only, and fails closed
+
+`location_id IS NULL` means the employee is reachable only by organisation-wide
+roles, never by a Location Manager. This is a fail-closed rule: absence of a
+location removes access rather than widening it.
+
+**Location Manager authority never becomes organisation-wide.** In particular, a
+Location Manager whose authorised location list is *empty* sees **nothing**. This
+is a deliberate divergence from the older `can_access_case_location()`, whose
+first clause returns true for any user who is not a location-scoped manager *with
+locations assigned* — meaning an empty list grants everything. Since
+`org_members.location_ids` defaults to `'{}'`, that fail-open case is the default
+state of a new row. The employee predicate `can_access_employee()` must never be
+rewritten in that shape.
+
+### Only one role was narrowed
+
+Compass has seven roles; only `location_manager` is location-scoped
+(`LOCATION_SCOPED_ROLES`). E1.5 narrowed employee visibility for that role alone.
+`hr_director`, `hr_manager`, `line_manager`, `investigator`, `legal_reviewer` and
+`auditor` keep the organisation-wide employee scope they already had, including
+unassigned employees.
+
+Read and write predicates are **separate on purpose**. `can_access_employee()`
+governs SELECT and returns true for every organisation-wide role.
+`is_location_manager_for()` governs the scoped write paths and names the role
+explicitly. Reusing the read predicate for INSERT/UPDATE would hand employee-write
+privileges to four roles that have never had them.
+
+### A Location Manager cannot move an employee between scopes
+
+In E1.5 a Location Manager may create and edit employees inside their authorised
+locations, but **may not change `location_id`** — not even for an employee they
+otherwise fully manage. Changing canonical location moves a person into or out of
+a permission scope, so it is an explicit HR action, enforced by a column guard
+trigger rather than by RLS (a `WITH CHECK` expression cannot see the old row).
+
+Canonical location reassignment is HR-controlled. E1.7's employment events may
+later implement a deliberate scoped workflow; until then this is the bounded rule.
+
+### Assignment is reconciliation, never inference
+
+Canonical location is assigned by explicit human selection through
+`set_employee_location()` — HR only, same-organisation enforced, optimistic on
+`updated_at`, and audited old → new in the same transaction with real employee
+parentage (`audit_log.employee_id`).
+
+**No automatic mapping from legacy free text to a canonical UUID**, ever, and no
+fuzzy matching. At the time of E1.5, all five of Compass LTD's free-text values
+matched a canonical location name exactly — which is precisely why automating it
+would feel helpful and be wrong. The match is a coincidence of spelling, not a
+record of anyone's decision. The same organisation holds both `London` and
+`London Soho`, which is what fuzzy matching would get wrong first.
+
+### Historical context must not be rewritten
+
+When an employee's `location_id` changes, historical activity must retain the
+location context it had at the time it occurred. A location change is a change to
+the employee's *current* state, never a retroactive edit of their history. There
+are no employee activities yet (E1.6), and no employment events yet (E1.7) — this
+rule exists so that neither is built in a way that violates it.
+
+### Location lifecycle
+
+`locations` has no active/inactive column, so there is no deactivation concept to
+respect. `employee_records.location_id` is the first referential link to the table,
+and it uses `ON DELETE RESTRICT`: deleting a location that still has employees is
+blocked. `ON DELETE SET NULL` was rejected because it would silently move every
+employee at that location into the HR-only unassigned pool without anyone
+deciding to — a silent reclassification of customer data.
+
+Consequence to be aware of: `locations.org_id` cascades from `organisations`, so
+deleting an organisation row would now be blocked while any of its employees hold
+a location. No application path deletes an organisation (the billing webhook
+PATCHes it; "Delete all data" deliberately preserves `locations`), so this is
+reachable only by manual database administration.
+
+---
+
 ## AD-002 — A process type only receives what Compass owns for it
 
 **Status:** **implemented** in phases E1.4 (next-step guidance) and E1.4A (stage

@@ -130,6 +130,10 @@ export function buildEmployeeRoster(authorisedData = {}) {
         // person changing, which is the whole reason they cannot be identity.
         name: e.name || "",
         jobTitle: e.jobTitle || "",
+        // Phase E1.5 — locationId is the CANONICAL location and the only one that
+        // decides who can see this row. `location` above it is legacy free text,
+        // carried for display and never consulted for permission.
+        locationId: e.locationId || null,
         location: e.location || "",
         department: e.department || "",
         employeeNumber: e.employeeNumber || "",

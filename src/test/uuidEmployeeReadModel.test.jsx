@@ -394,9 +394,16 @@ describe('the read model composes, it does not authorise', () => {
     // E0.7 is read composition only. Widening access would require a new policy
     // or a new endpoint; it introduces neither, and that is checked rather than
     // asserted in prose.
-    const migrations = readdirSync('supabase').filter(f => f.endsWith('.sql') && f.includes('2026-09-2'));
-    // The identity programme's migrations, unchanged by this phase.
-    expect(migrations.sort()).toEqual([
+    // The identity programme's own migrations, none of which E0.7 added or
+    // altered. Asserted as a SUBSET rather than as the exact directory listing:
+    // frozen equality here made this test fail the moment a later, unrelated
+    // phase added any migration at all — which is what phase E1.5 legitimately
+    // did (employee_location_foundation_2026-09-27.sql, the canonical employee
+    // location relationship). The claim worth protecting is that E0.7 introduced
+    // no migration of its own and that these still exist, not that the directory
+    // can never grow again.
+    const migrations = readdirSync('supabase').filter(f => f.endsWith('.sql'));
+    [
       'appeal_hearing_chair_lifecycle_2026-09-23.sql',
       'case_employee_identity_2026-09-26.sql',
       'employee_identity_correction_2026-09-26.sql',
@@ -404,7 +411,9 @@ describe('the read model composes, it does not authorise', () => {
       'employee_owned_objects_2026-09-26.sql',
       'employee_reconciliation_2026-09-26.sql',
       'standalone_meetings_2026-09-25.sql',
-    ]);
+    ].forEach(f => expect(migrations, f).toContain(f));
+    // No migration carries E0.7's own name, because it had none to carry.
+    expect(migrations.filter(f => /uuid_employee|employee_read_model/.test(f))).toEqual([]);
     // Six deployable API routes, none added.
     const routes = readdirSync('api').filter(f => f.endsWith('.js') && !f.startsWith('_') && !f.endsWith('.test.js'));
     expect(routes.sort()).toEqual([

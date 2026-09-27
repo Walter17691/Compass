@@ -53,6 +53,7 @@ import { conditionalUpdate, enqueueSave, withTransientRetry } from './lib/optimi
 import { requestOverride, requestPolicyDeviation, requestLateAppealAcceptance } from './lib/humanOverride';
 import { caseRoleLabel } from './lib/caseRoles';
 import { getProcessType, stageLabel } from './lib/processStages';
+import { setEmployeeLocationWrite, describeLocationOutcome } from './lib/employeeLocationWrites';
 import { buildEscalationContext } from './lib/escalation';
 import { EscalateToHrModal } from './screens/EscalateToHrModal';
 import { getTemplateForType, resolveDefaultTaskDueDate } from './lib/processTemplates';
@@ -625,7 +626,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [completingOutcomeDetails, setCompletingOutcomeDetails] = useState(false);
   const [editJobTitle, setEditJobTitle] = useState("");
   const [editStartDate, setEditStartDate] = useState("");
-  const [editLocation, setEditLocation] = useState("");
   const [reconcilingCaseId, setReconcilingCaseId] = useState(null);
 
   const loadEmployeeRecords = async () => {
@@ -642,7 +642,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // into client state. It was previously DISCARDED here, which is why nothing
       // in the app could reference an employee by anything but their name. Every
       // later phase depends on this one field being present.
-      setEmployeeRecords(data.map(r=>({id:r.id,name:r.name,jobTitle:r.job_title,startDate:r.start_date,endDate:r.end_date||"",location:r.location,employeeNumber:r.employee_number||"",workEmail:r.work_email||"",department:r.department||"",manager:r.manager||"",status:r.status||"",employmentStatus:r.employment_status||"unknown",workingPattern:r.working_pattern||"",probationEndDate:r.probation_end_date||""})));
+      // Phase E1.5 — locationId is the CANONICAL location and the only one that
+      // determines permission. `location` beside it is legacy free text, kept for
+      // display and historical context, and deliberately never used to decide
+      // access. updatedAt is carried so an employee write can be conditional on
+      // it, which no employee write previously was.
+      setEmployeeRecords(data.map(r=>({id:r.id,name:r.name,jobTitle:r.job_title,startDate:r.start_date,endDate:r.end_date||"",location:r.location,locationId:r.location_id||null,updatedAt:r.updated_at||null,employeeNumber:r.employee_number||"",workEmail:r.work_email||"",department:r.department||"",manager:r.manager||"",status:r.status||"",employmentStatus:r.employment_status||"unknown",workingPattern:r.working_pattern||"",probationEndDate:r.probation_end_date||""})));
     } catch(e) { console.error('loadEmployeeRecords', e); markLoadIssue('employee records'); }
   };
 
@@ -667,9 +672,18 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     }
     saveEmployeeRecords(employeeRecords.filter(e=>e.id!==existing.id));
     if(org?.id) {
-      const { error } = await supabase.from('employee_records')
-        .delete().eq('id', existing.id).eq('org_id', org.id);
-      if(error) { console.error('deleteEmployeeRecord', error); showToast("Couldn't delete the employee record — "+error.message, "error"); return; }
+      // Phase E1.5 — .select() so a refusal is visible. DELETE is HR-only, and an
+      // RLS refusal filters the row rather than raising, so this used to remove
+      // the employee from the screen, report nothing, and leave them in the
+      // database until the next reload silently brought them back.
+      const { data, error } = await supabase.from('employee_records')
+        .delete().eq('id', existing.id).eq('org_id', org.id).select();
+      if(error) { console.error('deleteEmployeeRecord', error); showToast("Couldn't delete the employee record — "+error.message, "error"); await loadEmployeeRecords(); return; }
+      if(!data || data.length === 0) {
+        showToast("That employee record wasn't deleted — you don't have permission to remove it.", "error");
+        await loadEmployeeRecords();
+        return;
+      }
     }
     audit("Employee record deleted", `${existing.name} — employee ${existing.id}`);
   };
@@ -677,12 +691,39 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // Phase E0.5A.1 — an UPDATE is addressed by canonical id and scoped to the org.
   // It never touches `name`, so renaming is a deliberate separate act and can
   // never be a side effect of editing a job title.
+  // Phase E1.5 — two things this did not do before, both of which mattered once
+  // employee_records became a permission boundary.
+  //
+  // 1. OPTIMISTIC CONCURRENCY. Every employee write stamped a client-supplied
+  //    updated_at and none of them checked it, so two HR users editing the same
+  //    person silently overwrote each other and the loser was never told. Now
+  //    conditional on the updated_at the caller actually last saw, the same
+  //    pattern saveCaseToDB has always used.
+  //
+  // 2. TREATING "NOTHING HAPPENED" AS FAILURE. An RLS refusal on UPDATE does not
+  //    raise: the row is filtered by the policy's USING clause, so the statement
+  //    affects zero rows and returns no error. Proven against the live database.
+  //    Without this check a Location Manager editing an employee outside their
+  //    scope would see a success toast and a locally-updated screen describing a
+  //    change the database refused to make.
+  //
+  // Both outcomes are reported the same way on purpose, and the roster is
+  // reloaded so the screen stops showing a change that did not happen. They are
+  // not distinguished in the copy because the honest answer to the user is the
+  // same either way: this did not save, here is the real current state.
   const updateEmployeeRecordById = async (employeeId, fields) => {
     if(!org?.id || !employeeId) return;
+    const existing = findEmployeeById(employeeRecords, employeeId);
     const payload = employeeRecordPayload(fields);
-    const { error } = await supabase.from('employee_records')
+    let query = supabase.from('employee_records')
       .update(payload).eq('id', employeeId).eq('org_id', org.id);
-    if(error) { console.error('updateEmployeeRecord', error); showToast("Couldn't save the employee record — "+error.message, "error"); }
+    if(existing?.updatedAt) query = query.eq('updated_at', existing.updatedAt);
+    const { data, error } = await query.select();
+    if(error) { console.error('updateEmployeeRecord', error); showToast("Couldn't save the employee record — "+error.message, "error"); return; }
+    if(!data || data.length === 0) {
+      showToast("This employee record wasn't saved — it changed while you were editing, or you don't have permission to change it. Showing the current version.", "error");
+      await loadEmployeeRecords();
+    }
   };
 
   // CREATE still goes through the (org_id, name) conflict target, because
@@ -695,6 +736,57 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     const { error } = await supabase.from('employee_records')
       .upsert({ org_id: org.id, name, ...employeeRecordPayload(fields) }, { onConflict: 'org_id,name' });
     if(error) { console.error('createEmployeeRecord', error); showToast("Couldn't save the employee record — "+error.message, "error"); }
+  };
+
+  // Phase E1.5 — create an employee AT a canonical location.
+  //
+  // Deliberately an INSERT, not the upsert above. The upsert's conflict target is
+  // (org_id, name), so re-submitting an existing name silently UPDATES that
+  // person — and if location_id were in that payload it would move an existing
+  // employee between permission scopes with no audit row, which is exactly what
+  // set_employee_location exists to prevent. An insert instead fails on
+  // UNIQUE(org_id, name), which is the correct answer: a matching name is not a
+  // reason to merge two people.
+  //
+  // location_id is mandatory for a Location Manager and enforced by RLS, not
+  // here; this passes what the user chose and lets the database decide.
+  const createEmployeeAtLocation = async (name, locationId, fields = {}) => {
+    const trimmed = (name||"").trim();
+    if(!org?.id || !trimmed) return { ok: false };
+    const { error } = await supabase.from('employee_records')
+      .insert({ org_id: org.id, name: trimmed, location_id: locationId || null, ...employeeRecordPayload(fields) });
+    if(error) {
+      console.error('createEmployeeAtLocation', error);
+      // 23505 = unique violation on (org_id, name). Said in words, because
+      // "duplicate key value violates unique constraint" is not an answer.
+      const msg = error.code === '23505'
+        ? `There is already an employee called ${trimmed}. Compass won't merge two people with the same name — check whether this is the same person first.`
+        : "Couldn't add the employee — "+error.message;
+      showToast(msg, "error");
+      return { ok: false, error };
+    }
+    await loadEmployeeRecords();
+    return { ok: true };
+  };
+
+  // Phase E1.5 — assign, change or clear an employee's canonical location.
+  //
+  // Reconciliation, never inference. The legacy free-text value is shown to the
+  // human as context by the UI, and even where it matches a canonical location
+  // name exactly (as all five of Compass LTD's do) it is never auto-selected. A
+  // person confirms the UUID.
+  const setEmployeeLocation = async (employeeId, locationId) => {
+    const existing = findEmployeeById(employeeRecords, employeeId);
+    if(!existing) { showToast("Compass couldn't identify which employee to update.", "error"); return; }
+    const outcome = await setEmployeeLocationWrite({
+      supabase, employeeId, locationId, expectedUpdatedAt: existing.updatedAt,
+    });
+    const chosen = locations.find(l=>l.id===locationId);
+    const { tone, message } = describeLocationOutcome(outcome, chosen?.name || "");
+    showToast(message, tone === "success" ? undefined : tone);
+    // Reloaded on every outcome, including refusal: the screen must end up showing
+    // what the database actually holds, not what was attempted.
+    await loadEmployeeRecords();
   };
 
   // Phase E0.5B — create a canonical employee for a historical subject who has
@@ -11098,7 +11190,7 @@ Please produce:
       )}
 
             {screen===SCREENS.PEOPLE&&(
-              <PeopleScreen cases={cases} employeeRecords={employeeRecords} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} dsarRequests={dsarRequests} setActiveEmployeeId={setActiveEmployeeId} setScreen={setScreen} setCaseInfo={setCaseInfo} setMeetingSetup={setMeetingSetup} />
+              <PeopleScreen cases={cases} employeeRecords={employeeRecords} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} dsarRequests={dsarRequests} setActiveEmployeeId={setActiveEmployeeId} setScreen={setScreen} setCaseInfo={setCaseInfo} setMeetingSetup={setMeetingSetup} locations={locations} isHR={isHR} authorisedLocationIds={member?.role==='location_manager' ? (member?.location_ids||[]) : null} onCreateEmployee={(name, locationId)=>createEmployeeAtLocation(name, locationId)} />
             )}
 
 
@@ -11135,13 +11227,17 @@ Please produce:
           locations={locations}
           editJobTitle={editJobTitle} setEditJobTitle={setEditJobTitle}
           editStartDate={editStartDate} setEditStartDate={setEditStartDate}
-          editLocation={editLocation} setEditLocation={setEditLocation}
+          canAssignLocation={isHR}
+          onSetEmployeeLocation={setEmployeeLocation}
           // Both writes are by CANONICAL ID. upsert carries employeeId so it
           // updates the right row, and delete takes employee.id — deleting by
           // name would remove the wrong person the moment two employees in one
           // organisation share one.
           onSaveEmployee={(employee)=>{
-            upsertEmployeeRecord(employee.id, { employeeId: employee.id, jobTitle: editJobTitle, startDate: editStartDate, location: editLocation });
+            // Phase E1.5 — `location` (legacy free text) is deliberately NOT written
+            // here any more. Canonical location is set by its own audited operation, and
+            // the legacy column is left exactly as it is rather than being kept in sync.
+            upsertEmployeeRecord(employee.id, { employeeId: employee.id, jobTitle: editJobTitle, startDate: editStartDate });
             setEditingEmployeeRecord(false);
             showToast("Employee record updated");
           }}
