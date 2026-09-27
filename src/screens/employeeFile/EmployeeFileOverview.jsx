@@ -81,7 +81,7 @@ function ProcessBlock({ process, onOpenCase, compact = false }) {
 export function EmployeeFileOverview({ file, onOpenCase, onGoToTab, onReconcile }) {
   const [showDetails, setShowDetails] = useState(false);
   const { openProcesses, currentProcess, hasMultipleOpen, attention, recentActivity,
-          employmentDetails, isEmpty, showUnattributedNotice } = file;
+          employmentDetails, isEmpty, showUnattributedNotice, currentWarnings = [] } = file;
 
   // ── The empty file is a first-class state, not a failure ─────────────────
   if (isEmpty) {
@@ -163,6 +163,45 @@ export function EmployeeFileOverview({ file, onOpenCase, onGoToTab, onReconcile 
                              borderRadius: RADIUS.button, padding: "6px 12px", color: COLOR.purple,
                              cursor: "pointer", fontFamily: FONT.sans, flexShrink: 0 }}>
                     Open case
+                  </button>
+                </div>
+              </Panel>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {/* ── Current warnings ───────────────────────────────────────────────
+          Placed after attention and before recent activity: it is standing
+          context about the employee's record, not a task, so it should not
+          compete with what the user has to DO — but it must be seen before they
+          scroll into history.
+
+          Deliberately NOT an alert. No red, no banner, no icon, no "risk"
+          language. A live warning is an ordinary, factual part of an employment
+          record, and dressing it as an emergency would both mislead and make the
+          page shout. The section simply does not render when there is nothing
+          live — no "no warnings", no green reassurance card. */}
+      {currentWarnings.length > 0 && (
+        <Section title={currentWarnings.length === 1 ? "Current warning" : "Current warnings"}>
+          <div style={{ display: "grid", gap: SPACE.sm }}>
+            {currentWarnings.map(w => (
+              <Panel key={w.caseId}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+                              gap: SPACE.lg, flexWrap: "wrap" }}>
+                  <div style={{ minWidth: 0, flex: "1 1 260px" }}>
+                    <div style={{ ...TYPE.rowName, color: COLOR.ink, overflowWrap: "anywhere" }}>{w.type}</div>
+                    {/* The RECORDED expiry, never recomputed from the duration. */}
+                    <div style={{ ...TYPE.rowContext, color: COLOR.inkFaint, marginTop: 2 }}>
+                      {`Issued ${formatWhen(w.issuedAt)} · Expires ${formatWhen(w.expiresAt)}`}
+                    </div>
+                    <div style={{ ...TYPE.metadata, color: COLOR.inkQuiet, marginTop: 2 }}>{w.processLabel}</div>
+                  </div>
+                  <button type="button" onClick={() => onOpenCase(w.caseId)}
+                    style={{ ...TYPE.metadata, fontWeight: 700, background: "none", border: `1px solid ${COLOR.borderStrong}`,
+                             borderRadius: RADIUS.button, padding: "7px 12px", color: COLOR.purple,
+                             cursor: "pointer", fontFamily: FONT.sans, flexShrink: 0 }}>
+                    View case
                   </button>
                 </div>
               </Panel>

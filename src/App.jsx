@@ -11116,6 +11116,7 @@ Please produce:
           concernReferrals={concernReferrals}
           dsarRequests={dsarRequests}
           dueSoon={dueSoon}
+          allegations={allegations}
           isHR={isHR}
           role={member?.role||null}
           activeTab={employeeFileTab}

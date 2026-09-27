@@ -978,6 +978,84 @@ analysis for the whole file — read lint **per rule**, never by total.
   previous organisation's meetings for one frame after an org switch. Replaced by
   deriving "loading" from a result that carries its own `orgId`. Back to 9.
 
+### Phase E1.1 — current formal warnings on the Employee File (2026-09-27)
+- **STATUS: DEPLOYED / READY FOR HUMAN VISUAL UAT.** **No migration** — the
+  structured warning metadata already existed. No backfill, no data write.
+- **Authoritative source, re-audited rather than assumed:**
+  `lib/outcomeTypes.js` → `WARNING_OUTCOME_TYPES = ["First written warning",
+  "Final written warning"]` and `isWarningOutcome()`; `cases.outcome`,
+  `cases.outcome_issued_at`, `cases.warning_duration_months`,
+  `cases.warning_expires_at` (added by
+  `warning_duration_outcome_metadata_2026-09-09.sql`). The Employee File
+  **consumes** these; it establishes no second source.
+- **The recorded expiry is the authority.** `warningExpiresAt` is displayed and
+  decided on as stored; it is never recomputed from issue + duration. A stored
+  expiry that disagrees with the arithmetic still wins, because it is what the
+  outcome letter told the employee. Asserted: the derivation never imports
+  `addCalendarMonths`.
+- **TWO GAPS FOUND AND REPORTED RATHER THAN PAPERED OVER.**
+  1. **Compass has never compared a warning expiry against the clock anywhere.**
+     Every existing use of `warningExpiresAt` is display-only (outcome tab,
+     letter grounding, letter validator). So there was **no existing boundary
+     semantics to preserve** — this phase establishes one: a warning is live
+     while `today < expiry`, comparing **calendar dates** (the column is a
+     DATE). It is therefore spent **on** the recorded expiry date. Erring the
+     other way would present a lapsed warning as live, which is the more
+     damaging error because it can influence a later disciplinary decision.
+     **This is a new product rule and should be confirmed.**
+  2. **Appeal outcomes are recorded PER ALLEGATION, not on the case.**
+     `recordAppealOutcome` writes only `allegations.appealOutcome`; it does not
+     touch `cases.outcome` or `warningExpiresAt`. There is no case-level
+     representation of "this warning was overturned".
+- **Appeal interaction, composed from the existing model**
+  (`APPEAL_OUTCOMES` → `effectTag`):
+  - `overturned` (Appeal upheld) → **not current**.
+  - `varied` (Partially upheld) → **withheld**. The decision was varied but
+    Compass does not record what it was varied *to*, so the operative warning
+    cannot be established. Not guessed.
+  - `unchanged` (Not upheld) → current.
+  - none recorded / `further_investigation_required` → **current**. Nothing in
+    Compass suspends an outcome pending appeal; that existing semantics is
+    preserved rather than replaced by new employment-law policy in the UI.
+  - Where allegations disagree, `overturned` wins — the reading that cannot
+    overstate a record.
+- **Derived from EVERY authorised case, not just open ones.** A closed
+  disciplinary case can hold a live warning, and an employee may correctly have
+  no open process and a current warning. Proven.
+- **No text inference, no AI.** Warning-ness comes from the shared outcome-type
+  list — never from `caseType === "disciplinary"`, never from the word
+  "warning" in a letter or note. Asserted structurally.
+- **Placement and treatment.** After *What is happening* / *Needs your
+  attention*, before *Recent activity*: standing context, not a task. Deliberately
+  **not** an alert — no red, no banner, no icon, no badges, no "risk" language,
+  and **no invented "expiring soon" threshold** (the deadline engine does not
+  track warning expiry, so there was no shared rule to reuse). Multiple live
+  warnings are listed separately, soonest expiry first, each with its own
+  **View case** into the existing Case View.
+- **Nothing when empty.** No "No warnings", no "0 active", no green reassurance
+  card — verified in-browser that the word "warning" does not appear at all.
+- **Permissions unchanged.** Derived from the already-authorised,
+  `employee_id`-linked slice; the derivation performs no permission logic and no
+  name matching, so an inaccessible case never arrives and nothing announces a
+  hidden warning.
+- **Evidence** — `src/test/employeeFile.test.jsx` grew to **65 tests, 12 of 12
+  mutations caught** (employee_id→employee_name, expiry reversed, draft accepted,
+  overturned retained, varied shown, case-access slice widened, open-cases-only,
+  expiry recomputed, wrong-case appeal, empty section rendered). Full suite
+  **5,513 / 311**. Build clean. **Lint 158/9 — identical to E1 rule-by-rule.**
+  **12 API routes, none added.**
+- **Clock-independent tests:** every boundary case uses an injected `now`
+  (day before → live, on expiry → spent, day after → spent), and the
+  hour-of-day is proven not to change the answer.
+- **A locale detail worth knowing:** en-GB renders September as **"Sept"**, so
+  the row reads *"Issued 11 Sept 2026 · Expires 11 Mar 2027"*. My assertion
+  assumed "Sep" and was corrected to what the locale actually produces.
+- **Visual verification** at 1440 / 390 across one warning, multiple warnings,
+  none, and a long process label: no overflow at 390px, section absent when
+  empty, and the multi-warning shot demonstrates the product point — the open
+  process is a **grievance** while both live warnings come from **closed**
+  disciplinary cases. Screenshots in `docs/DESIGN/e1/`.
+
 ### Phase E1 — Employee File shell + Overview (2026-09-26)
 - **STATUS: DEPLOYED / READY FOR HUMAN VISUAL UAT.** **No migration, no policy,
   no data write.** Production untouched.

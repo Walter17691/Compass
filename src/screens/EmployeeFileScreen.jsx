@@ -41,6 +41,9 @@ export function EmployeeFileScreen({
   concernReferrals = [],
   dsarRequests = [],
   dueSoon = [],
+  // Allegations carry the appeal outcome; they arrive already RLS-filtered by
+  // case, exactly like every other collection here.
+  allegations = [],
   isHR = false,
   role = null,
   activeTab = "overview",
@@ -59,8 +62,8 @@ export function EmployeeFileScreen({
   onSaveEmployee, onDeleteEmployee,
 }) {
   const file = useMemo(
-    () => buildEmployeeFile(employeeId, { employeeRecords, cases, wellbeingNotes, concernReferrals, dsarRequests, dueSoon }, { isHR, role }),
-    [employeeId, employeeRecords, cases, wellbeingNotes, concernReferrals, dsarRequests, dueSoon, isHR, role]
+    () => buildEmployeeFile(employeeId, { employeeRecords, cases, wellbeingNotes, concernReferrals, dsarRequests, dueSoon, allegations }, { isHR, role }),
+    [employeeId, employeeRecords, cases, wellbeingNotes, concernReferrals, dsarRequests, dueSoon, allegations, isHR, role]
   );
 
   const tab = isEmployeeFileTab(activeTab) ? activeTab : "overview";

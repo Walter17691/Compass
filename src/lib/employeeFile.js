@@ -2,6 +2,8 @@ import { getEmployeeContext, hasUnattributedRecords } from './employeeContext.js
 import { getCaseStage, isGenuineMeetingRecord } from './caseStage.js';
 import { getNextStep } from './nextStep.js';
 import { isMeetingComplete } from './meetingLifecycle.js';
+import { isWarningOutcome } from './outcomeTypes.js';
+import { allegationsForCase, appealOutcomeMeta } from './allegations.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // THE EMPLOYEE FILE — derivation. Phase E1.
@@ -178,6 +180,111 @@ export function buildRecentActivity(ctx, { viewer = {}, limit = 6 } = {}) {
     .slice(0, limit);
 }
 
+// ── Current formal warnings. Phase E1.1 ────────────────────────────────────
+//
+// So an authorised user can see whether a live warning exists without opening
+// every past disciplinary case.
+//
+// ┌─ STRUCTURED DATA ONLY ──────────────────────────────────────────────────┐
+// │ A warning exists because an OUTCOME of a warning type was recorded with  │
+// │ an expiry date. Never because the case type is "disciplinary", never     │
+// │ because a letter or note contains the word "warning", and never because  │
+// │ a model thought so. If the structured data cannot establish it, it is    │
+// │ not shown.                                                               │
+// └─────────────────────────────────────────────────────────────────────────┘
+//
+// This CONSUMES the existing authority rather than re-deriving it:
+//   * isWarningOutcome()      — the shared list of warning outcome types
+//   * cases.outcome           — what was actually issued
+//   * cases.outcomeIssuedAt   — when
+//   * cases.warningExpiresAt  — the RECORDED expiry, which is the display and
+//                               decision authority. Duration is never used to
+//                               recompute it; a stored expiry that disagrees
+//                               with issue+duration is still the truth, because
+//                               it is what the outcome letter told the employee.
+//
+// A CLOSED case can hold a LIVE warning. Current warnings are therefore derived
+// from every authorised case, not from open processes — an employee may
+// correctly have no open disciplinary process and still have a live warning.
+
+// Compares calendar DATES, not instants. warning_expires_at is a DATE column,
+// and an instant comparison would make a warning expire at midnight in one
+// timezone and not another.
+const asDay = v => {
+  if (!v) return null;
+  const d = new Date(v);
+  if (isNaN(d)) return null;
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+};
+
+// THE BOUNDARY, AND WHY IT IS STATED RATHER THAN INHERITED.
+//
+// Compass has never compared a warning expiry against the clock anywhere: every
+// existing use of warningExpiresAt is display-only (the outcome tab, the letter
+// grounding, the letter validator). So there was no established semantics to
+// preserve, and this phase establishes one.
+//
+// A warning issued on 11 Sep with a 6-month duration records 11 Mar as its
+// expiry — the date the period ENDS. It is therefore live up to but not
+// including that date, and spent on the day itself. Erring the other way would
+// mean presenting a lapsed warning as live, which is the more damaging error in
+// a disciplinary context because it can influence a later decision.
+export function isWarningLive(expiresAt, now = new Date()) {
+  const expiry = asDay(expiresAt);
+  const today = asDay(now);
+  if (expiry == null || today == null) return false;
+  return today < expiry;
+}
+
+// What an appeal did to the original decision.
+//
+// AUDITED, AND A REAL GAP FOUND: Compass records an appeal outcome PER
+// ALLEGATION (allegations.appealOutcome → effectTag overturned | varied |
+// unchanged | null). Nothing writes a case-level appeal result, and
+// recordAppealOutcome does not touch cases.outcome or warningExpiresAt. So the
+// case's recorded outcome is unchanged by an appeal.
+//
+//   overturned → the original decision does not stand. NOT current.
+//   varied     → the decision was varied, but Compass does not record what it
+//                was varied TO. The operative warning cannot be established, so
+//                it is NOT shown. Reported as a gap rather than guessed.
+//   unchanged  → the decision stands. Current.
+//   none yet   → nothing in Compass suspends an outcome pending appeal; the
+//                recorded outcome remains operative. Existing semantics,
+//                preserved rather than replaced by a new policy in the UI.
+export function appealEffectOnCase(caseId, allegations) {
+  const tags = allegationsForCase(allegations, caseId)
+    .map(a => appealOutcomeMeta(a.appealOutcome)?.effectTag)
+    .filter(Boolean);
+  if (tags.includes("overturned")) return "overturned";
+  if (tags.includes("varied")) return "varied";
+  return tags.length ? "unchanged" : "none";
+}
+
+// Returns display data, never JSX. `cases` must already be the AUTHORISED,
+// employee_id-linked slice — this function performs no permission logic and no
+// name matching, so a case the viewer cannot see simply never arrives.
+export function deriveCurrentWarnings(cases = [], allegations = [], now = new Date()) {
+  return (Array.isArray(cases) ? cases : [])
+    .filter(cs => cs && isWarningOutcome(cs.outcome))
+    // An outcome that was never issued is a draft, not a warning.
+    .filter(cs => !!cs.outcomeIssuedAt)
+    .filter(cs => isWarningLive(cs.warningExpiresAt, now))
+    .filter(cs => {
+      const effect = appealEffectOnCase(cs.id, allegations);
+      return effect === "none" || effect === "unchanged";
+    })
+    .map(cs => ({
+      caseId: cs.id,
+      type: cs.outcome,
+      issuedAt: cs.outcomeIssuedAt,
+      expiresAt: cs.warningExpiresAt,
+      durationMonths: cs.warningDurationMonths || null,
+      processLabel: processLabel(cs.caseType),
+    }))
+    .sort((a, b) => new Date(a.expiresAt) - new Date(b.expiresAt));
+}
+
 // ── Employment details — only what is actually recorded ────────────────────
 //
 // Rows of dashes are visual noise that make a sparse record look broken. An
@@ -241,6 +348,9 @@ export function buildEmployeeFile(employeeId, authorisedData = {}, viewerInput =
     currentProcess: open.length === 1 ? open[0] : null,
     hasMultipleOpen: open.length > 1,
     attention: buildAttention({ processes, dueSoon: authorisedData.dueSoon, caseIds }),
+    // From EVERY authorised case, not just open ones: a closed disciplinary
+    // case can still hold a live warning.
+    currentWarnings: deriveCurrentWarnings(ctx.cases, authorisedData.allegations, authorisedData.now),
     recentActivity: buildRecentActivity(ctx, { viewer }),
     employmentDetails: buildEmploymentDetails(ctx.employee),
     // A first-class state: an employee with nothing canonically attributed.

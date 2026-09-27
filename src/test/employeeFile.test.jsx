@@ -3,7 +3,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readFileSync, existsSync } from 'node:fs';
 import { EmployeeFileScreen } from '../screens/EmployeeFileScreen.jsx';
-import { buildEmployeeFile, employeeFileViewer, buildAttention, processLabel, EMPLOYEE_FILE_TABS } from '../lib/employeeFile.js';
+import { buildEmployeeFile, employeeFileViewer, buildAttention, processLabel, EMPLOYEE_FILE_TABS,
+         deriveCurrentWarnings, isWarningLive, appealEffectOnCase } from '../lib/employeeFile.js';
 
 // Phase E1 — the Employee File.
 //
@@ -498,5 +499,202 @@ describe('design, responsiveness and accessibility', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('John Smith');
     // Section headings are h2s beneath it, not styled divs.
     expect(screen.getAllByRole('heading', { level: 2 }).length).toBeGreaterThan(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase E1.1 — current formal warnings.
+//
+// Derived from structured outcome metadata only. Never from the case type,
+// never from the word "warning" in a letter, never from a model.
+describe('E1.1 — current formal warnings', () => {
+  const NOW = new Date('2026-10-01T12:00:00Z');
+  const warned = (id, over = {}) => caseFor(id, 'u-a', {
+    outcome: 'First written warning',
+    outcomeIssuedAt: '2026-09-11T00:00:00Z',
+    warningDurationMonths: 6,
+    warningExpiresAt: '2027-03-11',
+    stage: 'closed',
+    ...over,
+  });
+  const build = (cases, allegations = [], now = NOW, viewer = { isHR: true }) =>
+    buildEmployeeFile('u-a', { ...DATA, cases, allegations, now }, viewer);
+
+  it('1/3/4. a live first written warning appears with its issue and recorded expiry', () => {
+    const w = build([warned('c1')]).currentWarnings;
+    expect(w).toHaveLength(1);
+    expect(w[0]).toMatchObject({
+      caseId: 'c1', type: 'First written warning',
+      issuedAt: '2026-09-11T00:00:00Z', expiresAt: '2027-03-11',
+    });
+  });
+
+  it('2. a final written warning appears too', () => {
+    const w = build([warned('c1', { outcome: 'Final written warning' })]).currentWarnings;
+    expect(w[0].type).toBe('Final written warning');
+  });
+
+  it('4. the RECORDED expiry is authoritative, never recomputed from the duration', () => {
+    // issue + 6 months would be 11 Mar 2027; the stored expiry disagrees and
+    // wins, because it is what the outcome letter told the employee.
+    const w = build([warned('c1', { warningExpiresAt: '2027-08-01' })]).currentWarnings;
+    expect(w[0].expiresAt).toBe('2027-08-01');
+    expect(libCode).not.toContain('addCalendarMonths');
+  });
+
+  it('5. an expired warning does not appear', () => {
+    const w = build([warned('c1', { warningExpiresAt: '2026-09-30' })]).currentWarnings;
+    expect(w).toEqual([]);
+  });
+
+  it('the expiry boundary is deterministic and clock-independent', () => {
+    const at = d => deriveCurrentWarnings([warned('c1', { warningExpiresAt: '2026-10-01' })], [], new Date(d)).length;
+    expect(at('2026-09-30T23:00:00Z')).toBe(1);  // day before  → live
+    expect(at('2026-10-01T00:00:00Z')).toBe(0);  // ON expiry   → spent
+    expect(at('2026-10-02T00:00:00Z')).toBe(0);  // day after   → spent
+    // Compared as calendar dates, so the hour of day never changes the answer.
+    expect(isWarningLive('2026-10-02', new Date('2026-10-01T23:59:00Z'))).toBe(true);
+    expect(isWarningLive('2026-10-02', new Date('2026-10-02T00:00:01Z'))).toBe(false);
+  });
+
+  it('6/15. a CLOSED case with a live warning still appears', () => {
+    const file = build([warned('c1', { stage: 'closed' })]);
+    expect(file.openProcesses).toHaveLength(0);
+    expect(file.currentWarnings).toHaveLength(1);
+    // And the warning stays associated with its case, which remains reachable.
+    expect(file.closedProcesses.map(p => p.caseId)).toContain('c1');
+  });
+
+  it('16. an open disciplinary case with no issued outcome contributes nothing', () => {
+    const file = build([caseFor('c1', 'u-a', { stage: 'investigation' })]);
+    expect(file.currentWarnings).toEqual([]);
+    expect(file.openProcesses).toHaveLength(1);
+  });
+
+  it('17. a draft outcome — recorded but never issued — is not a warning', () => {
+    const w = build([warned('c1', { outcomeIssuedAt: null })]).currentWarnings;
+    expect(w).toEqual([]);
+  });
+
+  it('a non-warning outcome is not a warning', () => {
+    ['Dismissal', 'No further action', 'Informal advice', ''].forEach(outcome => {
+      expect(build([warned('c1', { outcome })]).currentWarnings).toEqual([]);
+    });
+  });
+
+  it('7. no live warnings means no section at all', () => {
+    const file = build([warned('c1', { warningExpiresAt: '2020-01-01' })]);
+    expect(file.currentWarnings).toEqual([]);
+    render(<EmployeeFileScreen {...baseProps} cases={[warned('c1', { warningExpiresAt: '2020-01-01' })]} allegations={[]} />);
+    expect(screen.queryByText(/Current warning/)).not.toBeInTheDocument();
+    ['No warnings', '0 active warnings', 'Clean record'].forEach(t =>
+      expect(screen.queryByText(t)).not.toBeInTheDocument());
+  });
+
+  it('8. two live warnings stay separate and identifiable', () => {
+    const w = build([
+      warned('c1'),
+      warned('c2', { outcome: 'Final written warning', warningExpiresAt: '2027-01-15' }),
+    ]).currentWarnings;
+    expect(w).toHaveLength(2);
+    // Soonest expiry first, and each keeps its own case.
+    expect(w.map(x => x.type)).toEqual(['Final written warning', 'First written warning']);
+    expect(new Set(w.map(x => x.caseId)).size).toBe(2);
+  });
+
+  it('9/10/22/23. only employee_id-linked cases contribute — no name fallback', () => {
+    const w = build([
+      warned('mine'),
+      { ...warned('colleague'), employeeId: 'u-b' },     // same NAME, different person
+      { ...warned('legacy'), employeeId: null },          // legacy name-only
+    ]).currentWarnings;
+    expect(w.map(x => x.caseId)).toEqual(['mine']);
+    // Structurally: the derivation never looks at a name.
+    const fn = libCode.slice(libCode.indexOf('export function deriveCurrentWarnings'),
+                             libCode.indexOf('// ── Employment details'));
+    expect(fn.length).toBeGreaterThan(100);
+    expect(fn).not.toContain('employeeName');
+    expect(fn).not.toContain('.name');
+  });
+
+  it('11/12/13/14. an inaccessible case cannot leak a warning', () => {
+    // The derivation is handed the authorised slice and performs no permission
+    // logic of its own, so a case the viewer cannot see never arrives. A
+    // Location Manager, Investigator or Platform Admin given nothing gets nothing.
+    ['location_manager', 'line_manager', 'investigator', 'legal_reviewer', 'auditor'].forEach(role => {
+      expect(build([], [], NOW, { isHR: false, role }).currentWarnings).toEqual([]);
+    });
+    // And nothing announces a hidden warning.
+    render(<EmployeeFileScreen {...baseProps} cases={[]} allegations={[]} isHR={false} role="location_manager" />);
+    ['warning hidden', 'Current warning', '1 warning'].forEach(t =>
+      expect(screen.queryByText(new RegExp(t))).not.toBeInTheDocument());
+  });
+
+  it('18. a warning overturned on appeal is NOT current', () => {
+    const alls = [{ id: 'a1', caseId: 'c1', appealOutcome: 'upheld' }];
+    expect(build([warned('c1')], alls).currentWarnings).toEqual([]);
+  });
+
+  it('19/20. varied is withheld; not-upheld and pending follow existing semantics', () => {
+    // "Partially upheld" varies the original decision, but Compass records no
+    // case-level result of that variation — so the operative warning cannot be
+    // established and is withheld rather than guessed.
+    expect(build([warned('c1')], [{ id: 'a1', caseId: 'c1', appealOutcome: 'partially_upheld' }]).currentWarnings).toEqual([]);
+    // Not upheld → the decision stands.
+    expect(build([warned('c1')], [{ id: 'a1', caseId: 'c1', appealOutcome: 'not_upheld' }]).currentWarnings).toHaveLength(1);
+    // 20. Pending appeal: nothing in Compass suspends an outcome, so it stands.
+    expect(build([warned('c1')], [{ id: 'a1', caseId: 'c1', appealOutcome: null }]).currentWarnings).toHaveLength(1);
+    expect(build([warned('c1')], [{ id: 'a1', caseId: 'c1', appealOutcome: 'further_investigation_required' }]).currentWarnings).toHaveLength(1);
+    // Another case's appeal never affects this one.
+    expect(build([warned('c1')], [{ id: 'a1', caseId: 'other', appealOutcome: 'upheld' }]).currentWarnings).toHaveLength(1);
+  });
+
+  it('the appeal effect composes the EXISTING allegation model', () => {
+    expect(appealEffectOnCase('c1', [{ id: 'a1', caseId: 'c1', appealOutcome: 'upheld' }])).toBe('overturned');
+    expect(appealEffectOnCase('c1', [{ id: 'a1', caseId: 'c1', appealOutcome: 'not_upheld' }])).toBe('unchanged');
+    expect(appealEffectOnCase('c1', [])).toBe('none');
+    // Overturned wins over a varied sibling — the harsher-to-the-employer
+    // reading, and the one that cannot overstate a record.
+    expect(appealEffectOnCase('c1', [
+      { id: 'a1', caseId: 'c1', appealOutcome: 'partially_upheld' },
+      { id: 'a2', caseId: 'c1', appealOutcome: 'upheld' },
+    ])).toBe('overturned');
+    expect(lib).toContain("from './allegations.js'");
+    expect(lib).toContain("from './outcomeTypes.js'");
+  });
+
+  it('24. no AI and no text inference anywhere in the derivation', () => {
+    const fn = libCode.slice(libCode.indexOf('export function deriveCurrentWarnings'),
+                             libCode.indexOf('// ── Employment details'));
+    ['includes("warning")', 'toLowerCase', 'outcomeNotes', 'letterOutput', 'description', '/api/chat']
+      .forEach(t => expect(fn).not.toContain(t));
+    // Warning-ness comes from the shared list, not from the case type.
+    expect(libCode).toContain('isWarningOutcome(cs.outcome)');
+    expect(fn).not.toContain('caseType ===');
+  });
+
+  it('renders calmly: no alarm language, no red banner', () => {
+    render(<EmployeeFileScreen {...baseProps} cases={[warned('c1')]} allegations={[]} />);
+    expect(screen.getByText('First written warning')).toBeInTheDocument();
+    // en-GB abbreviates September as "Sept", not "Sep" — asserted against what
+    // the locale actually produces rather than what I assumed it would.
+    expect(screen.getByText('Issued 11 Sept 2026 · Expires 11 Mar 2027')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View case' })).toBeInTheDocument();
+    ['risk', 'Risk', 'URGENT', 'Alert', 'Danger'].forEach(t =>
+      expect(screen.queryByText(new RegExp(t))).not.toBeInTheDocument());
+    // No red, and no invented "expiring soon" threshold.
+    expect(overviewCode).not.toContain('COLOR.red');
+    [' 30 ', ' 14 ', 'expiringSoon', 'EXPIRING'].forEach(t => expect(libCode).not.toContain(t));
+  });
+
+  it('View case opens the existing Case View — no warning-detail screen', async () => {
+    const user = userEvent.setup();
+    const setScreen = vi.fn();
+    const setActiveCaseId = vi.fn();
+    render(<EmployeeFileScreen {...baseProps} cases={[warned('c1')]} allegations={[]}
+      setScreen={setScreen} setActiveCaseId={setActiveCaseId} />);
+    await user.click(screen.getByRole('button', { name: 'View case' }));
+    expect(setActiveCaseId).toHaveBeenCalledWith('c1');
+    expect(setScreen).toHaveBeenCalledWith('case_view');
   });
 });
