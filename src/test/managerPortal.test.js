@@ -30,7 +30,9 @@ describe('myAssignedCases', () => {
 
 describe('myMeetingsToConduct', () => {
   it('includes a case whose next step is to start a meeting', () => {
-    const myCases = [{ id: 'c1', employeeName: 'Sam', meetings: [] }];
+    // Typed explicitly: a case with no recorded process type no longer
+    // receives the disciplinary recipe's guidance (E1.4).
+    const myCases = [{ id: 'c1', employeeName: 'Sam', caseType: 'misconduct', meetings: [] }];
     expect(myMeetingsToConduct(myCases).map(c => c.id)).toEqual(['c1']);
   });
 

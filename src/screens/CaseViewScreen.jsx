@@ -3,6 +3,10 @@ import { SCREENS, MEETING_TYPES } from '../constants';
 import { toISODateLocal, isPastLocalDate } from '../lib/dates';
 import { appealInvitationLogistics } from '../lib/appealInvitation';
 import { getCurrentRisk, isGrievanceCase } from '../lib/caseStage';
+// Imported directly rather than threaded through as a prop like getNextStep:
+// adding a callee inside App.jsx's component is what silently disabled lint
+// analysis in an earlier phase, and this file already imports from lib above.
+import { hasGuidedProcess } from '../lib/nextStep';
 import { resumableMeetingFor, scheduledMeetingsFor } from '../lib/meetingLifecycle';
 import { fmtMeetingTime } from '../lib/meetingTiming';
 import { MDRenderer } from '../components/MDRenderer';
@@ -858,6 +862,23 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Phase E1.4 — an open case whose process Compass holds no recipe for.
+          Deliberately not the purple Copilot banner and deliberately not a
+          warning: the case is perfectly valid, Compass simply has nothing
+          useful to say about how to run it, and saying so plainly is more
+          honest than an empty space the user has to interpret. Rendered only
+          when there is no recipe at all — a supported process sitting at a
+          stage its own recipe does not cover keeps showing nothing, exactly as
+          it did before. */}
+      {!nextStep&&stage!=="closed"&&!hasGuidedProcess(cs)&&(
+        <div style={{background:"#FAFAFB",borderBottom:"1px solid #E8E6EF",padding:"12px 28px",flexShrink:0}}>
+          <div style={{fontSize:13,color:"#3F3A4D"}}>No guided next step is available for this process type.</div>
+          <div style={{fontSize:11,color:"#6B6375",marginTop:2}}>
+            You can continue to record meetings, notes and documents on this case as normal.
+          </div>
         </div>
       )}
 

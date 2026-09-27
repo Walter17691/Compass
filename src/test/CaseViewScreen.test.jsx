@@ -1030,3 +1030,60 @@ describe('CaseViewScreen — Start appeal hearing seeds logistics from the saved
     expect(result.locationOrMethod).toBe('');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase E1.4 — the no-guided-process line.
+//
+// getNextStep returning null is nothing new (every recipe already did it for a
+// stage it does not cover). What E1.4 adds is telling the difference between
+// "this process is running and there is simply nothing to suggest right now"
+// and "Compass holds no recipe for this process at all" — and saying the second
+// one out loud instead of leaving an empty band the reader has to interpret.
+const COPY = 'No guided next step is available for this process type.';
+
+describe('E1.4 — no guided next step, said plainly', () => {
+  const renderWith = (caseType, extraShell = {}) => {
+    const c = { ...cs, caseType };
+    return render(<CaseViewScreen {...baseProps}
+      shell={{ ...baseProps.shell, cases: [c], getNextStep: () => null, ...extraShell }} />);
+  };
+
+  it('says so on an open case whose process type has no recipe', () => {
+    renderWith('capability');
+    expect(screen.getByText(COPY)).toBeInTheDocument();
+  });
+
+  it('says so on an open case with no recorded process type at all', () => {
+    renderWith(undefined);
+    expect(screen.getByText(COPY)).toBeInTheDocument();
+  });
+
+  it('stays silent for a supported process that merely has nothing to suggest', () => {
+    // The distinction the whole element exists for: misconduct HAS a recipe, so
+    // a null next step here means "nothing to suggest", not "no recipe".
+    renderWith('misconduct');
+    expect(screen.queryByText(COPY)).not.toBeInTheDocument();
+  });
+
+  it('stays silent on a closed case, which already showed nothing', () => {
+    renderWith('capability', { getCaseStage: () => 'closed' });
+    expect(screen.queryByText(COPY)).not.toBeInTheDocument();
+  });
+
+  it('does not appear alongside a real suggestion', () => {
+    render(<CaseViewScreen {...baseProps}
+      shell={{ ...baseProps.shell, cases: [{ ...cs, caseType: 'capability' }],
+               getNextStep: () => ({ label: 'Start the hearing', action: 'start_disciplinary', meetingType: 'disciplinary', primary: true }) }} />);
+    expect(screen.queryByText(COPY)).not.toBeInTheDocument();
+  });
+
+  it('is not alarming, and uses no technical language', () => {
+    renderWith('capability');
+    // The case is valid; the copy must not suggest otherwise, and must not leak
+    // implementation vocabulary onto an HR screen.
+    expect(screen.getByText(/record meetings, notes and documents on this case as normal/)).toBeInTheDocument();
+    const body = document.body.textContent;
+    ['unsupported', 'null', 'missing recipe', 'configuration error', 'not configured', 'error', 'invalid', 'unrecognised']
+      .forEach(word => expect(body.toLowerCase()).not.toContain(word));
+  });
+});

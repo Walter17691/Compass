@@ -5,7 +5,7 @@ import {
   meetingKind, meetingStatus, isGenuineMeeting, isMeetingComplete, lastGenuineMeeting,
 } from '../lib/meetingLifecycle.js';
 import { isLetterOnlyRecord, isGenuineMeetingRecord, hasLetterType } from '../lib/caseStage.js';
-import { getNextStep } from '../lib/nextStep.js';
+import { getNextStep, hasGuidedProcess } from '../lib/nextStep.js';
 import fixture from './fixtures/productionCaseShapes.json';
 
 // Release 1 Phase 1 — the meeting lifecycle primitive.
@@ -315,33 +315,84 @@ describe('14. production parity — all 58 shapes, all 774 cases', () => {
     expect(fixture.shapes.reduce((a, b) => a + b.n, 0)).toBe(774);
   });
 
-  it('every shape produces the pre-Phase-1 action under every ctx — zero drift', () => {
+  // Phase E1.4 split this in two.
+  //
+  // The baseline these shapes carry was captured pre-Phase-1, when the
+  // disciplinary recipe was the default for every unrecognised case type. E1.4
+  // deliberately ends that, so a flat "zero drift across all 774" would now be
+  // asserting the defect. Rather than retire a 774-case canary, it is aimed at
+  // the two claims E1.4 actually makes: guided processes are untouched, and the
+  // cases that change are exactly — and only — the ones with no recipe.
+  it('a process Compass HAS a recipe for keeps its pre-Phase-1 action under every ctx — zero drift', () => {
     const drift = [];
     for (const { n, shape, expect: expected } of fixture.shapes) {
       const cs = toCase(shape);
+      if (!hasGuidedProcess(cs)) continue;
       fixture.ctxPermutations.forEach((ctx, i) => {
         const result = getNextStep(cs, ctx);
         const action = result ? result.action : null;
-        if (action !== expected[i]) drift.push({ n, ctx, before: expected[i], after: action });
+        if (action !== expected[i]) drift.push({ n, caseType: shape.caseType, ctx, before: expected[i], after: action });
       });
     }
     expect(drift).toEqual([]);
   });
 
-  it('no production case changes its next step (case-weighted count is zero)', () => {
-    let affected = 0;
+  it('the investigation -> disciplinary engine is reached by 128 production cases and is unchanged', () => {
+    // Guards the scope boundary: E1.4 changed routing, never a recipe.
+    const guided = fixture.shapes.filter(s => hasGuidedProcess(toCase(s.shape)));
+    expect(guided.reduce((a, b) => a + b.n, 0)).toBe(128);
+    expect([...new Set(guided.map(s => s.shape.caseType))].sort()).toEqual(['investigation', 'misconduct']);
+  });
+
+  it('every case that loses guidance had no recipe — and every case with no recipe loses it', () => {
+    // The two directions together are the whole of E1.4: nothing guided went
+    // quiet, and nothing unguided kept being guided by another process's recipe.
+    let changed = 0, unguided = 0, changedButGuided = 0, unguidedButStillGuided = 0;
     for (const { n, shape, expect: expected } of fixture.shapes) {
       const cs = toCase(shape);
+      const guided = hasGuidedProcess(cs);
       const differs = fixture.ctxPermutations.some((ctx, i) => {
         const r = getNextStep(cs, ctx);
         return (r ? r.action : null) !== expected[i];
       });
-      if (differs) affected += n;
+      // Every unguided shape must now return null under every ctx.
+      const allNull = fixture.ctxPermutations.every(ctx => getNextStep(cs, ctx) === null);
+      if (differs) changed += n;
+      if (!guided) {
+        unguided += n;
+        if (!allNull) unguidedButStillGuided += n;
+      } else if (differs) {
+        changedButGuided += n;
+      }
     }
-    expect(affected).toBe(0);
+    expect(changedButGuided).toBe(0);
+    expect(unguidedButStillGuided).toBe(0);
+    // 566 with no recorded type at all, 66 capability, 14 "informal".
+    expect(unguided).toBe(646);
+    expect(changed).toBe(646);
+  });
+
+  it('names what the 646 unguided cases were previously being told to do', () => {
+    // Kept concrete on purpose. These were live recommendations in production:
+    // an untyped case invited to a disciplinary hearing, a capability appeal run
+    // on the disciplinary appeal recipe, an "informal" case told to issue a
+    // formal outcome letter. This is the defect E1.4 removes, in its own words.
+    const was = new Map();
+    for (const { n, shape, expect: expected } of fixture.shapes) {
+      if (hasGuidedProcess(toCase(shape))) continue;
+      const key = `${shape.caseType || '(no type recorded)'}:${expected[0]}`;
+      was.set(key, (was.get(key) || 0) + n);
+    }
+    expect(was.get('(no type recorded):outcome_letter')).toBe(521);
+    expect(was.get('(no type recorded):disciplinary_invite')).toBe(45);
+    expect(was.get('capability:send_signature')).toBe(48);
+    expect(was.get('capability:start_appeal_meeting')).toBe(18);
+    expect(was.get('informal:outcome_letter')).toBe(14);
   });
 
   it('the 99 no-record legacy meetings are still read as workflow-incomplete', () => {
+    // Meeting-completeness is independent of process routing, so this holds
+    // whether or not the case carries a recipe — asserted below without one.
     // This exact shape occurs 49 times in production: investigation meeting,
     // no record. Its next step is asserted against the captured pre-Phase-1
     // baseline rather than a hand-written guess.
@@ -351,7 +402,20 @@ describe('14. production parity — all 58 shapes, all 774 cases', () => {
     expect(target).toBeDefined();
     expect(target.n).toBe(49);
     const cs = toCase(target.shape);
+    // The completeness reading itself — E1.4 did not touch this.
     expect(isMeetingComplete(cs.meetings[0])).toBe(false);
-    expect(getNextStep(cs, {}).action).toBe(target.expect[0]);
+
+    // This shape carries no case type, and its captured baseline action was
+    // "outcome_letter": 49 production cases whose only meeting had no record of
+    // anything were being advised to draft the outcome letter. It now returns no
+    // guided step at all.
+    expect(target.shape.caseType).toBe('');
+    expect(target.expect[0]).toBe('outcome_letter');
+    expect(getNextStep(cs, {})).toBeNull();
+
+    // The disciplinary engine's own reading of the same shape is unchanged: give
+    // it a recipe and the pre-Phase-1 action comes back. That is the half of this
+    // test worth keeping — routing changed, the recipe did not.
+    expect(getNextStep({ ...cs, caseType: 'misconduct' }, {}).action).toBe(target.expect[0]);
   });
 });

@@ -1,27 +1,28 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { getNextStep } from '../lib/nextStep.js';
 import { getCaseStage } from '../lib/caseStage.js';
 
 describe('getNextStep', () => {
   it('returns null for a closed case', () => {
-    expect(getNextStep({ stage: 'closed', meetings: [] })).toBeNull();
+    expect(getNextStep({ caseType: 'misconduct', stage: 'closed', meetings: [] })).toBeNull();
   });
 
   it('recommends starting an investigation for a fresh intake with no meetings', () => {
-    const step = getNextStep({ stage: 'intake', meetings: [] });
+    const step = getNextStep({ caseType: 'misconduct', stage: 'intake', meetings: [] });
     expect(step.action).toBe('start_investigation');
     expect(step.reason).toMatch(/ACAS/);
   });
 
   describe('investigation stage', () => {
     it('recommends starting the meeting when none has been recorded', () => {
-      const step = getNextStep({ stage: 'investigation', meetings: [] });
+      const step = getNextStep({ caseType: 'misconduct', stage: 'investigation', meetings: [] });
       expect(step.action).toBe('start_investigation');
     });
 
     it('recommends signature once a record exists but is unsigned', () => {
       const step = getNextStep({
-        stage: 'investigation',
+        caseType: 'misconduct', stage: 'investigation',
         meetings: [{ type: 'Investigation', record: 'notes', signStatus: 'pending' }],
       });
       expect(step.action).toBe('send_signature');
@@ -29,7 +30,7 @@ describe('getNextStep', () => {
 
     it('recommends generating the report once the record is signed', () => {
       const step = getNextStep({
-        stage: 'investigation',
+        caseType: 'misconduct', stage: 'investigation',
         meetings: [{ type: 'Investigation', record: 'notes', signStatus: 'signed' }],
       });
       expect(step.action).toBe('inv_report');
@@ -37,7 +38,7 @@ describe('getNextStep', () => {
 
     it('only considers the most recent investigation meeting', () => {
       const step = getNextStep({
-        stage: 'investigation',
+        caseType: 'misconduct', stage: 'investigation',
         meetings: [
           { type: 'Investigation', record: 'notes', signStatus: 'signed' },
           { type: 'Investigation', record: null, signStatus: null },
@@ -48,20 +49,20 @@ describe('getNextStep', () => {
   });
 
   it('recommends the disciplinary invite from inv_report stage, with a no-case-to-answer secondary option', () => {
-    const step = getNextStep({ stage: 'inv_report', meetings: [] });
+    const step = getNextStep({ caseType: 'misconduct', stage: 'inv_report', meetings: [] });
     expect(step.action).toBe('disciplinary_invite');
     expect(step.secondary.action).toBe('close_no_case');
   });
 
   describe('disciplinary stage', () => {
     it('recommends starting the hearing when none has been recorded', () => {
-      const step = getNextStep({ stage: 'disciplinary', meetings: [] });
+      const step = getNextStep({ caseType: 'misconduct', stage: 'disciplinary', meetings: [] });
       expect(step.action).toBe('start_disciplinary');
     });
 
     it('recommends signature once a hearing record exists but is unsigned', () => {
       const step = getNextStep({
-        stage: 'disciplinary',
+        caseType: 'misconduct', stage: 'disciplinary',
         meetings: [{ type: 'Disciplinary', record: 'notes', signStatus: 'pending' }],
       });
       expect(step.action).toBe('send_signature');
@@ -69,7 +70,7 @@ describe('getNextStep', () => {
 
     it('recommends drafting the outcome letter once signed with no outcome yet', () => {
       const step = getNextStep({
-        stage: 'disciplinary',
+        caseType: 'misconduct', stage: 'disciplinary',
         meetings: [{ type: 'Disciplinary', record: 'notes', signStatus: 'signed' }],
       });
       expect(step.action).toBe('outcome_letter');
@@ -85,7 +86,7 @@ describe('getNextStep', () => {
     // that heuristic.
     it('reaches post_outcome once signed with an outcome letter present, rather than being short-circuited to a false "closed"', () => {
       const step = getNextStep({
-        stage: 'disciplinary',
+        caseType: 'misconduct', stage: 'disciplinary',
         meetings: [{ type: 'Disciplinary', record: 'notes', signStatus: 'signed', letterOutput: '...' }],
       });
       expect(step.action).toBe('post_outcome');
@@ -100,7 +101,7 @@ describe('getNextStep', () => {
     // letterOutput on save) lets this distinguish the two.
     it('still recommends drafting the outcome letter when the only letterOutput present is an invitation, not an outcome', () => {
       const step = getNextStep({
-        stage: 'disciplinary',
+        caseType: 'misconduct', stage: 'disciplinary',
         meetings: [{ type: 'Disciplinary', record: 'notes', signStatus: 'signed', letterOutput: 'Dear Sam, please attend a disciplinary hearing...', letterType: 'invite' }],
       });
       expect(step.action).toBe('outcome_letter');
@@ -108,7 +109,7 @@ describe('getNextStep', () => {
 
     it('legacy meetings with no recorded letterType keep the old behaviour (any letterOutput reads as the outcome)', () => {
       const step = getNextStep({
-        stage: 'disciplinary',
+        caseType: 'misconduct', stage: 'disciplinary',
         meetings: [{ type: 'Disciplinary', record: 'notes', signStatus: 'signed', letterOutput: '...' /* no letterType */ }],
       });
       expect(step.action).toBe('post_outcome');
@@ -122,13 +123,13 @@ describe('getNextStep', () => {
   // recommendation is to draft one, not to close the case with no written
   // confirmation ever having been issued to the employee.
   it('recommends drafting the outcome letter at the outcome stage when none has been saved yet', () => {
-    const step = getNextStep({ stage: 'outcome', meetings: [] });
+    const step = getNextStep({ caseType: 'misconduct', stage: 'outcome', meetings: [] });
     expect(step.action).toBe('outcome_letter');
   });
 
   it('recommends closing the case at the outcome stage once the letter has actually been saved', () => {
     const step = getNextStep({
-      stage: 'outcome',
+      caseType: 'misconduct', stage: 'outcome',
       meetings: [{ type: 'Disciplinary', record: 'notes', signStatus: 'signed', letterOutput: '...', letterType: 'outcome' }],
     });
     expect(step.action).toBe('close_case');
@@ -275,13 +276,13 @@ describe('getNextStep', () => {
 
   describe('appeal stage', () => {
     it('recommends starting the appeal hearing when none has been recorded', () => {
-      const step = getNextStep({ stage: 'appeal', meetings: [] });
+      const step = getNextStep({ caseType: 'misconduct', stage: 'appeal', meetings: [] });
       expect(step.action).toBe('start_appeal_meeting');
     });
 
     it('recommends signature once an appeal record exists but is unsigned', () => {
       const step = getNextStep({
-        stage: 'appeal',
+        caseType: 'misconduct', stage: 'appeal',
         meetings: [{ type: 'Appeal', record: 'notes', signStatus: 'pending' }],
       });
       expect(step.action).toBe('send_signature');
@@ -289,7 +290,7 @@ describe('getNextStep', () => {
 
     it('recommends drafting the appeal outcome letter once signed', () => {
       const step = getNextStep({
-        stage: 'appeal',
+        caseType: 'misconduct', stage: 'appeal',
         meetings: [{ type: 'Appeal', record: 'notes', signStatus: 'signed' }],
       });
       expect(step.action).toBe('appeal_letter');
@@ -300,7 +301,7 @@ describe('getNextStep', () => {
     // auto-closes the case before this final branch is reached.
     it('recommends closing once the appeal outcome is issued, rather than being short-circuited to a false "closed"', () => {
       const step = getNextStep({
-        stage: 'appeal',
+        caseType: 'misconduct', stage: 'appeal',
         meetings: [{ type: 'Appeal', record: 'notes', signStatus: 'signed', letterOutput: '...' }],
       });
       expect(step.action).toBe('close_case');
@@ -313,7 +314,7 @@ describe('getNextStep', () => {
     // implying the appeal had already been decided.
     it('still recommends drafting the appeal outcome letter when the only letterOutput present is an appeal-hearing invitation', () => {
       const step = getNextStep({
-        stage: 'appeal',
+        caseType: 'misconduct', stage: 'appeal',
         meetings: [{ type: 'Appeal', record: 'notes', signStatus: 'signed', letterOutput: 'Dear Sam, please attend your appeal hearing...', letterType: 'invite' }],
       });
       expect(step.action).toBe('appeal_letter');
@@ -324,7 +325,7 @@ describe('getNextStep', () => {
     // "Start appeal hearing" before an impartial officer exists.
     describe('appeal officer sequencing (ctx)', () => {
       it('HR viewer, no appeal_manager yet: suggests appointing an appeal officer instead of starting the hearing', () => {
-        const step = getNextStep({ stage: 'appeal', meetings: [] }, { hasAppealManager: false, isHR: true });
+        const step = getNextStep({ caseType: 'misconduct', stage: 'appeal', meetings: [] }, { hasAppealManager: false, isHR: true });
         expect(step.action).toBe('appoint_appeal_officer');
         expect(step.label).toBe('Appoint appeal officer');
       });
@@ -333,45 +334,45 @@ describe('getNextStep', () => {
       // this file's own header now documents: an officer being appointed
       // is not the same as an invitation existing.
       it('HR viewer, appeal_manager assigned but no invitation drafted yet: suggests drafting the appeal hearing invitation, not starting the hearing', () => {
-        const step = getNextStep({ stage: 'appeal', meetings: [] }, { hasAppealManager: true, isHR: true });
+        const step = getNextStep({ caseType: 'misconduct', stage: 'appeal', meetings: [] }, { hasAppealManager: true, isHR: true });
         expect(step.action).toBe('appeal_invite');
         expect(step.label).toBe('Draft appeal hearing invitation');
       });
 
       it('HR viewer, appeal_manager assigned AND invitation already drafted: falls through to the existing "Start appeal hearing" logic unchanged', () => {
         const step = getNextStep({
-          stage: 'appeal',
+          caseType: 'misconduct', stage: 'appeal',
           meetings: [{ type: 'Disciplinary Appeal', letterOutput: 'Dear Sam, please attend your appeal hearing...', letterType: 'invite' }],
         }, { hasAppealManager: true, isHR: true });
         expect(step.action).toBe('start_appeal_meeting');
       });
 
       it('non-HR viewer, no appeal_manager yet: does NOT suggest appointing (matches the existing isHR-only gate on the manual button) — falls through to the unchanged default', () => {
-        const step = getNextStep({ stage: 'appeal', meetings: [] }, { hasAppealManager: false, isHR: false });
+        const step = getNextStep({ caseType: 'misconduct', stage: 'appeal', meetings: [] }, { hasAppealManager: false, isHR: false });
         expect(step.action).toBe('start_appeal_meeting');
       });
 
       it('omitting ctx entirely (every pre-existing caller) behaves exactly as before — no crash, no new suggestion', () => {
-        const step = getNextStep({ stage: 'appeal', meetings: [] });
+        const step = getNextStep({ caseType: 'misconduct', stage: 'appeal', meetings: [] });
         expect(step.action).toBe('start_appeal_meeting');
       });
 
       it('existing downstream appeal next-steps (signature, outcome letter, close) are unaffected once an appeal_manager exists and an invitation has already been drafted', () => {
         const invite = { type: 'Disciplinary Appeal', letterOutput: 'invite text', letterType: 'invite' };
-        const signed = getNextStep({ stage: 'appeal', meetings: [invite, { type: 'Appeal', record: 'notes', signStatus: 'signed' }] }, { hasAppealManager: true, isHR: true });
+        const signed = getNextStep({ caseType: 'misconduct', stage: 'appeal', meetings: [invite, { type: 'Appeal', record: 'notes', signStatus: 'signed' }] }, { hasAppealManager: true, isHR: true });
         expect(signed.action).toBe('appeal_letter');
-        const issued = getNextStep({ stage: 'appeal', meetings: [invite, { type: 'Appeal', record: 'notes', signStatus: 'signed', letterOutput: '...' }] }, { hasAppealManager: true, isHR: true });
+        const issued = getNextStep({ caseType: 'misconduct', stage: 'appeal', meetings: [invite, { type: 'Appeal', record: 'notes', signStatus: 'signed', letterOutput: '...' }] }, { hasAppealManager: true, isHR: true });
         expect(issued.action).toBe('close_case');
       });
     });
   });
 
   it('returns null for an unrecognised stage', () => {
-    expect(getNextStep({ stage: 'some_future_stage', meetings: [] })).toBeNull();
+    expect(getNextStep({ caseType: 'misconduct', stage: 'some_future_stage', meetings: [] })).toBeNull();
   });
 
   it('every branch carries a meetingType so consumers never re-derive it from the action name', () => {
-    const step = getNextStep({ stage: 'investigation', meetings: [] });
+    const step = getNextStep({ caseType: 'misconduct', stage: 'investigation', meetings: [] });
     expect(step.meetingType).toBe('investigation');
   });
 });
@@ -525,5 +526,123 @@ describe('getNextStep — long-term sickness-shaped cases', () => {
 
   it('recommends closing the case at the decision stage', () => {
     expect(getNextStep(sicknessCase('decision')).action).toBe('close_case');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase E1.4 — recipe fail-safe.
+//
+// Until this phase, getNextStep ended in an unconditional
+//   `return isGrievanceCase(cs) ? grievanceNextStep(...) : disciplinaryNextStep(...)`
+// so ANY case type without a dedicated branch silently received DISCIPLINARY
+// guidance. In production that was 162 capability cases, 28 absence cases and
+// 566 cases with no type at all — told to invite an employee to a disciplinary
+// hearing because Compass had no recipe for what they actually were.
+//
+// Routing is now an explicit allow-list keyed on the canonical PROCESS_TYPES
+// registry. A process type with no validated recipe gets NO guided next step.
+describe('E1.4 — no process type falls through to another process recipe', () => {
+  // Shaped so that, under the OLD fall-through, disciplinaryNextStep would
+  // certainly have returned a step: an open case with a completed investigation
+  // meeting is exactly where the disciplinary recipe has most to say.
+  const openCase = (caseType) => ({
+    id: 'c1', caseType, stage: 'investigation',
+    meetings: [{ id: 'm1', type: 'Investigation', date: '01/03/2026', status: 'completed', record: 'x' }],
+  });
+
+  describe('validated recipes keep working, unchanged', () => {
+    it('misconduct keeps the disciplinary recipe', () => {
+      expect(getNextStep(openCase('misconduct'))).not.toBeNull();
+    });
+
+    it('investigation keeps the disciplinary recipe — it is that recipe\'s first stage', () => {
+      // PROCESS_TYPES maps "investigation" into the misconduct family.
+      expect(getNextStep(openCase('investigation'))).not.toBeNull();
+    });
+
+    it('disciplinary and conduct concern keep it too', () => {
+      expect(getNextStep(openCase('disciplinary'))).not.toBeNull();
+      expect(getNextStep(openCase('conduct concern'))).not.toBeNull();
+    });
+
+    it('grievance keeps its own recipe', () => {
+      const step = getNextStep({ id: 'g', caseType: 'grievance', stage: 'intake', meetings: [] });
+      expect(step).not.toBeNull();
+      // Grievance-shaped, not disciplinary-shaped.
+      expect(step.label.toLowerCase()).not.toMatch(/disciplinary/);
+    });
+
+    it('probation, flexible working and long-term sickness keep theirs', () => {
+      // Each of these recipes is keyed on ITS OWN stage vocabulary, not the
+      // disciplinary one — so the case must be shaped with a stage that recipe
+      // actually recognises, which is also the proof it is being routed there.
+      [['probation', 'probation_started'],
+       ['flexible working', 'request_received'], ['flexible_working', 'request_received'],
+       ['long-term sickness', 'absence_identified'],
+       ['long term sickness', 'absence_identified'],
+       ['long_term_sickness', 'absence_identified']].forEach(([caseType, stage]) => {
+        expect(getNextStep({ id: 'x', caseType, stage, meetings: [] }), caseType).not.toBeNull();
+      });
+    });
+
+    it('a supported type at a stage its own recipe does not cover already returned null', () => {
+      // Pre-existing behaviour, asserted so the fail-safe cannot be mistaken
+      // for the cause of it: every recipe has always ended in `default: null`.
+      expect(getNextStep({ id: 'x', caseType: 'probation', stage: 'intake', meetings: [] })).toBeNull();
+    });
+
+    it('a closed case still returns null, as it always did', () => {
+      expect(getNextStep({ stage: 'closed', caseType: 'misconduct', meetings: [] })).toBeNull();
+    });
+  });
+
+  describe('unsupported types get NO guided step — never another recipe', () => {
+    // These are the real production populations.
+    const unsupported = [
+      ['capability', 162], ['performance', 0], ['absence', 28], ['attendance', 0],
+      ['redundancy', 0], ['other', 0], ['informal', 14],
+      ['something nobody has ever configured', 0],
+    ];
+    unsupported.forEach(([type, productionRows]) => {
+      it(`${type} (${productionRows} production cases) gets no guided next step`, () => {
+        expect(getNextStep(openCase(type))).toBeNull();
+      });
+    });
+
+    it('an untyped case gets no guided next step — all 566 of them', () => {
+      [undefined, null, '', '   '].forEach(t => {
+        expect(getNextStep(openCase(t))).toBeNull();
+      });
+      // And a case object with no caseType key at all.
+      expect(getNextStep({ id: 'c', stage: 'investigation', meetings: [] })).toBeNull();
+    });
+
+    it('the refusal is total — no stage of an unsupported type produces a step', () => {
+      ['intake', 'investigation', 'inv_report', 'disciplinary', 'outcome', 'appeal'].forEach(stage => {
+        expect(getNextStep({ id: 'c', caseType: 'capability', stage, meetings: [] }), stage).toBeNull();
+      });
+    });
+  });
+
+  describe('adversarial — restoring a default recipe must be caught', () => {
+    it('capability and misconduct must NOT share an answer', () => {
+      // The single assertion that fails the moment a default fall-through
+      // returns: if unsupported types are routed anywhere, this pair converges.
+      const misconduct = getNextStep(openCase('misconduct'));
+      const capability = getNextStep(openCase('capability'));
+      expect(misconduct).not.toBeNull();
+      expect(capability).toBeNull();
+      expect(capability).not.toEqual(misconduct);
+    });
+
+    it('routing is keyed on the canonical registry, not a second hand-written list', () => {
+      // A parallel list would drift from PROCESS_TYPES — which is precisely the
+      // class of bug this phase removes.
+      const src = readFileSync('src/lib/nextStep.js', 'utf8');
+      const code = src.split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+      expect(code).toContain('getProcessType');
+      // The unconditional fall-through is gone.
+      expect(code).not.toMatch(/return\s+isGrievanceCase\(cs\)\s*\?[\s\S]{0,120}disciplinaryNextStep\(cs, stage, ctx\);/);
+    });
   });
 });

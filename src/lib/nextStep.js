@@ -1,4 +1,5 @@
-import { getCaseStage, isGrievanceCase, hasLetterType } from './caseStage.js';
+import { getCaseStage, hasLetterType } from './caseStage.js';
+import { getProcessType } from './processStages.js';
 import { isInvestigationMeeting, isDisciplinaryMeeting, isAppealMeeting, isGrievanceMeeting } from './meetingTypeMatch.js';
 import { isMeetingComplete, lastGenuineMeeting, scheduledMeetingsFor,
          resumableMeetingFor, isGenuineMeeting, declaredStatus, MEETING_STATUS } from './meetingLifecycle.js';
@@ -24,10 +25,6 @@ import { isMeetingComplete, lastGenuineMeeting, scheduledMeetingsFor,
 // outcome letter produces — before the appeal window had necessarily
 // run. Fixed in caseStage.js by making an explicitly-tracked cs.stage
 // win over that heuristic, so these branches are now reachable.
-function normalizedCaseType(cs) {
-  return (cs?.caseType||"").trim().toLowerCase();
-}
-
 // Appeal Independence P1 (2026-09-18) — ctx is optional and additive
 // (every existing caller that omits it, e.g. App.jsx's generateNextBestAction
 // AI-prompt floor check, keeps its exact prior behaviour: ctx.hasAppealManager
@@ -42,14 +39,57 @@ export function getNextStep(cs, ctx = {}) {
   return withExistingMeeting(cs, baseNextStep(cs, ctx));
 }
 
+// Phase E1.4 — process recipe routing, as an explicit allow-list.
+//
+// This function used to end in
+//   return isGrievanceCase(cs) ? grievanceNextStep(...) : disciplinaryNextStep(...)
+// which made the DISCIPLINARY recipe the silent default for every case type
+// without a branch of its own. In production that meant 162 capability cases,
+// 28 absence cases, 14 "informal" ones and 566 cases with no recorded type at
+// all were being told to invite an employee to a disciplinary hearing — not
+// because anyone had decided that was the right process, but because Compass
+// had no recipe for what the case actually was and the last branch won. Running
+// the wrong process is not a cosmetic defect in employment law; it is one of the
+// grounds on which a dismissal is found unfair.
+//
+// The table is keyed on PROCESS_TYPES ids, the registry that already defines
+// Compass's case-type vocabulary and its synonyms, rather than on a second list
+// of strings maintained here. That is the substance of the fix, not a tidiness
+// preference: a parallel list is precisely how "capability" came to mean
+// "disciplinary" in this file while meaning "capability" everywhere else.
+//
+// An unrecognised or unrecorded type gets NO guided next step. That is not a new
+// outcome needing new handling — every recipe below already returns null from
+// its own `default:` branch for a stage it does not cover, and all nine
+// getNextStep call sites already render nothing when it happens. Silence is the
+// honest answer here: Compass does not know this process, so it offers no
+// opinion on it, and says so in plain words rather than guessing.
+const PROCESS_RECIPES = {
+  misconduct: (cs, stage, ctx) => disciplinaryNextStep(cs, stage, ctx),
+  grievance: (cs, stage, ctx) => grievanceNextStep(cs, stage, ctx),
+  probation: (cs, stage) => probationNextStep(stage),
+  flexible_working: (cs, stage, ctx) => flexibleWorkingNextStep(stage, ctx),
+  long_term_sickness: (cs, stage) => longTermSicknessNextStep(stage),
+};
+
+// One lookup, used by both the engine and the screen. Deliberately not spelled
+// out twice: if the two ever disagreed, a case view would announce that no
+// guidance is available while the engine was busy producing some, or the reverse.
+const recipeFor = cs => PROCESS_RECIPES[getProcessType(cs?.caseType).id];
+
+// True when Compass holds a validated recipe for this case's process type, and
+// can therefore be trusted to guide it. Exported so a screen can tell an
+// unguided case apart from a closed one — both produce no next step, and they
+// mean entirely different things to the person reading the screen.
+export function hasGuidedProcess(cs) {
+  return Boolean(recipeFor(cs));
+}
+
 function baseNextStep(cs, ctx = {}) {
   const stage = getCaseStage(cs);
   if(stage==="closed") return null;
-  const type = normalizedCaseType(cs);
-  if(type==="probation") return probationNextStep(stage);
-  if(type==="flexible working"||type==="flexible_working") return flexibleWorkingNextStep(stage, ctx);
-  if(type==="long-term sickness"||type==="long term sickness"||type==="long_term_sickness") return longTermSicknessNextStep(stage);
-  return isGrievanceCase(cs) ? grievanceNextStep(cs, stage, ctx) : disciplinaryNextStep(cs, stage, ctx);
+  const recipe = recipeFor(cs);
+  return recipe ? recipe(cs, stage, ctx) : null;
 }
 
 // Release 1 Phase 2.3 — one shared lifecycle rule, applied after the recipe
