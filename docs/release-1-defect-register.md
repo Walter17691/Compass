@@ -997,12 +997,20 @@ analysis for the whole file — read lint **per rule**, never by total.
   1. **Compass has never compared a warning expiry against the clock anywhere.**
      Every existing use of `warningExpiresAt` is display-only (outcome tab,
      letter grounding, letter validator). So there was **no existing boundary
-     semantics to preserve** — this phase establishes one: a warning is live
-     while `today < expiry`, comparing **calendar dates** (the column is a
-     DATE). It is therefore spent **on** the recorded expiry date. Erring the
-     other way would present a lapsed warning as live, which is the more
-     damaging error because it can influence a later disciplinary decision.
-     **This is a new product rule and should be confirmed.**
+     semantics to preserve** — this phase establishes one.
+     **RULE (confirmed by product review, 2026-09-27): the warning is live
+     THROUGH its expiry date, inclusive — `today <= expiry`**, comparing
+     **calendar dates** (the column is a DATE; no time-of-day component).
+     Compass tells the employee *"Expires 11 Mar 2027"*, and the plain reading
+     of that on the letter and on screen is that the warning still stands on
+     11 March and is gone on the 12th. It is also the clearer reading of ACAS:
+     a warning is current for the specified period and is disregarded **after**
+     that period, not on its last day.
+     `10 Mar → current · 11 Mar → current · 12 Mar → expired`.
+     *(I first shipped the exclusive boundary, reasoning that over-stating a
+     record is the more damaging error. Product review corrected it to
+     inclusive on the letter-wording and ACAS reading, which is the better
+     argument.)*
   2. **Appeal outcomes are recorded PER ALLEGATION, not on the case.**
      `recordAppealOutcome` writes only `allegations.appealOutcome`; it does not
      touch `cases.outcome` or `warningExpiresAt`. There is no case-level
@@ -1045,8 +1053,11 @@ analysis for the whole file — read lint **per rule**, never by total.
   **5,513 / 311**. Build clean. **Lint 158/9 — identical to E1 rule-by-rule.**
   **12 API routes, none added.**
 - **Clock-independent tests:** every boundary case uses an injected `now`
-  (day before → live, on expiry → spent, day after → spent), and the
-  hour-of-day is proven not to change the answer.
+  (day before → current, **on expiry → current**, day after → expired), and the
+  hour-of-day is proven not to change the answer — the last second of the expiry
+  date is still current and the first second of the next day is not. Both
+  directions of the boundary are mutation-proven: `<=`→`<` fails 2 tests and
+  `<=`→`>=` fails 12.
 - **A locale detail worth knowing:** en-GB renders September as **"Sept"**, so
   the row reads *"Issued 11 Sept 2026 · Expires 11 Mar 2027"*. My assertion
   assumed "Sep" and was corrected to what the locale actually produces.

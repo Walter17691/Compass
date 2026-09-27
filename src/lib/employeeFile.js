@@ -224,16 +224,26 @@ const asDay = v => {
 // grounding, the letter validator). So there was no established semantics to
 // preserve, and this phase establishes one.
 //
-// A warning issued on 11 Sep with a 6-month duration records 11 Mar as its
-// expiry — the date the period ENDS. It is therefore live up to but not
-// including that date, and spent on the day itself. Erring the other way would
-// mean presenting a lapsed warning as live, which is the more damaging error in
-// a disciplinary context because it can influence a later decision.
+// THE WARNING IS LIVE THROUGH ITS EXPIRY DATE, INCLUSIVE.
+//
+// Compass tells the employee "Expires 11 Mar 2027", and the plain reading of
+// that — on the letter and on this screen — is that the warning still stands on
+// 11 March and is gone on the 12th. It also reads ACAS the clearer way: a
+// warning is current for the specified period and is disregarded AFTER that
+// period, not on its last day.
+//
+//   10 Mar → current
+//   11 Mar → current   (the recorded expiry date itself)
+//   12 Mar → expired
+//
+// Calendar dates only. There is deliberately no time-of-day component: the
+// column is a DATE, and an instant comparison would make a warning lapse at
+// midnight in one timezone and not another.
 export function isWarningLive(expiresAt, now = new Date()) {
   const expiry = asDay(expiresAt);
   const today = asDay(now);
   if (expiry == null || today == null) return false;
-  return today < expiry;
+  return today <= expiry;
 }
 
 // What an appeal did to the original decision.

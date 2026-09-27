@@ -543,18 +543,26 @@ describe('E1.1 — current formal warnings', () => {
   });
 
   it('5. an expired warning does not appear', () => {
-    const w = build([warned('c1', { warningExpiresAt: '2026-09-30' })]).currentWarnings;
-    expect(w).toEqual([]);
+    // NOW is 1 Oct 2026; an expiry of 30 Sep is the day before, so it is spent.
+    expect(build([warned('c1', { warningExpiresAt: '2026-09-30' })]).currentWarnings).toEqual([]);
+    // And the inclusive boundary: expiring TODAY is still current.
+    expect(build([warned('c1', { warningExpiresAt: '2026-10-01' })]).currentWarnings).toHaveLength(1);
   });
 
-  it('the expiry boundary is deterministic and clock-independent', () => {
-    const at = d => deriveCurrentWarnings([warned('c1', { warningExpiresAt: '2026-10-01' })], [], new Date(d)).length;
-    expect(at('2026-09-30T23:00:00Z')).toBe(1);  // day before  → live
-    expect(at('2026-10-01T00:00:00Z')).toBe(0);  // ON expiry   → spent
-    expect(at('2026-10-02T00:00:00Z')).toBe(0);  // day after   → spent
-    // Compared as calendar dates, so the hour of day never changes the answer.
-    expect(isWarningLive('2026-10-02', new Date('2026-10-01T23:59:00Z'))).toBe(true);
-    expect(isWarningLive('2026-10-02', new Date('2026-10-02T00:00:01Z'))).toBe(false);
+  it('the expiry boundary is INCLUSIVE, deterministic and clock-independent', () => {
+    // "Expires 11 Mar 2027" means the warning still stands ON 11 March and is
+    // gone on the 12th — the plain reading of the letter, and the clearer
+    // reading of ACAS (disregarded AFTER the period, not on its last day).
+    const at = d => deriveCurrentWarnings([warned('c1', { warningExpiresAt: '2027-03-11' })], [], new Date(d)).length;
+    expect(at('2027-03-10T23:00:00Z')).toBe(1);  // day before expiry → CURRENT
+    expect(at('2027-03-11T00:00:00Z')).toBe(1);  // ON expiry         → CURRENT
+    expect(at('2027-03-12T00:00:00Z')).toBe(0);  // day after expiry  → EXPIRED
+    // Calendar dates only — the hour of day never changes the answer, so the
+    // last moment of the expiry date is still current and the first moment of
+    // the next day is not.
+    expect(isWarningLive('2027-03-11', new Date('2027-03-11T00:00:00Z'))).toBe(true);
+    expect(isWarningLive('2027-03-11', new Date('2027-03-11T23:59:59Z'))).toBe(true);
+    expect(isWarningLive('2027-03-11', new Date('2027-03-12T00:00:01Z'))).toBe(false);
   });
 
   it('6/15. a CLOSED case with a live warning still appears', () => {
