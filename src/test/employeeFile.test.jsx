@@ -31,6 +31,7 @@ const strip = t => t
 const shellCodeStripped = strip(shell);
 const overviewCode = strip(overview);
 const tabsCode = strip(tabs);
+const activityCode = readFileSync('src/lib/employeeActivities.js', 'utf8');
 const headerCode = strip(header);
 const lib = readFileSync('src/lib/employeeFile.js', 'utf8');
 const libCode = lib.split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
@@ -313,34 +314,32 @@ describe('9/10/11. opening and creating cases', () => {
 
 // ═══════════════════════════════════════════════════════════════════════════
 describe('23/24/25/26. deferred tabs are honest, and no AI was added', () => {
-  it('the five tabs exist as a real tablist', () => {
+  // Phase E1.6 replaced the five tabs with the approved four. Timeline and
+  // Meetings were both chronological views of the same history and are now one
+  // Activity tab; "Cases & processes" became "HR Processes".
+  it('the four tabs exist as a real tablist', () => {
     render(<EmployeeFileScreen {...baseProps} />);
     expect(EMPLOYEE_FILE_TABS.map(t => t.label))
-      .toEqual(['Overview', 'Timeline', 'Meetings', 'Cases & processes', 'Documents']);
+      .toEqual(['Overview', 'Activity', 'HR Processes', 'Documents']);
     expect(screen.getByRole('tablist', { name: 'Employee file sections' })).toBeInTheDocument();
-    expect(screen.getAllByRole('tab')).toHaveLength(5);
+    expect(screen.getAllByRole('tab')).toHaveLength(4);
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('23. Timeline is a shell and name-matches nothing', () => {
-    render(<EmployeeFileScreen {...baseProps} activeTab="timeline" />);
-    expect(screen.getByText(/bring together everything recorded/)).toBeInTheDocument();
-    expect(screen.getByText(/Not built yet/)).toBeInTheDocument();
+  it('23/24. Activity replaces Timeline and Meetings, and name-matches nothing', () => {
+    render(<EmployeeFileScreen {...baseProps} activeTab="activity" />);
+    // The chronology explains what it is rather than promising a future feature.
+    expect(screen.getByText(/authorised record of management activity/)).toBeInTheDocument();
+    // The claim the old Timeline shell existed to protect, kept: nothing here
+    // resolves an employee by name.
     expect(tabsCode).not.toContain('employeeName ===');
     expect(tabsCode).not.toContain('employeeName===');
+    expect(activityCode).not.toContain('employeeName');
   });
 
-  it('24. Meetings shows case meetings only, and says so', () => {
-    render(<EmployeeFileScreen {...baseProps} activeTab="meetings" />);
-    expect(screen.getByText(/Meetings held outside a case are not shown yet/)).toBeInTheDocument();
-    expect(screen.getByText(/will not attribute one by name/)).toBeInTheDocument();
-    // Reached through the case — authoritative parentage, never a name.
-    expect(tabsCode).toContain('(cs.meetings || [])');
-    expect(tabsCode).not.toContain('standaloneMeetings');
-  });
-
-  it('24. the Meetings tab lists ONLY meetings from this employee\'s canonical cases', () => {
-    // Behavioural, not a source check: a legacy same-name case's meeting must not
+  it('24. Activity lists ONLY meetings from this employee\'s canonical cases', () => {
+    // Behavioural, not a source check, and unchanged in substance by the move from
+    // the Meetings tab into Activity: a legacy same-name case's meeting must not
     // appear, and neither must a same-named colleague's.
     const data = {
       ...DATA,
@@ -350,11 +349,20 @@ describe('23/24/25/26. deferred tabs are honest, and no AI was added', () => {
         caseFor('colleague', 'u-b', { meetings: [{ id: 'm-colleague', type: 'Colleague meeting', date: '2026-03-04' }] }),
       ],
     };
-    render(<EmployeeFileScreen {...baseProps} {...data} activeTab="meetings" />);
-    expect(screen.getByText('Investigation meeting')).toBeInTheDocument();
-    expect(screen.queryByText('Legacy meeting')).not.toBeInTheDocument();
-    expect(screen.queryByText('Colleague meeting')).not.toBeInTheDocument();
-    expect(screen.getByText(/Case meetings · 1/)).toBeInTheDocument();
+    render(<EmployeeFileScreen {...baseProps} {...data} activeTab="activity" />);
+    // Substring matchers: an Activity row reads "<meeting type> — <process>", so
+    // the meeting name shares its text node with the process it belongs to.
+    expect(screen.getByText(/Investigation meeting/)).toBeInTheDocument();
+    expect(screen.queryByText(/Legacy meeting/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Colleague meeting/)).not.toBeInTheDocument();
+  });
+
+  it('24. a meeting held outside a case is still absent, because it has no employee', () => {
+    // public.meetings has no employee_id; attributing one by name is the inference
+    // this programme removed. The Activity projection therefore only reaches
+    // meetings through an authorised case.
+    expect(activityCode).toContain('(c.meetings || [])');
+    expect(activityCode).not.toContain('standaloneMeetings');
   });
 
   it('25. the Documents tab lists only documents from canonical cases', () => {
@@ -485,7 +493,7 @@ describe('design, responsiveness and accessibility', () => {
     expect(selected).toHaveAttribute('aria-controls', 'emp-panel-overview');
     selected.focus();
     await user.keyboard('{ArrowRight}');
-    expect(setActiveTab).toHaveBeenCalledWith('timeline');
+    expect(setActiveTab).toHaveBeenCalledWith('activity');
     // The panel is labelled by its tab and focusable for screen-reader flow.
     expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'emp-tab-overview');
   });

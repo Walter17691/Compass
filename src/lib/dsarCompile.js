@@ -62,7 +62,9 @@ import { classifyIdentityByName, IDENTITY } from './employeeRecords.js';
 //    regardless of whose case it was on) is folded into the existing
 //    subjectAuditLog filter directly rather than a separate section,
 //    since it's the same shape of record either way.
-export function compileSubjectData(employeeName, { canonicalEmployeeId = null, cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [], wellbeingNotes = [], concernReferrals = [], allegations = [], caseSignals = [], caseTasks = [], hrReviewRequests = [], auditLog = [], signingRequests = [], portalAccounts = [], dsarRequests = [], orgMembers = [], profiles = [], caseViews = [], portalInvites = [], orgEvents = [], improvementInitiatives = [], managerCapabilityInsights = [], organisationThemes = [], caseAccess = [], redundancyCases = [], standaloneMeetings = [] } = {}) {
+export function compileSubjectData(employeeName, { canonicalEmployeeId = null, cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [], wellbeingNotes = [], concernReferrals = [], allegations = [], caseSignals = [], caseTasks = [], hrReviewRequests = [], auditLog = [], signingRequests = [], portalAccounts = [], dsarRequests = [], orgMembers = [], profiles = [], caseViews = [], portalInvites = [], orgEvents = [], improvementInitiatives = [], managerCapabilityInsights = [], organisationThemes = [], caseAccess = [], redundancyCases = [], standaloneMeetings = [],
+    employeeActivities = [], employeeActivityRecords = [],
+  } = {}) {
   // ── Phase E0.5B — CANONICAL IDENTITY TAKES PRECEDENCE OVER THE NAME ───────
   //
   // Once a case has been explicitly reconciled to a canonical employee, that
@@ -100,6 +102,21 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
     (canonicalEmployeeId && matchingEmployeeRecords.find(r => r.id === canonicalEmployeeId))
     || matchingEmployeeRecords[0]
     || null;
+
+  // Phase E1.6 — Employee Activities are selected by CANONICAL ID ONLY.
+  //
+  // Every other collection here still has a name-matching fallback for legacy
+  // rows that were written before canonical identity existed. Activities have no
+  // such history: employee_id is NOT NULL from the first row, so there is nothing
+  // a name fallback could rescue and everything it could wrongly attach. Two
+  // employees sharing a name therefore stay completely separate in a DSAR.
+  const subjectActivities = canonicalEmployeeId
+    ? employeeActivities.filter(a => a?.employeeId === canonicalEmployeeId)
+    : [];
+  const subjectActivityIds = new Set(subjectActivities.map(a => a.id));
+  const subjectActivityRecords = canonicalEmployeeId
+    ? employeeActivityRecords.filter(r => r?.employeeId === canonicalEmployeeId && subjectActivityIds.has(r.activityId))
+    : [];
 
   const nameMatchedCases = cases.filter(c => nameMatchesSubject(c?.employeeName));
   // Records that share the name but are NOT confirmed to be this person.
@@ -447,6 +464,9 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
     identityBasisByCollection: {
       cases: canonicalEmployeeId ? "employee_id" : "employee_name",
       wellbeingNotes: canonicalEmployeeId ? "employee_id" : "employee_name",
+      // Always employee_id, with no name alternative — see subjectActivities.
+      employeeActivities: "employee_id",
+      employeeActivityRecords: "employee_id",
       concernReferrals: canonicalEmployeeId ? "employee_id" : "employee_name",
       // Derived through their case, which is the authoritative parent.
       allegations: "case_id", caseTasks: "case_id", caseSignals: "case_id", hrReviewRequests: "case_id",
@@ -497,6 +517,8 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
     onboarding,
     offboarding,
     wellbeingNotes: subjectWellbeingNotes,
+    employeeActivities: subjectActivities,
+    employeeActivityRecords: subjectActivityRecords,
     concernReferrals: subjectConcernReferrals,
     allegations: subjectAllegations,
     caseSignals: subjectCaseSignals,

@@ -4,7 +4,8 @@ import { COLOR, SPACE, TYPE } from '../styles/tokens';
 import { buildEmployeeFile, EMPLOYEE_FILE_TABS, isEmployeeFileTab } from '../lib/employeeFile';
 import { EmployeeFileHeader, EmployeeFileTabs } from './employeeFile/EmployeeFileHeader';
 import { EmployeeFileOverview } from './employeeFile/EmployeeFileOverview';
-import { ProcessesTabPanel, MeetingsTabPanel, TimelineTabPanel, DocumentsTabPanel } from './employeeFile/EmployeeFileTabs';
+import { ProcessesTabPanel, DocumentsTabPanel } from './employeeFile/EmployeeFileTabs';
+import { EmployeeActivityPanel } from './employeeFile/EmployeeActivityPanel';
 import { EmployeeDetailsEdit } from './employeeFile/EmployeeDetailsEdit';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -61,10 +62,14 @@ export function EmployeeFileScreen({
   editJobTitle, setEditJobTitle, editStartDate, setEditStartDate,
   canAssignLocation = false, onSetEmployeeLocation,
   onSaveEmployee, onDeleteEmployee,
+  // Phase E1.6 — activities arrive already RLS-filtered, exactly like every
+  // other collection here. This screen composes; it never authorises.
+  employeeActivities = [], employeeActivityRecords = [],
+  onCreateActivity, onAddActivityRecord, onResolveConcern, activityBusy = false,
 }) {
   const file = useMemo(
-    () => buildEmployeeFile(employeeId, { employeeRecords, cases, wellbeingNotes, concernReferrals, dsarRequests, dueSoon, allegations }, { isHR, role }),
-    [employeeId, employeeRecords, cases, wellbeingNotes, concernReferrals, dsarRequests, dueSoon, allegations, isHR, role]
+    () => buildEmployeeFile(employeeId, { employeeRecords, cases, wellbeingNotes, concernReferrals, dsarRequests, dueSoon, allegations, employeeActivities, employeeActivityRecords }, { isHR, role }),
+    [employeeId, employeeRecords, cases, wellbeingNotes, concernReferrals, dsarRequests, dueSoon, allegations, employeeActivities, employeeActivityRecords, isHR, role]
   );
 
   const tab = isEmployeeFileTab(activeTab) ? activeTab : "overview";
@@ -135,8 +140,21 @@ export function EmployeeFileScreen({
         {tab === "overview" && (
           <EmployeeFileOverview file={file} onOpenCase={openCase} onGoToTab={setActiveTab} onReconcile={onReconcile} />
         )}
-        {tab === "timeline" && <TimelineTabPanel file={file} onGoToTab={setActiveTab} />}
-        {tab === "meetings" && <MeetingsTabPanel file={file} onOpenCase={openCase} fmtDate={fmtDate} />}
+        {/* Phase E1.6 — Activity replaces the separate Timeline and Meetings tabs.
+            Both were chronological views of the same history; this is that history
+            in one place, with employee activities alongside the process milestones
+            and case meetings that were already safely available. */}
+        {tab === "activity" && (
+          <EmployeeActivityPanel
+            file={file}
+            onCreateActivity={onCreateActivity}
+            onAddRecord={onAddActivityRecord}
+            onResolveConcern={onResolveConcern}
+            onOpenCase={openCase}
+            fmtDate={fmtDate}
+            busy={activityBusy}
+          />
+        )}
         {tab === "processes" && <ProcessesTabPanel file={file} onOpenCase={openCase} fmtDate={fmtDate} />}
         {tab === "documents" && <DocumentsTabPanel file={file} onOpenCase={openCase} />}
       </main>

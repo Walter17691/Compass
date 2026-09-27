@@ -42,7 +42,7 @@ import { FONT, COLOR, TYPE, SPACE, RADIUS, CONTENT_MAX_WIDTH } from '../styles/t
 // ─────────────────────────────────────────────────────────────────────────
 export function PeopleScreen({ cases, employeeRecords = [], wellbeingNotes = [], concernReferrals = [], dsarRequests = [], setActiveEmployeeId, setScreen, setMeetingSetup,
                                locations = [], isHR = false, authorisedLocationIds = null, onCreateEmployee,
-                               employeeRecordsLoading = false }) {
+                               employeeRecordsLoading = false, onStartActivity }) {
   const [search, setSearch] = useState("");
   const [view, setView] = useState("all");
   const [adding, setAdding] = useState(false);
@@ -208,6 +208,13 @@ export function PeopleScreen({ cases, employeeRecords = [], wellbeingNotes = [],
             {/* Still prefills the NAME, because the meeting form's employee field
                 is a display label until E2 gives meetings canonical parentage.
                 It prefills a form the user confirms; it establishes nothing. */}
+            {/* Phase E1.6 — the roster-wide way in to recording an activity.
+                Carries the canonical UUID and lands on that employee's Activity
+                tab, so the manager says what happened rather than choosing
+                between "a case" and "a meeting". The roster here is already
+                RLS-filtered, so this offers nobody the viewer cannot access. */}
+            <button type="button" onClick={()=>{setActiveEmployeeId(p.id);setScreen(SCREENS.EMPLOYEE_FILE);onStartActivity?.();}}
+              style={{fontSize:12,background:"none",border:"none",padding:"5px 8px",color:COLOR.purple,cursor:"pointer",fontWeight:600,fontFamily:FONT.sans,flexShrink:0}}>+ Record activity</button>
             <button type="button" onClick={()=>{setMeetingSetup(s=>({...s,employee:p.name}));setScreen(SCREENS.HOME+"_meeting");}}
               style={{fontSize:12,background:"none",border:"none",padding:"5px 8px",color:COLOR.purple,cursor:"pointer",fontWeight:600,fontFamily:FONT.sans,flexShrink:0,marginRight:4}}>+ New meeting</button>
           </DataRow>

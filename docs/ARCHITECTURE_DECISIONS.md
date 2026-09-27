@@ -492,6 +492,136 @@ end up trusting.
 
 ---
 
+## AD-005 — Employee Activities
+
+**Status:** **implemented** in phase E1.6 (2026-09-27). First implementation phase
+of the approved Employee File product model.
+
+### Not everything is a case
+
+An Employee Activity is employee-owned management history that is **not** a formal
+ER process: `one_to_one`, `return_to_work`, `conversation`, `management_concern`.
+They are **not** case types and are never converted into cases. Recording a 1:1 as
+a case would drag hearings, investigations, outcomes and sanctions behind it, and
+an informal concern would acquire disciplinary machinery nobody chose.
+
+Product language is natural — 1:1, Return to Work, Conversation, Management
+Concern — and database enum values are never shown to a user.
+
+### Two tables: the matter, and its chronology
+
+`employee_activities` is the management matter. `employee_activity_records` is the
+chronology inside it (`conversation`, `follow_up`, `note`, `letter_of_concern`,
+`communication`). Without the second table every follow-up would have to become a
+new activity, which is the same mistake as making every follow-up a new case.
+
+### Lifecycle vocabularies are NOT shared
+
+A completed 1:1 is **not** "resolved"; a management concern is **not**
+"completed". Two columns, never one shared enum:
+
+- ordinary activities: `lifecycle_state ∈ draft | scheduled | in_progress | completed | cancelled`
+- management concerns: `concern_state ∈ open | resolved`
+
+A CHECK constraint makes the wrong pairing **unstorable**, not merely
+discouraged — a concern must have a concern state and no lifecycle state, and
+every other type the reverse. Resolution metadata is likewise constrained to a
+resolved concern.
+
+### occurred_at is not created_at
+
+`occurred_at` is when it happened and may be in the past; `created_at` is when the
+system record was made. A conversation held on 15 September and recorded on 27
+September belongs in employment history on the 15th. **`created_at` is never
+back-dated to simulate retrospective history**, and the UI states when something
+was recorded later rather than disguising it.
+
+### Location is context, not authority
+
+`employee_activities.location_id` is a snapshot of the location **at occurrence**,
+so a later transfer cannot rewrite where a conversation happened. It plays **no
+part in access control** — authorisation always follows the employee. Using it
+would mean a transfer silently changed who could read history.
+
+### Authorisation is inherited, not restated
+
+Activity RLS is `EXISTS (SELECT 1 FROM employee_records WHERE id = employee_id)`.
+Because `employee_records` has its own RLS, that subquery only finds employees the
+caller is authorised for, so:
+
+- activity visibility can never exceed Employee File visibility;
+- it cannot drift out of step with `can_access_employee()`, because it does not
+  duplicate it;
+- a Location Manager reaches only their authorised locations' employees, never an
+  unassigned employee;
+- child records inherit from the activity, which inherits from the employee, so
+  knowing a record uuid discloses nothing.
+
+There is **no DELETE policy**: employment history is not something a manager
+removes because they would rather it had not happened.
+
+Case access is **not** the authority for activities, and `case_access_level` plays
+no part.
+
+### Parentage is declared, then frozen
+
+Composite foreign keys carry tenancy and identity together — `(employee_id,
+org_id)` must exist on `employee_records`, and a record's `(activity_id, org_id,
+employee_id)` triple must exist on its parent. Cross-tenant and cross-employee
+parentage is therefore unrepresentable, not merely forbidden. Guard triggers then
+prevent re-pointing an existing row at a different employee, organisation or
+activity.
+
+Identity is `employee_id` only. **No name parentage, no name fallback, no merging
+of same-name employees** — in the domain, the writes, or the DSAR package.
+
+### A Letter of Concern is not a warning
+
+It is informal management action and meaningful employee history. The separation
+is **structural**, not a label: a Letter of Concern is a `record_type` on
+`employee_activity_records`, there is no warning column to populate and no expiry
+to invent, and Current Warnings derives only from cases and allegations. A formal
+warning is not even a valid `record_type`. No informal activity escalates a
+sanction automatically.
+
+### Resolution preserves history
+
+A resolved management concern keeps its full chronology and stays in Activity. It
+simply stops being current, and stops appearing in "needs your attention". A
+recorded 1:1 never appears there at all — it is history, not a task.
+
+### Employee File information architecture
+
+Four tabs: **Overview, Activity, HR Processes, Documents**. Timeline and Meetings
+were both chronological views of the same history and are now one Activity tab —
+activities with their own chronology, formal process milestones, and meetings
+reached through an authorised case. Meetings held outside a case remain absent
+because `public.meetings` has no `employee_id`.
+
+Activity is a **projection**, not a table dump.
+
+### Audit and privacy
+
+Activity audit is written by an **AFTER trigger**, not by the client or an RPC
+wrapper: `audit_log` has no INSERT policy, and a trigger cannot be forgotten by a
+new code path. `audit_log.employee_activity_id` mirrors `case_id` and
+`employee_id`; **no activity event borrows a case_id as fake parentage.** The seven
+activity actions are reserved against the generic audit RPC.
+
+Activities are **never persisted to localStorage**, and a failed load fails closed
+— AD-004's rule applies unchanged.
+
+### Deliberately not built
+
+Employment events (E1.7). Any migration of legacy `case_type='informal'` cases,
+wellbeing notes, meetings or return-to-work history. Relevance-history
+intelligence, AI scoring and automatic escalation. Competency frameworks, OKRs,
+performance ratings, development matrices or succession planning — **Compass
+records the management conversation; it does not manage the employee's development
+programme.**
+
+---
+
 ## AD-002 — A process type only receives what Compass owns for it
 
 **Status:** **implemented** in phases E1.4 (next-step guidance) and E1.4A (stage

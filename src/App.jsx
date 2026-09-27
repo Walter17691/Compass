@@ -54,6 +54,9 @@ import { requestOverride, requestPolicyDeviation, requestLateAppealAcceptance } 
 import { caseRoleLabel } from './lib/caseRoles';
 import { getProcessType, stageLabel } from './lib/processStages';
 import { setEmployeeLocationWrite, describeLocationOutcome } from './lib/employeeLocationWrites';
+import { createEmployeeActivity, addActivityRecord as addActivityRecordWrite, resolveManagementConcern,
+         describeActivityOutcome, mapActivityRow, mapActivityRecordRow, ACTIVITY_RESULT } from './lib/employeeActivityWrites';
+import { usesConcernLifecycle } from './lib/employeeActivities';
 import { buildEscalationContext } from './lib/escalation';
 import { EscalateToHrModal } from './screens/EscalateToHrModal';
 import { getTemplateForType, resolveDefaultTaskDueDate } from './lib/processTemplates';
@@ -614,6 +617,131 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // longer writes to storage. Renaming every call site would hide the one fact
   // worth noticing here.
   const saveEmployeeRecords = u => setEmployeeRecords(u);
+
+  // ── Phase E1.6 — Employee Activities ────────────────────────────────────
+  //
+  // Not persisted to localStorage, deliberately. E1.5A/E1.5B established that
+  // current authorised server state is the authority and a browser cache must
+  // never extend it; activity data is management history about a named person,
+  // so it is exactly the kind of thing that must not outlive its authorisation.
+  const [employeeActivities, setEmployeeActivities] = useState([]);
+  const [employeeActivityRecords, setEmployeeActivityRecords] = useState([]);
+  const [activityBusy, setActivityBusy] = useState(false);
+
+  const loadEmployeeActivities = async () => {
+    if(!org?.id) return;
+    try {
+      const [act, rec] = await Promise.all([
+        fetchAllPages((from, to) => supabase.from('employee_activities').select('*')
+          .eq('org_id', org.id).order('occurred_at', { ascending: false }).range(from, to)),
+        fetchAllPages((from, to) => supabase.from('employee_activity_records').select('*')
+          .eq('org_id', org.id).order('occurred_at', { ascending: true }).range(from, to)),
+      ]);
+      // Fail closed, the same rule as cases and the roster: if the authorised read
+      // did not succeed, show nothing rather than something stale.
+      if(act.error || rec.error) {
+        console.error('loadEmployeeActivities', act.error || rec.error);
+        markLoadIssue('employee activities');
+        setEmployeeActivities([]); setEmployeeActivityRecords([]);
+        return;
+      }
+      setEmployeeActivities((act.data || []).map(mapActivityRow));
+      setEmployeeActivityRecords((rec.data || []).map(mapActivityRecordRow));
+    } catch(e) {
+      console.error('loadEmployeeActivities', e);
+      markLoadIssue('employee activities');
+      setEmployeeActivities([]); setEmployeeActivityRecords([]);
+    }
+  };
+
+  // Create an activity, plus its first chronology entry when the manager wrote
+  // one. Two statements rather than one RPC: the database already enforces
+  // authorisation, parentage and audit, so there is nothing for a wrapper to add.
+  const createActivityForEmployee = async (employeeId, input) => {
+    if(!org?.id || !employeeId || !currentUser?.user_id) return false;
+    const employee = findEmployeeById(employeeRecords, employeeId);
+    const isConcern = usesConcernLifecycle(input.activityType);
+    setActivityBusy(true);
+    try {
+      const outcome = await createEmployeeActivity({
+        supabase, orgId: org.id, employeeId,
+        activityType: input.activityType,
+        title: input.title || null,
+        // The lifecycle vocabularies never mix: a concern gets a concern state, a
+        // conversation gets a lifecycle state. The database refuses the other way.
+        concernState: isConcern ? 'open' : null,
+        lifecycleState: isConcern ? null : (input.mode === 'record' ? 'completed' : 'in_progress'),
+        occurredAt: new Date(input.occurredOn).toISOString(),
+        // Location context AT OCCURRENCE, captured from the employee's canonical
+        // location now. It is a snapshot: a later transfer must not rewrite where
+        // this conversation happened.
+        locationId: employee?.locationId || null,
+        managerName: currentUser?.name || null,
+        followUpDate: input.followUpDate || null,
+        recordedBy: currentUser.user_id,
+      });
+      if(outcome.result !== ACTIVITY_RESULT.OK) {
+        const { tone, message } = describeActivityOutcome(outcome);
+        showToast(message, tone);
+        return false;
+      }
+      if((input.note || "").trim()) {
+        await addActivityRecordWrite({
+          supabase, activityId: outcome.activity.id, orgId: org.id, employeeId,
+          recordType: 'conversation',
+          occurredAt: new Date(input.occurredOn).toISOString(),
+          body: input.note.trim(), recordedBy: currentUser.user_id,
+        });
+      }
+      await loadEmployeeActivities();
+      showToast("Recorded.");
+      return true;
+    } finally { setActivityBusy(false); }
+  };
+
+  const addRecordToActivity = async (activityId, input) => {
+    const activity = employeeActivities.find(a => a.id === activityId);
+    if(!org?.id || !activity || !currentUser?.user_id) return false;
+    setActivityBusy(true);
+    try {
+      const outcome = await addActivityRecordWrite({
+        supabase, activityId, orgId: org.id, employeeId: activity.employeeId,
+        recordType: input.recordType,
+        occurredAt: new Date(input.occurredOn).toISOString(),
+        body: (input.body || "").trim() || null,
+        recordedBy: currentUser.user_id,
+      });
+      if(outcome.result !== ACTIVITY_RESULT.OK) {
+        const { tone, message } = describeActivityOutcome(outcome);
+        showToast(message, tone);
+        return false;
+      }
+      await loadEmployeeActivities();
+      return true;
+    } finally { setActivityBusy(false); }
+  };
+
+  // Resolution does NOT delete history: the chronology stays exactly as it was,
+  // and the concern simply stops being current.
+  const resolveConcernForEmployee = async (activityId) => {
+    const activity = employeeActivities.find(a => a.id === activityId);
+    if(!activity || !currentUser?.user_id) return false;
+    setActivityBusy(true);
+    try {
+      const outcome = await resolveManagementConcern({
+        supabase, activityId, updatedAt: activity.updatedAt, resolvedBy: currentUser.user_id,
+      });
+      if(outcome.result !== ACTIVITY_RESULT.OK) {
+        const { tone, message } = describeActivityOutcome(outcome);
+        showToast(message, tone);
+        await loadEmployeeActivities();
+        return false;
+      }
+      await loadEmployeeActivities();
+      showToast("Concern marked resolved. The full history stays on file.");
+      return true;
+    } finally { setActivityBusy(false); }
+  };
   const getEmployeeRecord = (name) => findEmployeeByName(employeeRecords, name);
   // Phase E0.5A.1 — an UPDATE addresses the canonical id; only a CREATE uses the
   // name, and only because UNIQUE(org_id, name) still exists.
@@ -2499,7 +2627,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!org?.id) return;
     setDataLoadIssues([]);
     setCaseSignalsLoaded(false);
-    loadLocations(); loadOrganisationThemes(); loadCaseThemes(); loadOrgEvents(); loadImprovementInitiatives(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadTeamMembers(); loadPendingInvites(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates();
+    loadLocations(); loadOrganisationThemes(); loadCaseThemes(); loadOrgEvents(); loadImprovementInitiatives(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadEmployeeActivities(); loadTeamMembers(); loadPendingInvites(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates();
     if(isHR) { loadWellbeingNotes(); loadManagerCapabilityInsights(); loadIntegrationEvents(); loadRedundancyCases(); }
   };
   useEffect(loadOrgData, [org?.id, isHR, user?.id]);
@@ -11254,7 +11382,7 @@ Please produce:
       )}
 
             {screen===SCREENS.PEOPLE&&(
-              <PeopleScreen cases={cases} employeeRecords={employeeRecords} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} dsarRequests={dsarRequests} setActiveEmployeeId={setActiveEmployeeId} setScreen={setScreen} setCaseInfo={setCaseInfo} setMeetingSetup={setMeetingSetup} locations={locations} isHR={isHR} authorisedLocationIds={member?.role==='location_manager' ? (member?.location_ids||[]) : null} onCreateEmployee={(name, locationId)=>createEmployeeAtLocation(name, locationId)} employeeRecordsLoading={employeeRecordsLoading} />
+              <PeopleScreen cases={cases} employeeRecords={employeeRecords} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} dsarRequests={dsarRequests} setActiveEmployeeId={setActiveEmployeeId} setScreen={setScreen} setCaseInfo={setCaseInfo} setMeetingSetup={setMeetingSetup} locations={locations} isHR={isHR} authorisedLocationIds={member?.role==='location_manager' ? (member?.location_ids||[]) : null} onCreateEmployee={(name, locationId)=>createEmployeeAtLocation(name, locationId)} employeeRecordsLoading={employeeRecordsLoading} onStartActivity={()=>setEmployeeFileTab("activity")} />
             )}
 
 
@@ -11267,6 +11395,12 @@ Please produce:
         <EmployeeFileScreen
           employeeId={activeEmployeeId}
           employeeRecords={employeeRecords}
+          employeeActivities={employeeActivities}
+          employeeActivityRecords={employeeActivityRecords}
+          onCreateActivity={(input)=>createActivityForEmployee(activeEmployeeId, input)}
+          onAddActivityRecord={addRecordToActivity}
+          onResolveConcern={resolveConcernForEmployee}
+          activityBusy={activityBusy}
           cases={cases}
           wellbeingNotes={wellbeingNotes}
           concernReferrals={concernReferrals}
@@ -11665,7 +11799,7 @@ Please produce:
 
       {/* ══ DSAR ══ */}
       {screen===SCREENS.DSAR&&(
-        <DsarScreen
+        <DsarScreen employeeActivities={employeeActivities} employeeActivityRecords={employeeActivityRecords}
           dsarRequests={dsarRequests}
           createDsarRequest={createDsarRequest}
           updateDsarRequest={updateDsarRequest}

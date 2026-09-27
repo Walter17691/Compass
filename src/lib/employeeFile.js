@@ -4,6 +4,7 @@ import { getNextStep } from './nextStep.js';
 import { isMeetingComplete } from './meetingLifecycle.js';
 import { isWarningOutcome } from './outcomeTypes.js';
 import { allegationsForCase, appealOutcomeMeta } from './allegations.js';
+import { buildActivityEntries, activityAttention, isOpenConcern } from './employeeActivities.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // THE EMPLOYEE FILE — derivation. Phase E1.
@@ -35,11 +36,20 @@ import { allegationsForCase, appealOutcomeMeta } from './allegations.js';
 // prominent profiling feature. E6 owns bounded, provenance-aware intelligence.
 // ─────────────────────────────────────────────────────────────────────────
 
+// Phase E1.6 — the approved four-tab model.
+//
+// Timeline and Meetings are gone as separate tabs, not hidden: both were
+// chronological views of the same employment history, and Activity is now that
+// history in one place — employee activities, formal process milestones, and the
+// meetings reached through an authorised case. "Cases & processes" becomes
+// "HR Processes", which is what it has always contained.
+//
+// This is the minimum coherent change for Employee Activities. The broader Case
+// View / workflow simplification is a separate UX phase and is not started here.
 export const EMPLOYEE_FILE_TABS = Object.freeze([
   { id: "overview", label: "Overview" },
-  { id: "timeline", label: "Timeline" },
-  { id: "meetings", label: "Meetings" },
-  { id: "processes", label: "Cases & processes" },
+  { id: "activity", label: "Activity" },
+  { id: "processes", label: "HR Processes" },
   { id: "documents", label: "Documents" },
 ]);
 
@@ -346,6 +356,15 @@ export function buildEmployeeFile(employeeId, authorisedData = {}, viewerInput =
   const closed = processes.filter(p => !p.open);
   const caseIds = new Set(ctx.cases.map(c => c.id));
 
+  // Phase E1.6 — activities for THIS employee only, selected by canonical id.
+  // Never by name: two employees may share one, and the caller hands over the
+  // whole authorised set.
+  const activities = (authorisedData.employeeActivities || []).filter(a => a && a.employeeId === employeeId);
+  const activityIds = new Set(activities.map(a => a.id));
+  const activityRecords = (authorisedData.employeeActivityRecords || [])
+    .filter(r => r && activityIds.has(r.activityId));
+  const openConcerns = activities.filter(isOpenConcern);
+
   return {
     viewer,
     context: ctx,
@@ -357,11 +376,25 @@ export function buildEmployeeFile(employeeId, authorisedData = {}, viewerInput =
     // calm count plus the list when there are several. It never merges them.
     currentProcess: open.length === 1 ? open[0] : null,
     hasMultipleOpen: open.length > 1,
-    attention: buildAttention({ processes, dueSoon: authorisedData.dueSoon, caseIds }),
+    // Open concerns and due follow-ups join the existing attention list. A
+    // RECORDED 1:1 does not: it is history, and putting every completed
+    // conversation here is how "needs your attention" stops meaning anything.
+    attention: [
+      ...buildAttention({ processes, dueSoon: authorisedData.dueSoon, caseIds }),
+      ...activityAttention(activities, authorisedData.now),
+    ],
     // From EVERY authorised case, not just open ones: a closed disciplinary
     // case can still hold a live warning.
     currentWarnings: deriveCurrentWarnings(ctx.cases, authorisedData.allegations, authorisedData.now),
     recentActivity: buildRecentActivity(ctx, { viewer }),
+    // The Activity tab's chronological projection: activities with their own
+    // chronology, formal process milestones, and meetings reached through an
+    // authorised case.
+    activities,
+    activityRecords,
+    activityEntries: buildActivityEntries({ activities, activityRecords, cases: ctx.cases }),
+    // "What is happening" may name an open concern alongside an open process.
+    openConcerns,
     employmentDetails: buildEmploymentDetails(ctx.employee),
     // A first-class state: an employee with nothing canonically attributed.
     isEmpty: ctx.isEmpty,
