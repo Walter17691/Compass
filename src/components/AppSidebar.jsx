@@ -354,6 +354,9 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
   const primaryItemsAfterAsk = [
     {s:SCREENS.TASKS, l:"Tasks", icon:TasksIcon},
     {s:SCREENS.PEOPLE, l:"People", icon:PeopleIcon},
+    // Phase E1.7 — Archive is a VIEW over the same canonical Employee Files whose
+    // effective employment state is former, not a second employee store.
+    {s:SCREENS.ARCHIVE, l:"Archive", icon:PeopleIcon},
   ];
 
   // Home + Sidebar Product Experience pass, Part 1 — same semantic

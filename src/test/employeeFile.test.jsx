@@ -432,9 +432,21 @@ describe('14. actions, restraint and the deferred meeting action', () => {
     render(<EmployeeFileScreen {...baseProps} onNewCase={() => {}} setEditing={() => {}} />);
     const primary = screen.getByRole('button', { name: 'New case' });
     expect(primary).toBeInTheDocument();
-    // Editing is offered, but as a secondary action and not as a form on Overview.
-    expect(screen.getByRole('button', { name: 'Edit details' })).toBeInTheDocument();
+    // Phase E1.7 renamed "Edit details" to "Correct details", because correcting a
+    // typo and recording a real employment change are different intentions and the
+    // one word "edit" covered both.
+    expect(screen.getByRole('button', { name: 'Correct details' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit details' })).not.toBeInTheDocument();
+    // Still a focused mode, never a form sitting on Overview.
     expect(screen.queryByLabelText('Job title')).not.toBeInTheDocument();
+  });
+
+  it('the two employment intentions are offered as separate, differently-named actions', () => {
+    render(<EmployeeFileScreen {...baseProps} setEditing={() => {}}
+      onRecordEmploymentChange={() => {}} onMarkAsLeaver={() => {}} />);
+    expect(screen.getByRole('button', { name: 'Correct details' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Record employment change' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mark as leaver' })).toBeInTheDocument();
   });
 
   it('the edit flow survived the Person View removal, and writes by id', () => {

@@ -33,6 +33,9 @@ export const ORG_SCOPED_TABLES = [
   // employee_activities, but it is listed explicitly so "delete all data" does
   // not depend on cascade order remaining what it is today.
   'employee_activities', 'employee_activity_records',
+  // Phase E1.7 — employment events, own org_id; listed explicitly rather than
+  // relying on the employee cascade.
+  'employee_employment_events',
   // redundancy_cases (closes Prompt 16 audit finding H1) — its own direct
   // org_id column, no case_id/FK to cases at all, so nothing else's
   // cascade would ever reach it (see supabase/redundancy_cases_2026-08-27.sql).

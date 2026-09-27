@@ -42,7 +42,8 @@ import { FONT, COLOR, TYPE, SPACE, RADIUS, CONTENT_MAX_WIDTH } from '../styles/t
 // ─────────────────────────────────────────────────────────────────────────
 export function PeopleScreen({ cases, employeeRecords = [], wellbeingNotes = [], concernReferrals = [], dsarRequests = [], setActiveEmployeeId, setScreen, setMeetingSetup,
                                locations = [], isHR = false, authorisedLocationIds = null, onCreateEmployee,
-                               employeeRecordsLoading = false, onStartActivity }) {
+                               employeeRecordsLoading = false, onStartActivity,
+                               employmentEvents = [], archived = false }) {
   const [search, setSearch] = useState("");
   const [view, setView] = useState("all");
   const [adding, setAdding] = useState(false);
@@ -58,9 +59,17 @@ export function PeopleScreen({ cases, employeeRecords = [], wellbeingNotes = [],
     ? locations.filter(l => authorisedLocationIds.includes(l.id))
     : locations;
   const mayLeaveUnassigned = isHR;
+  const fullRoster = useMemo(
+    () => buildEmployeeRoster({ employeeRecords, cases, wellbeingNotes, concernReferrals, dsarRequests, employmentEvents }),
+    [employeeRecords, cases, wellbeingNotes, concernReferrals, dsarRequests, employmentEvents]
+  );
+  // Phase E1.7 — People means CURRENT employees; Archive is the same canonical
+  // rows whose effective employment state is former. One projection, no second
+  // store, no scheduled move: an employee with a future leaving date stays in
+  // People until that date arrives, and appears in Archive from then on.
   const roster = useMemo(
-    () => buildEmployeeRoster({ employeeRecords, cases, wellbeingNotes, concernReferrals, dsarRequests }),
-    [employeeRecords, cases, wellbeingNotes, concernReferrals, dsarRequests]
+    () => fullRoster.filter(p => archived ? !p.isCurrent : p.isCurrent),
+    [fullRoster, archived]
   );
   // Two employees may legitimately answer to one name once UNIQUE(org_id,name)
   // is removed. Rows stay distinguishable when that happens rather than becoming
@@ -80,13 +89,13 @@ export function PeopleScreen({ cases, employeeRecords = [], wellbeingNotes = [],
   return (
     <div style={{maxWidth:CONTENT_MAX_WIDTH,margin:"0 auto",padding:"32px 28px"}}>
       <PageHeader
-        title="People"
-        subtitle="Everyone on the employee roster"
+        title={archived ? "Archive" : "People"}
+        subtitle={archived ? "Former employees. Their Employee File and history are retained." : "Everyone currently employed"}
         actions={
           <div style={{display:"flex",gap:SPACE.sm,alignItems:"center",flexWrap:"wrap"}}>
             <input aria-label="Search people" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search people…"
               style={{padding:"8px 12px",fontSize:13,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,background:COLOR.surface,color:COLOR.ink,fontFamily:FONT.sans,outline:"none",width:200}}/>
-            {onCreateEmployee&&assignable.length>0&&(
+            {!archived&&onCreateEmployee&&assignable.length>0&&(
               <button type="button" onClick={()=>setAdding(a=>!a)}
                 style={{padding:"8px 12px",fontSize:13,fontWeight:600,background:COLOR.purple,border:"none",borderRadius:RADIUS.button,color:COLOR.paper,cursor:"pointer",fontFamily:FONT.sans}}>
                 Add employee
@@ -100,7 +109,7 @@ export function PeopleScreen({ cases, employeeRecords = [], wellbeingNotes = [],
           see has a location by definition, so the filter would always be empty,
           and the count itself would disclose how many employees exist outside
           their scope. */}
-      {isHR&&unassignedCount>0&&(
+      {!archived&&isHR&&unassignedCount>0&&(
         <div role="tablist" aria-label="Filter people" style={{display:"flex",gap:SPACE.lg,borderBottom:`1px solid ${COLOR.border}`,marginBottom:SPACE.md}}>
           {[["all",`Everyone · ${roster.length}`],["unassigned",`No location assigned · ${unassignedCount}`]].map(([id,label])=>(
             <button key={id} role="tab" aria-selected={view===id} type="button" onClick={()=>setView(id)}
@@ -194,7 +203,7 @@ export function PeopleScreen({ cases, employeeRecords = [], wellbeingNotes = [],
                 </div>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
-                {p.employmentStatus==="leaver"&&<span style={{fontSize:11,fontWeight:600,color:COLOR.inkFaint}}>LEAVER</span>}
+                {archived&&p.leavingDate&&<span style={{fontSize:11,color:COLOR.inkFaint}}>Left {p.leavingDate}</span>}
                 <RowChevron/>
               </div>
             </button>
@@ -223,12 +232,13 @@ export function PeopleScreen({ cases, employeeRecords = [], wellbeingNotes = [],
             until the authorised fetch answers there is genuinely nothing to show.
             Saying "loading" is the truthful answer; "no employees on the roster"
             would be a claim Compass cannot yet make. */}
-        {people.length===0&&(employeeRecordsLoading
+        {people.length===0&&!archived&&(employeeRecordsLoading
           ? <EmptyState message="Loading the employee roster…"/>
           : <EmptyState message={
               search?"No people match your search."
               :view==="unassigned"?"Every employee has an assigned location."
               :"No employees on the roster yet — add them in Settings → Employee data"}/>)}
+        {people.length===0&&archived&&<EmptyState message={employeeRecordsLoading?"Loading…":search?"No former employees match your search.":"No former employees yet."}/>}
         {hasMore&&(
           <button onClick={loadMore} style={{width:"100%",padding:"12px",background:COLOR.surface,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,cursor:"pointer",fontSize:13,color:COLOR.purple,fontWeight:600,fontFamily:FONT.sans,marginTop:SPACE.sm}}>
             Load more ({people.length} of {total})

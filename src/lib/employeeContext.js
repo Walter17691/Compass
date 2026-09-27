@@ -44,6 +44,8 @@ const byEmployee = (rows, employeeId) =>
 const unattributed = rows =>
   (Array.isArray(rows) ? rows : []).filter(r => r && !r.employeeId).length;
 
+import { resolveEffectiveEmployee, isCurrentEmployee, effectiveLeavingDate } from './employmentEvents.js';
+
 export const EMPLOYEE_CONTEXT_COLLECTIONS = Object.freeze([
   "cases", "wellbeingNotes", "concernReferrals", "dsarRequests",
 ]);
@@ -118,26 +120,35 @@ export function hasUnattributedRecords(context) {
 // Counts come from canonical relationships only, so a roster row shows what is
 // actually attributed to that person — which may legitimately be zero.
 export function buildEmployeeRoster(authorisedData = {}) {
-  const { employeeRecords = [] } = authorisedData;
+  const { employeeRecords = [], employmentEvents = [] } = authorisedData;
+  const now = authorisedData.now || new Date();
   return employeeRecords
     .filter(e => e && e.id)
     .map(e => {
       const ctx = getEmployeeContext(e.id, authorisedData);
+      // Phase E1.7 — the roster shows CURRENT EFFECTIVE details, so a future
+      // promotion or transfer does not appear as though it has happened, and a
+      // future leaving date does not move anyone out of People early.
+      const eff = resolveEffectiveEmployee(e, employmentEvents, now) || e;
       return {
         // Identity. Navigation and React keys both use this, never the name.
         id: e.id,
         // Labels. Display only — every one of these may change without the
         // person changing, which is the whole reason they cannot be identity.
         name: e.name || "",
-        jobTitle: e.jobTitle || "",
+        jobTitle: eff.jobTitle || "",
         // Phase E1.5 — locationId is the CANONICAL location and the only one that
         // decides who can see this row. `location` above it is legacy free text,
         // carried for display and never consulted for permission.
-        locationId: e.locationId || null,
+        locationId: eff.locationId || null,
         location: e.location || "",
-        department: e.department || "",
+        department: eff.department || "",
         employeeNumber: e.employeeNumber || "",
-        employmentStatus: e.employmentStatus || "unknown",
+        // EFFECTIVE status: this decides People vs Archive, with no scheduled
+        // move and nothing for a manager to trigger by opening a record.
+        employmentStatus: eff.employmentStatus || "unknown",
+        isCurrent: isCurrentEmployee(e, employmentEvents, now),
+        leavingDate: effectiveLeavingDate(e.id, employmentEvents, now),
         caseCount: ctx.cases.length,
         openCaseCount: ctx.cases.filter(c => c && c.stage !== "closed").length,
         wellbeingCount: ctx.wellbeingNotes.length,

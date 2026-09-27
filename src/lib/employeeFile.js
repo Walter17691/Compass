@@ -5,6 +5,8 @@ import { isMeetingComplete } from './meetingLifecycle.js';
 import { isWarningOutcome } from './outcomeTypes.js';
 import { allegationsForCase, appealOutcomeMeta } from './allegations.js';
 import { buildActivityEntries, activityAttention, isOpenConcern } from './employeeActivities.js';
+import { resolveEffectiveEmployee, upcomingChanges, buildEmploymentEventEntries,
+         employmentAttention, effectiveLeavingDate, isCurrentEmployee } from './employmentEvents.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // THE EMPLOYEE FILE — derivation. Phase E1.
@@ -365,6 +367,14 @@ export function buildEmployeeFile(employeeId, authorisedData = {}, viewerInput =
     .filter(r => r && activityIds.has(r.activityId));
   const openConcerns = activities.filter(isOpenConcern);
 
+  // Phase E1.7 — employment events for THIS employee, by canonical id.
+  const employmentEvents = (authorisedData.employmentEvents || []).filter(e => e && e.employeeId === employeeId);
+  const now = authorisedData.now || new Date();
+  // CURRENT EFFECTIVE details. A future promotion recorded today is not the
+  // current job title, and Overview must never imply that it is.
+  const effectiveEmployee = resolveEffectiveEmployee(ctx.employee, employmentEvents, now);
+  const pendingChanges = upcomingChanges(employeeId, employmentEvents, now);
+
   return {
     viewer,
     context: ctx,
@@ -382,6 +392,7 @@ export function buildEmployeeFile(employeeId, authorisedData = {}, viewerInput =
     attention: [
       ...buildAttention({ processes, dueSoon: authorisedData.dueSoon, caseIds }),
       ...activityAttention(activities, authorisedData.now),
+      ...employmentAttention(employeeId, employmentEvents, now),
     ],
     // From EVERY authorised case, not just open ones: a closed disciplinary
     // case can still hold a live warning.
@@ -392,10 +403,21 @@ export function buildEmployeeFile(employeeId, authorisedData = {}, viewerInput =
     // authorised case.
     activities,
     activityRecords,
-    activityEntries: buildActivityEntries({ activities, activityRecords, cases: ctx.cases }),
+    activityEntries: [
+      ...buildActivityEntries({ activities, activityRecords, cases: ctx.cases }),
+      ...buildEmploymentEventEntries(employmentEvents, { locationName: authorisedData.locationName, today: now }),
+    ].sort((a, b) => new Date(b.occurredAt || 0) - new Date(a.occurredAt || 0)),
+    // Employment events are their own authoritative domain under the same
+    // projection — never merged into activities, never turned into a case.
+    employmentEvents,
+    // What is true NOW, and what is coming. Both, clearly separated.
+    effectiveEmployee,
+    pendingChanges,
+    leavingDate: effectiveLeavingDate(employeeId, employmentEvents, now),
+    isCurrentEmployee: isCurrentEmployee(ctx.employee, employmentEvents, now),
     // "What is happening" may name an open concern alongside an open process.
     openConcerns,
-    employmentDetails: buildEmploymentDetails(ctx.employee),
+    employmentDetails: buildEmploymentDetails(effectiveEmployee || ctx.employee),
     // A first-class state: an employee with nothing canonically attributed.
     isEmpty: ctx.isEmpty,
     // Organisation-wide and employee-agnostic — it must never read as

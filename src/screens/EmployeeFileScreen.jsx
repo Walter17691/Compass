@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { SCREENS } from '../constants';
 import { COLOR, SPACE, TYPE } from '../styles/tokens';
 import { buildEmployeeFile, EMPLOYEE_FILE_TABS, isEmployeeFileTab } from '../lib/employeeFile';
@@ -6,6 +6,7 @@ import { EmployeeFileHeader, EmployeeFileTabs } from './employeeFile/EmployeeFil
 import { EmployeeFileOverview } from './employeeFile/EmployeeFileOverview';
 import { ProcessesTabPanel, DocumentsTabPanel } from './employeeFile/EmployeeFileTabs';
 import { EmployeeActivityPanel } from './employeeFile/EmployeeActivityPanel';
+import { EmploymentChangeForm, MarkAsLeaverForm } from './employeeFile/EmploymentChangeForm';
 import { EmployeeDetailsEdit } from './employeeFile/EmployeeDetailsEdit';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -66,10 +67,15 @@ export function EmployeeFileScreen({
   // other collection here. This screen composes; it never authorises.
   employeeActivities = [], employeeActivityRecords = [],
   onCreateActivity, onAddActivityRecord, onResolveConcern, activityBusy = false,
+  // Phase E1.7 — employment events, already RLS-filtered like everything else.
+  employmentEvents = [], onRecordEmploymentChange, onMarkAsLeaver,
+  canChangeLocation = false, employmentBusy = false,
 }) {
+  // Two focused modes, never a form living on Overview.
+  const [employmentMode, setEmploymentMode] = useState(null);   // 'change' | 'leaver'
   const file = useMemo(
-    () => buildEmployeeFile(employeeId, { employeeRecords, cases, wellbeingNotes, concernReferrals, dsarRequests, dueSoon, allegations, employeeActivities, employeeActivityRecords }, { isHR, role }),
-    [employeeId, employeeRecords, cases, wellbeingNotes, concernReferrals, dsarRequests, dueSoon, allegations, employeeActivities, employeeActivityRecords, isHR, role]
+    () => buildEmployeeFile(employeeId, { employeeRecords, cases, wellbeingNotes, concernReferrals, dsarRequests, dueSoon, allegations, employeeActivities, employeeActivityRecords, employmentEvents, locationName: (id) => locations.find(l => l.id === id)?.name || null }, { isHR, role }),
+    [employeeId, employeeRecords, cases, wellbeingNotes, concernReferrals, dsarRequests, dueSoon, allegations, employeeActivities, employeeActivityRecords, employmentEvents, locations, isHR, role]
   );
 
   const tab = isEmployeeFileTab(activeTab) ? activeTab : "overview";
@@ -109,18 +115,45 @@ export function EmployeeFileScreen({
         primaryAction={file.viewer.canCreateCase && onNewCase
           ? { label: "New case", onClick: () => onNewCase(file.employee.id) }
           : null}
-        secondaryActions={file.viewer.canEditEmployee && setEditing && !editing
-          ? [{ label: "Edit details", onClick: () => {
+        secondaryActions={file.viewer.canEditEmployee && setEditing && !editing && !employmentMode
+          ? [
+              // Worded as the two different intentions they are, not as one
+              // "edit" that silently means both.
+              { label: "Correct details", onClick: () => {
                 setEditJobTitle?.(file.employee.jobTitle || "");
                 setEditStartDate?.(file.employee.startDate || "");
                 setEditing(true);
-              } }]
+              } },
+              ...(onRecordEmploymentChange ? [{ label: "Record employment change", onClick: () => setEmploymentMode("change") }] : []),
+              ...(onMarkAsLeaver && file.isCurrentEmployee ? [{ label: "Mark as leaver", onClick: () => setEmploymentMode("leaver") }] : []),
+            ]
           : []}
       />
 
-      {!editing && <EmployeeFileTabs tabs={EMPLOYEE_FILE_TABS} active={tab} onSelect={setActiveTab} />}
+      {!editing && !employmentMode && <EmployeeFileTabs tabs={EMPLOYEE_FILE_TABS} active={tab} onSelect={setActiveTab} />}
 
-      {editing ? (
+      {employmentMode ? (
+        <main style={{ maxWidth: 960, margin: "0 auto", padding: `${SPACE.xl}px ${SPACE.xl}px ${SPACE.xxxl}px` }}>
+          {employmentMode === "change" ? (
+            <EmploymentChangeForm
+              employee={file.employee}
+              effectiveEmployee={file.effectiveEmployee}
+              locations={locations}
+              canChangeLocation={canChangeLocation}
+              busy={employmentBusy}
+              onRecord={async (input) => { const ok = await onRecordEmploymentChange?.(file.employee.id, input); if (ok) setEmploymentMode(null); }}
+              onCancel={() => setEmploymentMode(null)}
+            />
+          ) : (
+            <MarkAsLeaverForm
+              employee={file.employee}
+              busy={employmentBusy}
+              onRecord={async (input) => { const ok = await onMarkAsLeaver?.(file.employee.id, input); if (ok) setEmploymentMode(null); }}
+              onCancel={() => setEmploymentMode(null)}
+            />
+          )}
+        </main>
+      ) : editing ? (
         <main style={{ maxWidth: 960, margin: "0 auto", padding: `${SPACE.xl}px ${SPACE.xl}px ${SPACE.xxxl}px` }}>
           <EmployeeDetailsEdit
             employee={file.employee}

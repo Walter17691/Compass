@@ -622,6 +622,146 @@ programme.**
 
 ---
 
+## AD-006 — Employment Events, leavers and Archive
+
+**Status:** **implemented** in phase E1.7 (2026-09-27).
+
+### A peer domain
+
+Employment Events sit alongside Employee Activities (AD-005) and employee-owned HR
+Processes under the Employee File. They are not activities, not cases, and never
+converted into either. Canonical `employee_id` parentage; no case is ever borrowed
+as fake parentage.
+
+### Current state is RESOLVED, never written ahead of time
+
+This is the whole architecture:
+
+```
+current state  =  base employee record
+               +  events whose effective_date has arrived
+               +  today
+```
+
+A promotion recorded on 27 September and effective 1 November changes nothing
+until 1 November, and then changes it with **no scheduler having run**. There is no
+cron, no `setTimeout`, no background job, and the browser never mutates
+security-critical state.
+
+Resolution exists twice, deliberately: in SQL
+(`effective_employee_location`, `effective_employment_status`) because RLS needs
+it, and in JS for the read model. The SQL is the authority.
+
+### Location, RLS and the future-transfer problem
+
+`employee_records.location_id` remains the **base** canonical location and is
+**never written with a future value**. RLS now reads
+`can_access_employee(org_id, effective_employee_location(id))` instead of the raw
+column — one narrowly-substituted predicate.
+
+Consequences, verified against production:
+
+- a future transfer grants the **target** location's manager nothing early;
+- it removes nothing from the **source** location's manager early;
+- on the effective date access moves, with nothing having run in between;
+- with no events the function returns the base column, so behaviour is identical
+  for every employee who has none.
+
+Cancelled and future events are excluded by construction, not by a caller
+remembering to filter.
+
+### Location Manager transfers — DECISION REQUIRED, not guessed
+
+A Location Manager may record every employment change **except a location
+transfer**, which is HR-only, enforced in the INSERT policy.
+
+E1.5/AD-003 deferred "may a Location Manager move an employee, and to which
+locations" to this phase without deciding it. Rather than guess, the fail-closed
+behaviour ships: no Location Manager can enlarge or manipulate their own scope
+through a transfer. **The open question is whether they may target any same-org
+location, or only one they are independently authorised for.** Until answered,
+HR-only stands.
+
+### Correction is not a change
+
+| | Correct employee details | Record employment change |
+|---|---|---|
+| Fixes | data recorded wrongly | the employment itself |
+| Effective date | none | required, may be future |
+| Creates an event | **no** | yes |
+| In Activity | **no** | yes |
+| Audited | yes (`Employee details corrected`) | yes |
+
+The correction audit is a trigger on `employee_records`, so no code path can
+correct details silently. It deliberately excludes `location_id`, which has its own
+authoritative operation and its own event type.
+
+### Old → new is always preserved
+
+Typed columns, not a JSON dumping ground: one text pair for job title / department
+/ manager / working pattern, one uuid pair for location so the same-organisation
+foreign key still applies. A CHECK enforces the right pair for the right type, so
+"Promoted" with no values is not storable.
+
+Only changes backed by a **real** employee field exist. `contractual_hours_changed`
+is absent because no such column exists. `employment_started` is absent because
+`start_date` is legacy text and 14 of the 17 populated production values are not
+ISO dates — it cannot be read as a date without guessing.
+
+### Leavers and Archive are a projection
+
+"Mark as leaver" records an effective-dated `employment_ended` event. Nothing is
+moved, copied or deleted.
+
+- Before the leaving date: **People**, still a current employee.
+- From the leaving date: **Archive**, same Employee File, same UUID, full history.
+
+Archive is a **view** over `employee_records` filtered by effective employment
+state. There is no `archived_employees` table and no second employee store. No
+manager opening a record triggers the move, and no cron performs it.
+
+**Archived Employee File access** follows the unchanged employee predicate: a
+leaving event does not change location, so a Location Manager retains access to a
+former employee at their location. That is the existing behaviour rather than a new
+entitlement — revoking it would be an invention. **Flagged as a product decision.**
+
+### History is corrected or cancelled, never deleted
+
+A future event may be corrected. Once **effective**, its substance is frozen by
+trigger — record a further change instead. Cancellation keeps the row, says it was
+cancelled, records who and why, and stops it counting toward current state;
+reinstating is refused, because un-cancelling would make the audit trail a lie.
+There is no DELETE policy on the table.
+
+### Historical activity location is immutable
+
+When an employee's location changes, `employee_activities.location_id` is **never**
+rewritten. A January 1:1 in London stays London after a March move to Manchester.
+Asserted across every write surface, not just the activity module.
+
+### Rehire
+
+Never create or merge an employee by name, and never overwrite previous employment
+history. An `employee_number` or `work_email` collision is **not** identity proof
+without an approved rule. No rehire workflow was implemented.
+
+### Boundaries
+
+Employment events do not alter **Current Warnings**, which remain formal-case
+derived only — a promotion, transfer, manager change or leaving date is not a
+warning, and the event table has no warning or sanction column. Formal-case access
+still follows the three-level model (AD-004); location remains not a case-access
+path. DSAR includes events keyed on `employee_id` with **no name fallback**, and
+the table is in the erasure list. Events are never persisted to localStorage and a
+failed load fails closed (AD-004's rule).
+
+Legacy `leaver_instances` (107 rows, no `employee_id`, name-based) is **not
+migrated and not attached**; it has no write route in the application.
+`start_date`/`end_date` are **not converted** — effective dates live on the event
+table as a proper `DATE`.
+
+---
+
 ## AD-002 — A process type only receives what Compass owns for it
 
 **Status:** **implemented** in phases E1.4 (next-step guidance) and E1.4A (stage

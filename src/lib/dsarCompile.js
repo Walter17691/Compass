@@ -63,7 +63,7 @@ import { classifyIdentityByName, IDENTITY } from './employeeRecords.js';
 //    subjectAuditLog filter directly rather than a separate section,
 //    since it's the same shape of record either way.
 export function compileSubjectData(employeeName, { canonicalEmployeeId = null, cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [], wellbeingNotes = [], concernReferrals = [], allegations = [], caseSignals = [], caseTasks = [], hrReviewRequests = [], auditLog = [], signingRequests = [], portalAccounts = [], dsarRequests = [], orgMembers = [], profiles = [], caseViews = [], portalInvites = [], orgEvents = [], improvementInitiatives = [], managerCapabilityInsights = [], organisationThemes = [], caseAccess = [], redundancyCases = [], standaloneMeetings = [],
-    employeeActivities = [], employeeActivityRecords = [],
+    employeeActivities = [], employeeActivityRecords = [], employmentEvents = [],
   } = {}) {
   // ── Phase E0.5B — CANONICAL IDENTITY TAKES PRECEDENCE OVER THE NAME ───────
   //
@@ -116,6 +116,14 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
   const subjectActivityIds = new Set(subjectActivities.map(a => a.id));
   const subjectActivityRecords = canonicalEmployeeId
     ? employeeActivityRecords.filter(r => r?.employeeId === canonicalEmployeeId && subjectActivityIds.has(r.activityId))
+    : [];
+
+  // Phase E1.7 — employment events, by CANONICAL ID ONLY, for the same reason as
+  // activities: employee_id is NOT NULL from the first row, so a name fallback
+  // could rescue nothing and could wrongly attach a same-named colleague's
+  // promotion, transfer or leaving date to this subject.
+  const subjectEmploymentEvents = canonicalEmployeeId
+    ? employmentEvents.filter(e => e?.employeeId === canonicalEmployeeId)
     : [];
 
   const nameMatchedCases = cases.filter(c => nameMatchesSubject(c?.employeeName));
@@ -467,6 +475,7 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
       // Always employee_id, with no name alternative — see subjectActivities.
       employeeActivities: "employee_id",
       employeeActivityRecords: "employee_id",
+      employmentEvents: "employee_id",
       concernReferrals: canonicalEmployeeId ? "employee_id" : "employee_name",
       // Derived through their case, which is the authoritative parent.
       allegations: "case_id", caseTasks: "case_id", caseSignals: "case_id", hrReviewRequests: "case_id",
@@ -519,6 +528,7 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
     wellbeingNotes: subjectWellbeingNotes,
     employeeActivities: subjectActivities,
     employeeActivityRecords: subjectActivityRecords,
+    employmentEvents: subjectEmploymentEvents,
     concernReferrals: subjectConcernReferrals,
     allegations: subjectAllegations,
     caseSignals: subjectCaseSignals,

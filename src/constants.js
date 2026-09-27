@@ -45,7 +45,7 @@ export const SCREENS = {
   HOME:"home", CASES:"cases", PREP:"prep", RECORD:"record",
   REVIEW:"review", LETTER:"letter", SETTINGS:"settings",
   DASHBOARD:"dashboard",
-  TEMPLATES:"templates", WHISTLE:"whistle", PEOPLE:"people", INTAKE:"intake", CASE_VIEW:"case_view", EMPLOYEE_FILE:"employee_file",
+  TEMPLATES:"templates", WHISTLE:"whistle", PEOPLE:"people", ARCHIVE:"archive", INTAKE:"intake", CASE_VIEW:"case_view", EMPLOYEE_FILE:"employee_file",
   DEVELOP:"develop", SEARCH:"search",
   NEWSTARTER:"newstarter", OFFBOARDING:"offboarding", ERREPORT:"erreport",
   REDUNDANCY:"redundancy", WELLBEING:"wellbeing", DSAR:"dsar", TASKS:"tasks",

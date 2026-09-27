@@ -57,6 +57,8 @@ import { setEmployeeLocationWrite, describeLocationOutcome } from './lib/employe
 import { createEmployeeActivity, addActivityRecord as addActivityRecordWrite, resolveManagementConcern,
          describeActivityOutcome, mapActivityRow, mapActivityRecordRow, ACTIVITY_RESULT } from './lib/employeeActivityWrites';
 import { usesConcernLifecycle } from './lib/employeeActivities';
+import { recordEmploymentEvent, markEmployeeAsLeaver, describeEventOutcome, EVENT_RESULT } from './lib/employmentEventWrites';
+import { mapEmploymentEventRow, resolveEffectiveEmployee, EMPLOYMENT_EVENT_TYPES } from './lib/employmentEvents';
 import { buildEscalationContext } from './lib/escalation';
 import { EscalateToHrModal } from './screens/EscalateToHrModal';
 import { getTemplateForType, resolveDefaultTaskDueDate } from './lib/processTemplates';
@@ -627,6 +629,94 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [employeeActivities, setEmployeeActivities] = useState([]);
   const [employeeActivityRecords, setEmployeeActivityRecords] = useState([]);
   const [activityBusy, setActivityBusy] = useState(false);
+
+  // ── Phase E1.7 — Employment Events ──────────────────────────────────────
+  //
+  // Not persisted to localStorage, like activities and for the same reason.
+  const [employmentEvents, setEmploymentEvents] = useState([]);
+  const [employmentBusy, setEmploymentBusy] = useState(false);
+
+  const loadEmploymentEvents = async () => {
+    if(!org?.id) return;
+    try {
+      const { data, error } = await fetchAllPages((from, to) => supabase.from('employee_employment_events')
+        .select('*').eq('org_id', org.id).order('effective_date', { ascending: false }).range(from, to));
+      if(error) {
+        console.error('loadEmploymentEvents', error);
+        markLoadIssue('employment events');
+        setEmploymentEvents([]);
+        return;
+      }
+      setEmploymentEvents((data || []).map(mapEmploymentEventRow));
+    } catch(e) {
+      console.error('loadEmploymentEvents', e);
+      markLoadIssue('employment events');
+      setEmploymentEvents([]);
+    }
+  };
+
+  // Record an employment change.
+  //
+  // The OLD value is read from the employee's CURRENT EFFECTIVE state, not from
+  // the raw record: if an earlier change has already taken effect, that is what
+  // this one is changing from. Nothing is written into employee_records — current
+  // state is resolved from the base record plus effective events, so a future
+  // change must not be applied early and a same-day one needs no mutation either.
+  const recordEmploymentChange = async (employeeId, input) => {
+    const employee = findEmployeeById(employeeRecords, employeeId);
+    if(!org?.id || !employee || !currentUser?.user_id) return false;
+    const eff = resolveEffectiveEmployee(employee, employmentEvents, new Date()) || employee;
+    const type = EMPLOYMENT_EVENT_TYPES.find(t => t.id === input.eventType);
+    const isLocation = type?.kind === 'location';
+    setEmploymentBusy(true);
+    try {
+      const outcome = await recordEmploymentEvent({
+        supabase, orgId: org.id, employeeId,
+        eventType: input.eventType,
+        effectiveDate: input.effectiveDate,
+        oldText: isLocation ? null : (eff[type?.field] || null),
+        newText: isLocation ? null : (input.newText || null),
+        oldLocationId: isLocation ? (eff.locationId || null) : null,
+        newLocationId: isLocation ? (input.newLocationId || null) : null,
+        documentationStatus: input.documentationStatus,
+        recordedBy: currentUser.user_id,
+      });
+      if(outcome.result !== EVENT_RESULT.OK) {
+        const { tone, message } = describeEventOutcome(outcome);
+        showToast(message, tone);
+        return false;
+      }
+      await loadEmploymentEvents();
+      showToast(input.effectiveDate > new Date().toISOString().slice(0,10)
+        ? "Recorded. It takes effect on the date you set."
+        : "Employment change recorded.");
+      return true;
+    } finally { setEmploymentBusy(false); }
+  };
+
+  const markAsLeaver = async (employeeId, input) => {
+    if(!org?.id || !employeeId || !currentUser?.user_id) return false;
+    setEmploymentBusy(true);
+    try {
+      const outcome = await markEmployeeAsLeaver({
+        supabase, orgId: org.id, employeeId,
+        leavingDate: input.leavingDate,
+        note: input.note || null,
+        documentationStatus: input.documentationStatus,
+        recordedBy: currentUser.user_id,
+      });
+      if(outcome.result !== EVENT_RESULT.OK) {
+        const { tone, message } = describeEventOutcome(outcome);
+        showToast(message, tone);
+        return false;
+      }
+      await loadEmploymentEvents();
+      showToast(input.leavingDate > new Date().toISOString().slice(0,10)
+        ? "Recorded. They remain a current employee until their last day."
+        : "Recorded. Their Employee File is retained in Archive.");
+      return true;
+    } finally { setEmploymentBusy(false); }
+  };
 
   const loadEmployeeActivities = async () => {
     if(!org?.id) return;
@@ -2627,7 +2717,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!org?.id) return;
     setDataLoadIssues([]);
     setCaseSignalsLoaded(false);
-    loadLocations(); loadOrganisationThemes(); loadCaseThemes(); loadOrgEvents(); loadImprovementInitiatives(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadEmployeeActivities(); loadTeamMembers(); loadPendingInvites(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates();
+    loadLocations(); loadOrganisationThemes(); loadCaseThemes(); loadOrgEvents(); loadImprovementInitiatives(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadEmployeeActivities(); loadEmploymentEvents(); loadTeamMembers(); loadPendingInvites(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates();
     if(isHR) { loadWellbeingNotes(); loadManagerCapabilityInsights(); loadIntegrationEvents(); loadRedundancyCases(); }
   };
   useEffect(loadOrgData, [org?.id, isHR, user?.id]);
@@ -11382,7 +11472,12 @@ Please produce:
       )}
 
             {screen===SCREENS.PEOPLE&&(
-              <PeopleScreen cases={cases} employeeRecords={employeeRecords} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} dsarRequests={dsarRequests} setActiveEmployeeId={setActiveEmployeeId} setScreen={setScreen} setCaseInfo={setCaseInfo} setMeetingSetup={setMeetingSetup} locations={locations} isHR={isHR} authorisedLocationIds={member?.role==='location_manager' ? (member?.location_ids||[]) : null} onCreateEmployee={(name, locationId)=>createEmployeeAtLocation(name, locationId)} employeeRecordsLoading={employeeRecordsLoading} onStartActivity={()=>setEmployeeFileTab("activity")} />
+              <PeopleScreen cases={cases} employeeRecords={employeeRecords} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} dsarRequests={dsarRequests} setActiveEmployeeId={setActiveEmployeeId} setScreen={setScreen} setCaseInfo={setCaseInfo} setMeetingSetup={setMeetingSetup} locations={locations} isHR={isHR} authorisedLocationIds={member?.role==='location_manager' ? (member?.location_ids||[]) : null} onCreateEmployee={(name, locationId)=>createEmployeeAtLocation(name, locationId)} employeeRecordsLoading={employeeRecordsLoading} onStartActivity={()=>setEmployeeFileTab("activity")} employmentEvents={employmentEvents} />
+            )}
+            {screen===SCREENS.ARCHIVE&&(
+              /* Phase E1.7 — the same screen over the same canonical rows, in
+                 archived mode. Not a second employee store and not a copy. */
+              <PeopleScreen archived cases={cases} employeeRecords={employeeRecords} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} dsarRequests={dsarRequests} setActiveEmployeeId={setActiveEmployeeId} setScreen={setScreen} setCaseInfo={setCaseInfo} setMeetingSetup={setMeetingSetup} locations={locations} isHR={isHR} authorisedLocationIds={member?.role==='location_manager' ? (member?.location_ids||[]) : null} employeeRecordsLoading={employeeRecordsLoading} employmentEvents={employmentEvents} />
             )}
 
 
@@ -11401,6 +11496,11 @@ Please produce:
           onAddActivityRecord={addRecordToActivity}
           onResolveConcern={resolveConcernForEmployee}
           activityBusy={activityBusy}
+          employmentEvents={employmentEvents}
+          onRecordEmploymentChange={recordEmploymentChange}
+          onMarkAsLeaver={markAsLeaver}
+          canChangeLocation={isHR}
+          employmentBusy={employmentBusy}
           cases={cases}
           wellbeingNotes={wellbeingNotes}
           concernReferrals={concernReferrals}
@@ -11799,7 +11899,7 @@ Please produce:
 
       {/* ══ DSAR ══ */}
       {screen===SCREENS.DSAR&&(
-        <DsarScreen employeeActivities={employeeActivities} employeeActivityRecords={employeeActivityRecords}
+        <DsarScreen employeeActivities={employeeActivities} employeeActivityRecords={employeeActivityRecords} employmentEvents={employmentEvents}
           dsarRequests={dsarRequests}
           createDsarRequest={createDsarRequest}
           updateDsarRequest={updateDsarRequest}
