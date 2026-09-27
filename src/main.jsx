@@ -9,7 +9,7 @@ import SubscribeGate from './SubscribeGate.jsx'
 import { supabase } from './supabase.js'
 import { authedFetch } from './lib/authedFetch.js'
 import { isEntitled } from './lib/plan.js'
-import { clearAllOrgScopedData } from './lib/storage.js'
+import { clearAllOrgScopedData, purgeEmployeeRosterCache, syncAuthIdentity } from './lib/storage.js'
 import { CompassLogo } from './components/CompassLogo.jsx'
 import { COLOR } from './styles/tokens.js'
 
@@ -42,6 +42,15 @@ const LoadingFallback = () => (
 // createRoot(...).render(...) bootstrap side effect at the bottom of this
 // file (that line still runs exactly as before for the real app — this is
 // purely additive).
+// Phase E1.5A — remove any employee roster this browser already holds, at module
+// load, before a single component can mount and read it.
+//
+// It is not enough to stop writing the key: an existing user's browser already
+// contains one, captured under whatever permissions they had at the time. This
+// runs once per page load, ahead of Compass and ahead of Login, so there is no
+// window in which a stale roster could be consumed.
+purgeEmployeeRosterCache()
+
 export function Root() {
   const [user, setUser] = useState(null)
   // One user can belong to more than one org (e.g. an HR consultancy
@@ -156,6 +165,16 @@ export function Root() {
 
   useEffect(() => {
     const handleSession = async (u) => {
+      // Phase E1.5A — a different person signing in on this browser clears the
+      // previous person's cached tenant data BEFORE anything loads.
+      //
+      // clearAllOrgScopedData() previously fired only on an explicit sign-out
+      // click, so a session that ended by timeout or crash left everything in
+      // place for whoever signed in next. Org-scoping is no defence when both
+      // people belong to the same organisation. syncAuthIdentity compares against
+      // the last authenticated user id and wipes only on a genuine change, so a
+      // token refresh or a reload as the same user costs nothing.
+      syncAuthIdentity(u?.id ?? null)
       setUser(u)
       await Promise.all([loadOrg(u), loadPortalStatus(u)])
       setLoading(false)

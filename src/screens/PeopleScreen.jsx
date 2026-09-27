@@ -41,7 +41,8 @@ import { FONT, COLOR, TYPE, SPACE, RADIUS, CONTENT_MAX_WIDTH } from '../styles/t
 // all, which is exactly why HR needs to be able to find them.
 // ─────────────────────────────────────────────────────────────────────────
 export function PeopleScreen({ cases, employeeRecords = [], wellbeingNotes = [], concernReferrals = [], dsarRequests = [], setActiveEmployeeId, setScreen, setMeetingSetup,
-                               locations = [], isHR = false, authorisedLocationIds = null, onCreateEmployee }) {
+                               locations = [], isHR = false, authorisedLocationIds = null, onCreateEmployee,
+                               employeeRecordsLoading = false }) {
   const [search, setSearch] = useState("");
   const [view, setView] = useState("all");
   const [adding, setAdding] = useState(false);
@@ -211,10 +212,16 @@ export function PeopleScreen({ cases, employeeRecords = [], wellbeingNotes = [],
               style={{fontSize:12,background:"none",border:"none",padding:"5px 8px",color:COLOR.purple,cursor:"pointer",fontWeight:600,fontFamily:FONT.sans,flexShrink:0,marginRight:4}}>+ New meeting</button>
           </DataRow>
         ))}
-        {people.length===0&&<EmptyState message={
-          search?"No people match your search."
-          :view==="unassigned"?"Every employee has an assigned location."
-          :"No employees on the roster yet — add them in Settings → Employee data"}/>}
+        {/* Phase E1.5A — the roster is no longer seeded from a browser cache, so
+            until the authorised fetch answers there is genuinely nothing to show.
+            Saying "loading" is the truthful answer; "no employees on the roster"
+            would be a claim Compass cannot yet make. */}
+        {people.length===0&&(employeeRecordsLoading
+          ? <EmptyState message="Loading the employee roster…"/>
+          : <EmptyState message={
+              search?"No people match your search."
+              :view==="unassigned"?"Every employee has an assigned location."
+              :"No employees on the roster yet — add them in Settings → Employee data"}/>)}
         {hasMore&&(
           <button onClick={loadMore} style={{width:"100%",padding:"12px",background:COLOR.surface,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,cursor:"pointer",fontSize:13,color:COLOR.purple,fontWeight:600,fontFamily:FONT.sans,marginTop:SPACE.sm}}>
             Load more ({people.length} of {total})

@@ -577,8 +577,28 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [casesSearch, setCasesSearch] = useState("");
   const [casesFilter, setCasesFilter] = useState("active");
   const [casesView, setCasesView] = useState("list");
-  const [employeeRecords, setEmployeeRecords] = useState(orgLs("compass_employees", []));
-  const saveEmployeeRecords = u => { setEmployeeRecords(u); orgLsSet("compass_employees", u); };
+  // Phase E1.5A — the roster is deliberately NOT seeded from localStorage and is
+  // no longer persisted at all.
+  //
+  // It used to initialise from orgLs("compass_employees", []), which meant the
+  // first paint after any load showed whatever roster this browser last held. Once
+  // E1.5 made employee visibility depend on role and canonical location, that
+  // cache could outlive the authorisation it was captured under: a user whose
+  // permissions had been reduced rendered the fuller roster they used to be
+  // entitled to, until the RLS-filtered fetch happened to replace it.
+  //
+  // Nothing is lost by dropping it. loadEmployeeRecords() runs on every
+  // authenticated load regardless, and — tellingly — it always used
+  // setEmployeeRecords, never saveEmployeeRecords, so the authoritative response
+  // never populated this key. The only writer was local mutation, making the
+  // persisted value a partial by-product of editing rather than a cache of
+  // authorised data. Compass now shows a loading state until the server answers.
+  const [employeeRecords, setEmployeeRecords] = useState([]);
+  const [employeeRecordsLoading, setEmployeeRecordsLoading] = useState(true);
+  // Kept as its own name because callers mean "this is the new roster", but it no
+  // longer writes to storage. Renaming every call site would hide the one fact
+  // worth noticing here.
+  const saveEmployeeRecords = u => setEmployeeRecords(u);
   const getEmployeeRecord = (name) => findEmployeeByName(employeeRecords, name);
   // Phase E0.5A.1 — an UPDATE addresses the canonical id; only a CREATE uses the
   // name, and only because UNIQUE(org_id, name) still exists.
@@ -637,7 +657,17 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // row cap, so this was silently dropping real employees from the
       // roster. Same fix, paged on a stable order (id, the primary key).
       const { data, error } = await fetchAllPages((from, to) => supabase.from('employee_records').select('*').eq('org_id', org.id).order('id', { ascending: true }).range(from, to));
-      if (error) { console.error('loadEmployeeRecords', error); markLoadIssue('employee records'); }
+      // Phase E1.5A — a failed read FAILS CLOSED. It used to fall through to
+      // data.map, throw on null, and leave whatever roster was already in state
+      // sitting there. If the fetch fails precisely because someone's permissions
+      // changed, "keep showing the old list so the app still works" is the wrong
+      // answer: no roster is safer than a roster nobody has re-authorised.
+      if (error) {
+        console.error('loadEmployeeRecords', error);
+        markLoadIssue('employee records');
+        setEmployeeRecords([]);
+        return;
+      }
       // Phase E0 — `id` is the canonical employee identity and is now carried
       // into client state. It was previously DISCARDED here, which is why nothing
       // in the app could reference an employee by anything but their name. Every
@@ -648,7 +678,13 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // access. updatedAt is carried so an employee write can be conditional on
       // it, which no employee write previously was.
       setEmployeeRecords(data.map(r=>({id:r.id,name:r.name,jobTitle:r.job_title,startDate:r.start_date,endDate:r.end_date||"",location:r.location,locationId:r.location_id||null,updatedAt:r.updated_at||null,employeeNumber:r.employee_number||"",workEmail:r.work_email||"",department:r.department||"",manager:r.manager||"",status:r.status||"",employmentStatus:r.employment_status||"unknown",workingPattern:r.working_pattern||"",probationEndDate:r.probation_end_date||""})));
-    } catch(e) { console.error('loadEmployeeRecords', e); markLoadIssue('employee records'); }
+    } catch(e) {
+      console.error('loadEmployeeRecords', e);
+      markLoadIssue('employee records');
+      setEmployeeRecords([]);
+    } finally {
+      setEmployeeRecordsLoading(false);
+    }
   };
 
   // Only removes the profile row (job title/start date/location) — case
@@ -11190,7 +11226,7 @@ Please produce:
       )}
 
             {screen===SCREENS.PEOPLE&&(
-              <PeopleScreen cases={cases} employeeRecords={employeeRecords} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} dsarRequests={dsarRequests} setActiveEmployeeId={setActiveEmployeeId} setScreen={setScreen} setCaseInfo={setCaseInfo} setMeetingSetup={setMeetingSetup} locations={locations} isHR={isHR} authorisedLocationIds={member?.role==='location_manager' ? (member?.location_ids||[]) : null} onCreateEmployee={(name, locationId)=>createEmployeeAtLocation(name, locationId)} />
+              <PeopleScreen cases={cases} employeeRecords={employeeRecords} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} dsarRequests={dsarRequests} setActiveEmployeeId={setActiveEmployeeId} setScreen={setScreen} setCaseInfo={setCaseInfo} setMeetingSetup={setMeetingSetup} locations={locations} isHR={isHR} authorisedLocationIds={member?.role==='location_manager' ? (member?.location_ids||[]) : null} onCreateEmployee={(name, locationId)=>createEmployeeAtLocation(name, locationId)} employeeRecordsLoading={employeeRecordsLoading} />
             )}
 
 

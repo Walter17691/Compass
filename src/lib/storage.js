@@ -100,6 +100,8 @@ export function orgScopedKey(orgId, key) {
 // RLS-scoped fetch had a chance to overwrite it with THEIR own
 // authorised data (several of these — cases, wellbeing notes, employee
 // records — seed their React state straight from this cache on mount).
+export const EMPLOYEE_ROSTER_KEY = "compass_employees";
+
 export const SENSITIVE_ORG_SCOPED_KEYS = [
   "compass_cases", "compass_wellbeing", "compass_employees", "compass_redundancy",
   "compass_meeting_draft", "compass_adjustments", "compass_signature", "compass_letterhead",
@@ -120,6 +122,73 @@ const LEGACY_UNSCOPED_KEYS = ["compass_whistle", "compass_users", "compass_user"
 // "noorg" fallback), so splitting each real key on its first colon
 // reliably recovers the original key name to check against the
 // sensitive set, regardless of which org wrote it.
+// Phase E1.5A — the employee roster is no longer cached, and any copy an
+// existing browser already holds must be removed before it can be read.
+//
+// E1.5 made employee_records RLS the authoritative boundary: a Location Manager
+// sees only their locations, and an employee with no canonical location is
+// HR-only. A localStorage roster silently outlived that. It seeded React state on
+// mount, so a user whose permissions had been REDUCED rendered the fuller roster
+// they used to be entitled to, and — because the authoritative fetch never wrote
+// this key, only local mutations did — it was never a cache of authorised data in
+// the first place, just a partial by-product of editing.
+//
+// Removing it is not a trade-off: the roster is fetched on every load regardless,
+// so the only thing the cache bought was a slightly earlier first paint of data
+// that may no longer be authorised. Compass now shows a loading state instead.
+//
+// Every org's copy is removed, not just the active one, for the same reason
+// clearAllOrgScopedData sweeps all of them: one browser may be used across
+// several tenants. Called before the app can consume it, so a stale value cannot
+// be read even once.
+export function purgeEmployeeRosterCache() {
+  try {
+    if (typeof localStorage === 'undefined') return 0;
+    let removed = 0;
+    Object.keys(localStorage).forEach(k => {
+      const idx = k.indexOf(':');
+      const suffix = idx === -1 ? k : k.slice(idx + 1);
+      if (suffix === EMPLOYEE_ROSTER_KEY) { localStorage.removeItem(k); removed += 1; }
+    });
+    return removed;
+  } catch (e) {
+    console.error('purgeEmployeeRosterCache failed:', e);
+    return 0;
+  }
+}
+
+// Phase E1.5A — clearing on an AUTHENTICATION IDENTITY change, not only on an
+// explicit sign-out click.
+//
+// clearAllOrgScopedData() fired on signOut() alone. A session that ended any
+// other way — a natural timeout, a browser crash, or simply a different member
+// opening the same browser — left the previous person's cached tenant data in
+// place for the next user to seed their state from. Org-scoping does not help
+// when both users belong to the SAME organisation, which is the common case.
+//
+// The last authenticated user id is kept so the comparison survives a reload. It
+// is an opaque uuid, not personal data, and is the smallest thing that can answer
+// "is this the same person as last time?".
+const LAST_AUTH_USER_KEY = 'compass_last_auth_user';
+
+export function syncAuthIdentity(userId) {
+  try {
+    if (typeof localStorage === 'undefined') return { changed: false };
+    const previous = localStorage.getItem(LAST_AUTH_USER_KEY);
+    const current = userId || null;
+    if (current) localStorage.setItem(LAST_AUTH_USER_KEY, current);
+    else localStorage.removeItem(LAST_AUTH_USER_KEY);
+    // A first-ever sign-in (no previous marker) is not an identity CHANGE, so it
+    // does not need a wipe — there is nothing cached from anyone else.
+    const changed = !!previous && previous !== current;
+    if (changed) clearAllOrgScopedData();
+    return { changed, previous };
+  } catch (e) {
+    console.error('syncAuthIdentity failed:', e);
+    return { changed: false };
+  }
+}
+
 export function clearAllOrgScopedData() {
   try {
     if (typeof localStorage === 'undefined') return;
