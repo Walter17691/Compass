@@ -99,6 +99,16 @@ export function TimelinePanel({ cs, allegations, auditLog, fmtDate, onOpenSource
         <div style={{fontSize:13,fontWeight:700,color:"#7C5CFC",marginBottom:10}}>
           {stageProgress.processType.label} process
         </div>
+        {/* Phase E1.4A — a process Compass owns no stage sequence for. Without
+            this the heading above sat on top of an empty chip row: not an
+            error, just a blank band the reader has to interpret. The process is
+            still named, because that part is true and useful; what follows is
+            simply the admission that Compass has no sequence to draw for it. */}
+        {stageProgress.stages.length===0?(
+          <div style={{fontSize:12,color:"#6B6375",lineHeight:1.6}}>
+            No stage sequence is available for this process type.
+          </div>
+        ):(
         <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:stageProgress.missingSteps.length?10:0}}>
           {stageProgress.completed.map(s=>(
             <span key={s.id} style={{fontSize:11,padding:"4px 10px",borderRadius:20,background:"#E8F5EE",color:"#1A7A4A",fontWeight:500}}>✓ {s.label}</span>
@@ -110,6 +120,7 @@ export function TimelinePanel({ cs, allegations, auditLog, fmtDate, onOpenSource
             <span key={s.id} style={{fontSize:11,padding:"4px 10px",borderRadius:20,background:"#F5F1EA",color:"#9B9098"}}>{s.label}</span>
           ))}
         </div>
+        )}
         {stageProgress.missingSteps.length>0&&(
           <div style={{background:"#FEF5E7",border:"1px solid #F5E6C4",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#6B5218",lineHeight:1.6}}>
             Potential missing step{stageProgress.missingSteps.length>1?"s":""}: {stageProgress.missingSteps.join(", ")}

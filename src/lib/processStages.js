@@ -79,6 +79,24 @@ const FLEXIBLE_WORKING_STAGES = [
   { id: "closed", label: "Closed" },
 ];
 
+// Phase E1.4A — the explicit absence of a stage model.
+//
+// Five types below (appeal, capability, attendance, redundancy, other) used to
+// point at DISCIPLINARY_STAGES. The comment at the top of this file recorded
+// that as a known shortcut and called giving them distinct shapes "a natural
+// follow-up". It was not cosmetic. E1.4 stopped unsupported types receiving the
+// disciplinary NEXT STEP, and this left Compass refusing to say what to do next
+// while still drawing the case as "Concern raised -> Investigation ->
+// Disciplinary hearing -> Outcome -> Appeal". 770 production cases were drawn
+// that way: 580 with no usable type, 162 capability, 28 absence.
+//
+// Declaring no model is the honest answer, and it is not a new state — every
+// reader already degrades safely on a stage it cannot place (computeStageProgress
+// returns an empty progress, evidenceChecksFor returns {}, stageLabel returns the
+// raw id). Frozen because all five entries share this one array: an unguarded
+// push would hand a stage model back to every unsupported type at once.
+export const NO_STAGE_MODEL = Object.freeze([]);
+
 // `matches` covers every raw cs.caseType string actually produced by
 // either case-creation entry point today: IntakeScreen.jsx's 8-button
 // picker (lowercased label ids) and the quick-create <select>'s looser
@@ -89,14 +107,14 @@ const FLEXIBLE_WORKING_STAGES = [
 export const PROCESS_TYPES = [
   { id: "misconduct", label: "Misconduct", matches: ["misconduct", "disciplinary", "conduct concern", "investigation"], stages: DISCIPLINARY_STAGES },
   { id: "grievance", label: "Grievance", matches: ["grievance", "discrimination", "whistleblowing"], stages: GRIEVANCE_STAGES },
-  { id: "appeal", label: "Appeal", matches: ["appeal"], stages: DISCIPLINARY_STAGES },
-  { id: "capability", label: "Capability", matches: ["performance", "capability"], stages: DISCIPLINARY_STAGES },
-  { id: "attendance", label: "Attendance", matches: ["attendance", "absence", "attendance/sickness"], stages: DISCIPLINARY_STAGES },
+  { id: "appeal", label: "Appeal", matches: ["appeal"], stages: NO_STAGE_MODEL },
+  { id: "capability", label: "Capability", matches: ["performance", "capability"], stages: NO_STAGE_MODEL },
+  { id: "attendance", label: "Attendance", matches: ["attendance", "absence", "attendance/sickness"], stages: NO_STAGE_MODEL },
   { id: "long_term_sickness", label: "Long-term sickness", matches: ["long-term sickness", "long term sickness", "long_term_sickness"], stages: LONG_TERM_SICKNESS_STAGES },
   { id: "probation", label: "Probation", matches: ["probation"], stages: PROBATION_STAGES },
   { id: "flexible_working", label: "Flexible working", matches: ["flexible working", "flexible_working"], stages: FLEXIBLE_WORKING_STAGES },
-  { id: "redundancy", label: "Redundancy consultation", matches: ["redundancy"], stages: DISCIPLINARY_STAGES },
-  { id: "other", label: "Other", matches: ["other"], stages: DISCIPLINARY_STAGES },
+  { id: "redundancy", label: "Redundancy consultation", matches: ["redundancy"], stages: NO_STAGE_MODEL },
+  { id: "other", label: "Other", matches: ["other"], stages: NO_STAGE_MODEL },
 ];
 
 const OTHER_PROCESS_TYPE = PROCESS_TYPES[PROCESS_TYPES.length - 1];
@@ -108,6 +126,14 @@ export function getProcessType(caseType) {
 
 export function getStageDefinitions(caseType) {
   return getProcessType(caseType).stages;
+}
+
+// True when Compass owns a validated stage model for this process type, so a
+// screen can tell "we have no sequence to draw" apart from "the sequence is
+// empty right now". Mirrors hasGuidedProcess in nextStep.js deliberately: the
+// two questions are the same question asked of the two halves of a process.
+export function hasGuidedStages(caseType) {
+  return getStageDefinitions(caseType).length > 0;
 }
 
 export function stageLabel(caseType, stageId) {
