@@ -219,8 +219,85 @@ function ActivityChronology({ entry, onAddRecord, onResolve, busy }) {
 }
 
 // ── The Activity tab ──────────────────────────────────────────────────────
+// ── A pending employment change ────────────────────────────────────────────
+//
+// Phase E1.7A. The write layer, the guards and the audit already existed; only
+// the actions were missing. Offered ONLY while the change has not taken effect —
+// once it has, the honest answer is to record a further change, not to rewrite
+// what the organisation already acted on.
+function PendingChangeActions({ entry, onCancelChange, onEditChange, busy }) {
+  const [mode, setMode] = useState(null);      // 'cancel' | 'edit'
+  const [reason, setReason] = useState("");
+  const [effectiveDate, setEffectiveDate] = useState(entry.occurredAt || "");
+
+  if (!entry.pending || entry.cancelled) return null;
+
+  if (mode === "cancel") {
+    return (
+      <div style={{ marginTop: SPACE.sm }}>
+        <p style={{ ...TYPE.metadata, color: COLOR.inkQuiet, margin: `0 0 ${SPACE.sm}px`, lineHeight: 1.6 }}>
+          This keeps the change in the employee's history but prevents it from taking effect.
+        </p>
+        <label htmlFor={`cx-${entry.id}`} style={label}>Why is it being cancelled?</label>
+        <input id={`cx-${entry.id}`} value={reason} onChange={e => setReason(e.target.value)}
+          placeholder="e.g. the start date moved" style={field} />
+        <div style={{ display: "flex", gap: SPACE.sm, marginTop: SPACE.sm, flexWrap: "wrap" }}>
+          <button type="button" disabled={busy || !reason.trim()}
+            onClick={async () => { const ok = await onCancelChange?.(entry.id, reason.trim()); if (ok) setMode(null); }}
+            style={{ ...primaryBtn, background: (busy || !reason.trim()) ? COLOR.border : COLOR.purple,
+                     cursor: (busy || !reason.trim()) ? "default" : "pointer" }}>
+            Cancel change
+          </button>
+          <button type="button" onClick={() => setMode(null)} style={quietBtn}>Keep it</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === "edit") {
+    return (
+      <div style={{ marginTop: SPACE.sm, maxWidth: 260 }}>
+        <label htmlFor={`ed-${entry.id}`} style={label}>Effective from</label>
+        <input id={`ed-${entry.id}`} type="date" value={effectiveDate}
+          onChange={e => setEffectiveDate(e.target.value)}
+          onClick={e => e.currentTarget.showPicker?.()}
+          style={{ ...field, colorScheme: "light", cursor: "pointer" }} />
+        <div style={{ display: "flex", gap: SPACE.sm, marginTop: SPACE.sm, flexWrap: "wrap" }}>
+          <button type="button" disabled={busy || !effectiveDate}
+            onClick={async () => { const ok = await onEditChange?.(entry.id, { effectiveDate }); if (ok) setMode(null); }}
+            style={{ ...primaryBtn, background: (busy || !effectiveDate) ? COLOR.border : COLOR.purple,
+                     cursor: (busy || !effectiveDate) ? "default" : "pointer" }}>
+            Save
+          </button>
+          <button type="button" onClick={() => setMode(null)} style={quietBtn}>Cancel</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", gap: SPACE.md, marginTop: SPACE.sm, flexWrap: "wrap" }}>
+      {onEditChange && (
+        <button type="button" onClick={() => setMode("edit")}
+          style={{ ...TYPE.metadata, fontWeight: 700, background: "none", border: "none", padding: 0,
+                   color: COLOR.purple, cursor: "pointer", fontFamily: FONT.sans }}>
+          Edit future change
+        </button>
+      )}
+      {onCancelChange && (
+        <button type="button" onClick={() => setMode("cancel")}
+          style={{ ...TYPE.metadata, fontWeight: 700, background: "none", border: "none", padding: 0,
+                   color: COLOR.purple, cursor: "pointer", fontFamily: FONT.sans }}>
+          Cancel change
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function EmployeeActivityPanel({
   file, onCreateActivity, onAddRecord, onResolveConcern, onOpenCase, fmtDate, busy = false,
+  onCancelChange, onEditChange,
 }) {
   const [starting, setStarting] = useState(false);
   const entries = file?.activityEntries || [];
@@ -277,6 +354,10 @@ export function EmployeeActivityPanel({
                     {[
                       entry.occurredAt ? (fmtDate ? fmtDate(entry.occurredAt) : String(entry.occurredAt).slice(0, 10)) : null,
                       entry.stateLabel,
+                      // An employment change reads as what it changed, both sides.
+                      entry.kind === "employment_event" && entry.from && entry.to ? `${entry.from} → ${entry.to}` : null,
+                      entry.kind === "employment_event" && entry.cancelled ? "Cancelled" : null,
+                      entry.kind === "employment_event" && entry.pending && !entry.cancelled ? "Takes effect on this date" : null,
                       entry.managerName || null,
                       // Stated, never hidden: this was written up after the event.
                       entry.recordedLater ? "recorded later" : null,
@@ -302,6 +383,11 @@ export function EmployeeActivityPanel({
 
               {/* Progressive disclosure: only an activity has an inner chronology,
                   and only a concern usually has more than one entry in it. */}
+              {entry.kind === "employment_event" && (
+                <PendingChangeActions entry={entry} busy={busy}
+                  onCancelChange={onCancelChange} onEditChange={onEditChange} />
+              )}
+
               {entry.kind === "activity" && (entry.isConcern || entry.records.length > 0) && (
                 <ActivityChronology entry={entry} busy={busy}
                   onAddRecord={onAddRecord} onResolve={onResolveConcern} />

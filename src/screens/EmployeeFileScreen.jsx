@@ -70,6 +70,9 @@ export function EmployeeFileScreen({
   // Phase E1.7 — employment events, already RLS-filtered like everything else.
   employmentEvents = [], onRecordEmploymentChange, onMarkAsLeaver,
   canChangeLocation = false, employmentBusy = false,
+  // Phase E1.7A — the cancel/edit capability existed in the write layer from
+  // E1.7; these expose it for a change that has not yet taken effect.
+  onCancelEmploymentChange, onEditEmploymentChange,
 }) {
   // Two focused modes, never a form living on Overview.
   const [employmentMode, setEmploymentMode] = useState(null);   // 'change' | 'leaver'
@@ -185,7 +188,9 @@ export function EmployeeFileScreen({
             onResolveConcern={onResolveConcern}
             onOpenCase={openCase}
             fmtDate={fmtDate}
-            busy={activityBusy}
+            busy={activityBusy || employmentBusy}
+            onCancelChange={onCancelEmploymentChange}
+            onEditChange={onEditEmploymentChange}
           />
         )}
         {tab === "processes" && <ProcessesTabPanel file={file} onOpenCase={openCase} fmtDate={fmtDate} />}

@@ -759,3 +759,206 @@ describe('boundaries', () => {
     expect(migrationCode).not.toMatch(/update public\.employee_records set employment_status/i);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase E1.7A — employment lifecycle policy closure.
+//
+// Two decisions E1.7 deliberately left open are now closed, and the
+// cancellation/edit capability E1.7 built is now reachable.
+//
+// The access behaviour itself is proven against production with impersonated
+// JWT claims in rolled-back transactions (see the phase report): 11 assertions
+// before applying and the full transfer/Archive matrix after. These tests pin
+// the policy text and the UI so neither can quietly regress.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const CLOSURE = read('supabase/employment_lifecycle_policy_closure_2026-09-27.sql');
+const closureCode = CLOSURE.replace(/--[^\n]*/g, '');
+const activityPanel = strip(read('src/screens/employeeFile/EmployeeActivityPanel.jsx'));
+
+describe('E1.7A — Location Manager transfers', () => {
+  const insertPolicy = () => {
+    const i = closureCode.indexOf('create policy employment_events_insert');
+    expect(i).toBeGreaterThan(-1);
+    return closureCode.slice(i, closureCode.indexOf(';', i));
+  };
+
+  it('authority comes from the EMPLOYEE, never from the destination', () => {
+    const p = insertPolicy();
+    // Current employee authority, resolved through employee RLS.
+    expect(p).toMatch(/exists \(\s*select 1 from public\.employee_records er/);
+    // The destination is NOT checked against the actor's own locations. That is
+    // the decision: a Manchester manager may send their employee to Birmingham.
+    expect(p).not.toMatch(/is_location_manager_for\(org_id,\s*new_location_id\)/);
+    expect(p).not.toMatch(/new_location_id = any/);
+  });
+
+  it('the HR-only clause on transfers is gone', () => {
+    expect(insertPolicy()).not.toMatch(/event_type <> 'location_changed'/);
+  });
+
+  it('but creation still requires a lifecycle operator, not merely a reader', () => {
+    // Deleting the HR-only clause on its own would have let a read-only auditor
+    // transfer employees, because any role that can SEE the employee satisfied
+    // the rest of the check. Verified against production before the change.
+    const p = insertPolicy();
+    expect(p).toMatch(/public\.is_hr_in_org\(org_id\)/);
+    expect(p).toMatch(/public\.is_location_manager_for\(org_id, public\.effective_employee_location\(employee_id\)\)/);
+  });
+
+  it('amendment requires the same authority as creation', () => {
+    const i = closureCode.indexOf('create policy employment_events_update');
+    const p = closureCode.slice(i, closureCode.indexOf(';', i));
+    expect(p).toMatch(/public\.is_hr_in_org\(org_id\)/);
+    expect(p).toMatch(/is_location_manager_for\(org_id, public\.effective_employee_location\(employee_id\)\)/);
+  });
+
+  it('authorship is never an access path', () => {
+    // recorded_by appears ONLY as an anti-impersonation check on insert, never in
+    // a USING clause — so the manager who records a transfer out of their scope
+    // loses the employee and the event when it takes effect.
+    expect(insertPolicy()).toMatch(/recorded_by = auth\.uid\(\)/);
+    const selectPol = closureCode.indexOf('create policy employment_events_select');
+    expect(selectPol).toBe(-1);   // SELECT deliberately untouched
+    const updatePol = closureCode.slice(closureCode.indexOf('create policy employment_events_update'));
+    expect(updatePol.slice(0, updatePol.indexOf(';'))).not.toMatch(/recorded_by/);
+  });
+
+  it('the change is policy-only — no table, trigger, function or data touched', () => {
+    expect(closureCode).not.toMatch(/\balter table\b|\bcreate table\b|\bcreate trigger\b/i);
+    expect(closureCode).not.toMatch(/create (or replace )?function/i);
+    expect(closureCode).not.toMatch(/\b(insert into|update |delete from)\b/i);
+    // And no case policy is touched: case access remains AD-004's three-level model.
+    expect(closureCode).not.toMatch(/on public\.cases/);
+  });
+
+  it('cross-org destination integrity is still the database\'s job, not the form\'s', () => {
+    // Unchanged from E1.7, and relied upon by this decision.
+    expect(migrationCode).toMatch(
+      /foreign key \(new_location_id, org_id\)\s*references public\.locations\(id, org_id\)/);
+  });
+
+  it('the form offers every same-org location to HR and Location Managers alike', () => {
+    expect(appCode).toMatch(/canChangeLocation=\{isHR \|\| member\?\.role === 'location_manager'\}/);
+    const form = strip(read('src/screens/employeeFile/EmploymentChangeForm.jsx'));
+    // The destination list is the organisation's locations, not a filtered subset.
+    expect(form).toMatch(/locations\.map\(l => <option key=\{l\.id\} value=\{l\.id\}>/);
+    expect(form).not.toMatch(/authorisedLocationIds/);
+  });
+
+  it('no general ability to update employee_records.location_id was granted', () => {
+    const writes = strip(read('src/lib/employmentEventWrites.js'));
+    expect(writes).not.toMatch(/from\('employee_records'\)/);
+  });
+});
+
+describe('E1.7A — Archive uses the ordinary employee boundary', () => {
+  it('no archive-specific policy or table exists', () => {
+    expect(closureCode).not.toMatch(/archive/i);
+    expect(migrationCode).not.toMatch(/archived_employees/);
+    expect(ORG_SCOPED_TABLES).not.toContain('archived_employees');
+  });
+
+  it('Archive is a filter over the same roster, by effective status', () => {
+    const people = strip(read('src/screens/PeopleScreen.jsx'));
+    expect(people).toMatch(/archived \? !p\.isCurrent : p\.isCurrent/);
+    // One roster builder, one security boundary: a single CALL site (the other
+    // mention is the import), so People and Archive cannot drift apart.
+    expect((people.match(/buildEmployeeRoster\(/g) || []).length).toBe(1);
+  });
+
+  it('an archived employee keeps the same Employee File and UUID', () => {
+    const leaving = ev({ id: 'leave', eventType: 'employment_ended', effectiveDate: '2026-09-01',
+      oldText: null, newText: null });
+    const file = buildEmployeeFile(EMP, {
+      employeeRecords: [employee()], cases: [], employmentEvents: [leaving], now: TODAY,
+    }, { isHR: true });
+    expect(file.employee.id).toBe(EMP);
+    expect(file.isCurrentEmployee).toBe(false);
+  });
+
+  it('archive access follows the EFFECTIVE location, so losing scope loses the file', () => {
+    // The mechanism: employee RLS resolves the effective location, and Archive
+    // adds nothing. Proven live; asserted here as the shape that makes it true.
+    const pol = migrationCode.slice(migrationCode.indexOf('create policy employee_records_select_scoped'));
+    expect(pol.slice(0, pol.indexOf(';'))).toMatch(/effective_employee_location\(id\)/);
+  });
+});
+
+describe('E1.7A — cancelling and editing a pending change', () => {
+  it('the actions are offered only while the change is pending', () => {
+    expect(activityPanel).toMatch(/if \(!entry\.pending \|\| entry\.cancelled\) return null;/);
+  });
+
+  it('cancellation requires a reason and explains itself naturally', () => {
+    expect(activityPanel).toMatch(/Cancel change/);
+    expect(activityPanel).toMatch(/keeps the change in the employee's history but prevents it from taking effect/);
+    // Anchored to the DISABLED prop, not to the string anywhere: `!reason.trim()`
+    // also appears three times in the button's styling, so a bare match survives
+    // the guard being removed from the only place it matters.
+    expect(activityPanel).toMatch(/disabled=\{busy \|\| !reason\.trim\(\)\}/);
+    // No technical cancellation fields are exposed.
+    expect(activityPanel).not.toMatch(/cancelled_at|cancelled_by|cancellation_reason/);
+  });
+
+  it('a cancelled change is shown as Cancelled rather than disappearing', () => {
+    expect(activityPanel).toMatch(/entry\.cancelled \? "Cancelled"/);
+  });
+
+  it('a pending change says it has not happened yet', () => {
+    expect(activityPanel).toMatch(/Takes effect on this date/);
+  });
+
+  it('the handlers carry the version last read, so neither silently overwrites', () => {
+    ['const cancelEmploymentChange', 'const editEmploymentChange'].forEach(fn => {
+      const i = appCode.indexOf(fn);
+      const body = appCode.slice(i, appCode.indexOf('\n  };', i));
+      expect(body, fn).toMatch(/updatedAt: event\.updatedAt/);
+      // A conflict reloads rather than reporting success.
+      expect(body, fn).toMatch(/loadEmploymentEvents\(\)/);
+    });
+  });
+
+  it('cancelling never deletes, and the database refuses reinstatement', () => {
+    const writes = strip(read('src/lib/employmentEventWrites.js'));
+    const i = writes.indexOf('export async function cancelEmploymentEvent');
+    const body = writes.slice(i, writes.indexOf('export async function setDocumentationStatus'));
+    expect(body).not.toMatch(/\.delete\(/);
+    expect(body).toMatch(/cancelled_at/);
+    // FILE-WIDE, not just this function: a delete helper added anywhere else in
+    // the module would be just as destructive, and the database has no DELETE
+    // policy to stop the attempt being written.
+    expect(writes).not.toMatch(/\.delete\(/);
+    expect(appCode).not.toMatch(/from\('employee_employment_events'\)[\s\S]{0,80}\.delete\(/);
+    expect(migrationCode).not.toMatch(/create policy employment_events_delete/);
+    const guard = migrationCode.slice(migrationCode.indexOf('function public.employment_event_guard'));
+    expect(guard.slice(0, guard.indexOf('$$;'))).toMatch(/old\.cancelled_at is not null and new\.cancelled_at is null/);
+  });
+
+  it('a cancelled future change never becomes effective', () => {
+    const cancelled = ev({ effectiveDate: '2026-01-01', cancelledAt: '2026-01-02T00:00:00.000Z' });
+    expect(isEffective(cancelled, TODAY)).toBe(false);
+    expect(resolveEffectiveEmployee(employee(), [cancelled], TODAY).jobTitle).toBe('Team Member');
+    // But it is still in the history.
+    const [entry] = buildEmploymentEventEntries([cancelled], { today: TODAY });
+    expect(entry.cancelled).toBe(true);
+  });
+
+  it('an effective change offers no edit or cancel, by the same one-line rule', () => {
+    const effective = ev({ effectiveDate: '2026-01-01' });
+    const [entry] = buildEmploymentEventEntries([effective], { today: TODAY });
+    expect(entry.pending).toBe(false);
+    // The component returns null for anything not pending.
+    expect(activityPanel).toMatch(/if \(!entry\.pending \|\| entry\.cancelled\) return null;/);
+  });
+
+  it('DSAR keeps a cancelled event — history is not removed by cancelling it', () => {
+    const cancelled = ev({ effectiveDate: '2026-01-01', cancelledAt: '2026-01-02T00:00:00.000Z' });
+    const out = compileSubjectData('John Smith', {
+      canonicalEmployeeId: EMP,
+      employeeRecords: [{ id: EMP, name: 'John Smith' }],
+      cases: [], employmentEvents: [cancelled],
+    });
+    expect(out.employmentEvents.map(e => e.id)).toEqual(['ev-1']);
+  });
+});

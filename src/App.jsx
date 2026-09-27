@@ -57,7 +57,8 @@ import { setEmployeeLocationWrite, describeLocationOutcome } from './lib/employe
 import { createEmployeeActivity, addActivityRecord as addActivityRecordWrite, resolveManagementConcern,
          describeActivityOutcome, mapActivityRow, mapActivityRecordRow, ACTIVITY_RESULT } from './lib/employeeActivityWrites';
 import { usesConcernLifecycle } from './lib/employeeActivities';
-import { recordEmploymentEvent, markEmployeeAsLeaver, describeEventOutcome, EVENT_RESULT } from './lib/employmentEventWrites';
+import { recordEmploymentEvent, markEmployeeAsLeaver, cancelEmploymentEvent, correctEmploymentEvent,
+         describeEventOutcome, EVENT_RESULT } from './lib/employmentEventWrites';
 import { mapEmploymentEventRow, resolveEffectiveEmployee, EMPLOYMENT_EVENT_TYPES } from './lib/employmentEvents';
 import { buildEscalationContext } from './lib/escalation';
 import { EscalateToHrModal } from './screens/EscalateToHrModal';
@@ -690,6 +691,53 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       showToast(input.effectiveDate > new Date().toISOString().slice(0,10)
         ? "Recorded. It takes effect on the date you set."
         : "Employment change recorded.");
+      return true;
+    } finally { setEmploymentBusy(false); }
+  };
+
+  // Phase E1.7A — cancel or correct a change that has not yet taken effect.
+  //
+  // Both are refused by the database once the event is effective, so there is no
+  // client-side date check to get wrong: the UI only offers them for a pending
+  // change, and the database is what guarantees it.
+  const cancelEmploymentChange = async (eventId, reason) => {
+    const event = employmentEvents.find(e => e.id === eventId);
+    if(!event || !currentUser?.user_id) return false;
+    setEmploymentBusy(true);
+    try {
+      const outcome = await cancelEmploymentEvent({
+        supabase, eventId, updatedAt: event.updatedAt,
+        cancelledBy: currentUser.user_id, reason,
+      });
+      if(outcome.result !== EVENT_RESULT.OK) {
+        const { tone, message } = describeEventOutcome(outcome);
+        showToast(message, tone);
+        await loadEmploymentEvents();
+        return false;
+      }
+      await loadEmploymentEvents();
+      showToast("Cancelled. It stays in the employee's history but will not take effect.");
+      return true;
+    } finally { setEmploymentBusy(false); }
+  };
+
+  const editEmploymentChange = async (eventId, input) => {
+    const event = employmentEvents.find(e => e.id === eventId);
+    if(!event) return false;
+    setEmploymentBusy(true);
+    try {
+      const outcome = await correctEmploymentEvent({
+        supabase, eventId, updatedAt: event.updatedAt,
+        patch: { effective_date: input.effectiveDate },
+      });
+      if(outcome.result !== EVENT_RESULT.OK) {
+        const { tone, message } = describeEventOutcome(outcome);
+        showToast(message, tone);
+        await loadEmploymentEvents();
+        return false;
+      }
+      await loadEmploymentEvents();
+      showToast("Updated.");
       return true;
     } finally { setEmploymentBusy(false); }
   };
@@ -11499,8 +11547,15 @@ Please produce:
           employmentEvents={employmentEvents}
           onRecordEmploymentChange={recordEmploymentChange}
           onMarkAsLeaver={markAsLeaver}
-          canChangeLocation={isHR}
+          // Phase E1.7A — HR and Location Managers may both record a transfer.
+          // Authority comes from current authority over the EMPLOYEE, so the
+          // destination list is every canonical location in the organisation,
+          // not just the actor's own. RLS and the composite FK remain
+          // authoritative; this only decides what the form offers.
+          canChangeLocation={isHR || member?.role === 'location_manager'}
           employmentBusy={employmentBusy}
+          onCancelEmploymentChange={cancelEmploymentChange}
+          onEditEmploymentChange={editEmploymentChange}
           cases={cases}
           wellbeingNotes={wellbeingNotes}
           concernReferrals={concernReferrals}

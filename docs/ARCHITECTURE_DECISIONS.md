@@ -624,7 +624,8 @@ programme.**
 
 ## AD-006 — Employment Events, leavers and Archive
 
-**Status:** **implemented** in phase E1.7 (2026-09-27).
+**Status:** **implemented** in phase E1.7 (2026-09-27); the two decisions it left
+open closed in **E1.7A** (2026-09-27).
 
 ### A peer domain
 
@@ -670,17 +671,47 @@ Consequences, verified against production:
 Cancelled and future events are excluded by construction, not by a caller
 remembering to filter.
 
-### Location Manager transfers — DECISION REQUIRED, not guessed
+### Location Manager transfers — DECIDED in E1.7A
 
-A Location Manager may record every employment change **except a location
-transfer**, which is HR-only, enforced in the INSERT policy.
+**Authority comes from current authority over the EMPLOYEE, never from authority
+over the destination.** A Location Manager may record a location transfer for an
+employee they currently manage, to **any** canonical location in the same
+organisation — including one they have no authority over. A Manchester manager may
+send their own employee to Birmingham. What they may not do is reach into
+Birmingham, or move an employee they do not manage.
 
-E1.5/AD-003 deferred "may a Location Manager move an employee, and to which
-locations" to this phase without deciding it. Rather than guess, the fail-closed
-behaviour ships: no Location Manager can enlarge or manipulate their own scope
-through a transfer. **The open question is whether they may target any same-org
-location, or only one they are independently authorised for.** Until answered,
-HR-only stands.
+E1.5/AD-003 deferred this and E1.7 shipped HR-only rather than guess. E1.7A decided
+it and replaced the HR-only clause in the INSERT and UPDATE policies with
+`is_hr_in_org(org_id) OR is_location_manager_for(org_id,
+effective_employee_location(employee_id))`. Nothing in that predicate consults the
+destination against the actor's own scope, and nothing needed adding to make it
+safe — the existing `exists (employee_records …)` clause already resolves through
+the effective location, the composite FK on `(new_location_id, org_id)` already
+makes a cross-organisation destination unstorable, and no transfer writes
+`employee_records`. The form offers every same-org location to HR and Location
+Managers alike; the destination rule is the database's, not the form's.
+
+**Lifecycle operator, not merely a reader.** That same clause closed a defect E1.7
+carried: its HR-only test applied *only* to `location_changed`, so every other
+event type was open to any role that could see the employee — including `auditor`,
+whose own definition is read-only, and `line_manager`, which no approved decision
+names as a lifecycle operator. Both were verified able to create employment events
+before the change. Literally deleting the HR-only clause would have widened that to
+transfers. Replacing it narrows those two roles instead. **Whether a Line Manager
+should be a lifecycle operator remains an open product question**, reported rather
+than answered.
+
+### Authorship is not an access path
+
+Access is resolved from the employee's effective location and nothing else.
+`recorded_by` appears in the INSERT check — so an event cannot be attributed to
+another user — and in **no `USING` clause anywhere**. The manager who records a
+transfer out of their own scope therefore loses the employee *and the event they
+themselves wrote* the moment it takes effect. Verified live in both directions.
+
+This is the rule that stops "former manager keeps access forever" being built by
+accident, and it is why event SELECT was left inheriting the employee predicate
+rather than gaining an author exception.
 
 ### Correction is not a change
 
@@ -720,10 +751,25 @@ Archive is a **view** over `employee_records` filtered by effective employment
 state. There is no `archived_employees` table and no second employee store. No
 manager opening a record triggers the move, and no cron performs it.
 
-**Archived Employee File access** follows the unchanged employee predicate: a
-leaving event does not change location, so a Location Manager retains access to a
-former employee at their location. That is the existing behaviour rather than a new
-entitlement — revoking it would be an invention. **Flagged as a product decision.**
+**Archived Employee File access** — decided in E1.7A — is the **normal effective
+employee access boundary, with no archive-specific rule of any kind.** Archive
+needs no policy because it is not a place: a Location Manager sees an archived
+former employee only while that employee's effective location is still within their
+*current* scope, and loses them if that scope is removed. There is no
+former-manager ownership, no permanent retention by authorship or history, and no
+archive-specific RLS. A separate archive rule is exactly how "former manager keeps
+access forever" gets built by accident, so none exists.
+
+### Cancelling a pending change
+
+Cancellation existed in the database from E1.7 and was exposed in E1.7A. On a
+**pending** change only, the Activity panel offers "Cancel change" — which requires
+a reason — and "Edit future change", which moves the effective date. An already
+effective change offers neither, by the same one-line rule that governs the badge.
+The copy says what cancelling does: it keeps the change in the employee's history
+but prevents it taking effect. A cancelled change stays visible, labelled
+*Cancelled*, and stays in DSAR. Both handlers carry the version last read, so
+neither silently overwrites a concurrent edit.
 
 ### History is corrected or cancelled, never deleted
 
