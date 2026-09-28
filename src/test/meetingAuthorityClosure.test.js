@@ -249,8 +249,11 @@ describe('E2A — what of a meeting is disclosed', () => {
   });
 
   it('reports what it withheld rather than withholding silently', () => {
+    // Wave 0 renamed this to the one vocabulary both meeting formats share —
+    // `record.hrAdvisorNotes` means the same thing whether the meeting is a row
+    // in public.meetings or a jsonb entry inside a case.
     expect(disclosed.withheldAsInternalAnalysis.sort())
-      .toEqual(['advisorNotes', 'record.internalAnalysis', 'reviewDraft', 'risk']);
+      .toEqual(['advisorNotes', 'record.hrAdvisorNotes', 'reviewDraft', 'risk']);
     expect(out.standaloneMeetingsDisposition.internalAnalysisWithheld)
       .toEqual([{ meetingId: 'm', withheld: disclosed.withheldAsInternalAnalysis }]);
     // And the reviewer is told, because a silent redaction is a decision nobody

@@ -1066,6 +1066,54 @@ to them. The split reuses `splitMeetingRecord`, the boundary the signature path
 already draws. Withheld items are **reported per meeting**, so the classification
 is a visible decision a DPO can overrule rather than a silent omission.
 
+### DSAR response packages are disclosure projections (Wave 0, 2026-09-28)
+
+**A subject access response is an intentional disclosure projection, not a
+serialisation of Compass's internal application object.**
+
+Before Wave 0, `casesForExport` was `{ ...case }` with evidence `dataUrl`s
+removed, and the compiled object was written straight to the JSON file HR
+downloads and sends to the employee. Measured against production: **378 of 890**
+historical meeting records carried a `## HR Advisor Notes` section, **887**
+carried `prediction`, **52** `riskScore`, **321** `unresolvedSuggestions`. All of
+it was disclosable in one click.
+
+**Allow-list, never deny-list.** A deny-list discloses every field nobody has
+thought about yet, so the next internal field added to a case appears in the next
+DSAR download by accident. `lib/dsarCaseDisclosure.js` names what may be
+disclosed; anything unrecognised is withheld **and reported**, so a new field
+surfaces in the reviewer's list rather than in the employee's package.
+
+**One boundary across both meeting formats.** Canonical `public.meetings` rows
+(E2A) and historical `cases.meetings` jsonb entries share one internal-field
+vocabulary and one record splitter, and the withheld reason is named identically
+(`record.hrAdvisorNotes`) in both. The same content must not be disclosable
+merely because of which store it happens to live in.
+
+**Disclosed:** the employee-facing part of the record, the transcript, the
+summary, the document actually sent for signature, the outcome and warning
+details, their own appeal words, role-holder names, meeting and case dates, and
+evidence metadata. **Withheld:** HR advisory notes, the internal half of a
+record, generated `prediction` and `riskScore`, unfinished review drafts,
+Compass's own suggestions, internal triage and workflow flags, and third-party
+contact details and internal ids.
+
+**The arguable middle goes to a human.** HR's private reasoning
+(`outcomeNotes`), an investigation report held on the case, and a drafted letter
+with no record of being approved, signed or sent are **flagged, not decided**.
+Silently withholding is as wrong as silently disclosing: both take the decision
+away from the person answerable for it. A letter is treated as *issued* only
+where the product's own provenance says so — `caseTimeline` labels a bare
+`letterOutput` "Letter drafted", and `letterTracking` is populated only once one
+is sent.
+
+**Compass claims no legal authority.** It does not determine what the law
+requires. It separates plainly-internal material from the employee's own record
+and reports every withholding, and final disclosure remains a human decision.
+
+**Read-only.** The projection mutates no source data, and Wave 0 required no
+migration and no RLS change — E2A's authorised retrieval boundary is unchanged.
+
 ### Organisation-level compatibility is retained
 
 `employee_id` is nullable, so AD-001's future whistleblowing, redundancy and

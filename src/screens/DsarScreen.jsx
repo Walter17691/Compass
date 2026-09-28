@@ -204,6 +204,48 @@ function RequestDetail({ req, cases, employeeRecords, employeeActivities = [], e
               Two situations still need saying out loud, and they are different
               facts: the read FAILED (so completeness is unknown), or Compass
               deliberately WITHHELD internal analysis. */}
+          {/* ── Wave 0 — what was held back from the CASES, and why ──────────
+              Historical formal meetings ARE included. Compass's own analysis of
+              the employee is not. Said plainly, because a redaction nobody can
+              see is a decision nobody made — and the decision is the reviewer's,
+              not Compass's. Deliberately NOT phrased as what the law requires. */}
+          {compiled.caseDisclosure?.internalFieldsWithheld?.length>0&&(
+            <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
+              <WarningIcon size={14} color="#6B6375" style={{flexShrink:0,marginTop:1}}/>
+              <div style={{fontSize:12,color:"#6B6375",lineHeight:1.6}}>
+                <strong>Compass's own analysis has been held back from this package.</strong>{" "}
+                Meeting records, notes taken, signed documents and outcomes are included.
+                HR advisory notes, generated risk ratings and unfinished drafts are not
+                {compiled.caseDisclosure.meetingsWithWithheldContent>0
+                  ? ` (${compiled.caseDisclosure.meetingsWithWithheldContent} meeting${compiled.caseDisclosure.meetingsWithWithheldContent===1?"":"s"} affected)`
+                  : ""}. Check this is right for this request before you respond.
+              </div>
+            </div>
+          )}
+          {compiled.caseDisclosure?.reviewRequired?.length>0&&(
+            <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FEF5E7",border:"1px solid #F5E6C4",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
+              <WarningIcon size={14} color="#B87520" style={{flexShrink:0,marginTop:1}}/>
+              <div style={{fontSize:12,color:"#7A5C1A",lineHeight:1.6}}>
+                <strong>{compiled.caseDisclosure.reviewRequired.length} item{compiled.caseDisclosure.reviewRequired.length===1?"":"s"} need{compiled.caseDisclosure.reviewRequired.length===1?"s":""} your decision.</strong>{" "}
+                Compass has not included {compiled.caseDisclosure.reviewRequired.length===1?"it":"them"} either way:
+                <ul style={{margin:"4px 0 0",paddingLeft:16}}>
+                  {compiled.caseDisclosure.reviewRequired.slice(0,4).map((r,i)=>(
+                    <li key={i}>{r.reason}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+          {compiled.caseDisclosure?.unrecognisedFieldsWithheld?.length>0&&(
+            <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FEF5E7",border:"1px solid #F5E6C4",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
+              <WarningIcon size={14} color="#B87520" style={{flexShrink:0,marginTop:1}}/>
+              <div style={{fontSize:12,color:"#7A5C1A",lineHeight:1.6}}>
+                <strong>Compass found information it does not recognise and has left it out.</strong>{" "}
+                This usually means Compass has been updated and this screen has not. Ask for it to be
+                reviewed before you treat this package as complete.
+              </div>
+            </div>
+          )}
           {compiled.standaloneMeetingsDisposition?.readFailed&&(
             <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FEF5E7",border:"1px solid #F5E6C4",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
               <WarningIcon size={14} color="#B87520" style={{flexShrink:0,marginTop:1}}/>

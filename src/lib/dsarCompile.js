@@ -1,6 +1,7 @@
 import { classifyIdentityByName, IDENTITY } from './employeeRecords.js';
 import { MEETING_SUBJECT_KIND } from './standaloneMeetings.js';
 import { splitMeetingRecord } from './meetingRecordSections.js';
+import { disclosableCase, summariseCaseDisclosure, MEETING_WITHHELD_INTERNAL } from './dsarCaseDisclosure.js';
 // Compiles everything Compass holds about one named individual, for a UK
 // GDPR/DPA 2018 Subject Access Request. Pure/client-side — the data is
 // already loaded into the app, so this needs no new API route.
@@ -214,11 +215,18 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
   // an exemption does not apply.
   const classifyMeetingForDisclosure = m => {
     const { employeeFacing, internal } = splitMeetingRecord(m?.record || "");
+    // Wave 0 — the SAME vocabulary the historical jsonb transformer uses, so a
+    // field is internal because of what it is, not because of which store it is
+    // in. `record.hrAdvisorNotes` is named identically in both.
     const withheld = [];
-    if (internal) withheld.push('record.internalAnalysis');
-    if (m?.advisorNotes) withheld.push('advisorNotes');
-    if (m?.reviewDraft) withheld.push('reviewDraft');
-    if (m?.risk) withheld.push('risk');
+    if (internal) withheld.push('record.hrAdvisorNotes');
+    MEETING_WITHHELD_INTERNAL.forEach(k => {
+      const v = m?.[k];
+      const empty = v === undefined || v === null || v === ''
+        || (Array.isArray(v) && v.length === 0)
+        || (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0);
+      if (!empty && !withheld.includes(k)) withheld.push(k);
+    });
     return {
       id: m?.id, meetingTypeId: m?.meetingTypeId ?? null, status: m?.status ?? null,
       subjectKind: m?.subjectKind ?? null, employeeId: m?.employeeId ?? null,
@@ -532,7 +540,19 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
       evidenceRequiringReview.push({ caseId: c.id, name: ev.name, type: ev.type, date: ev.date, size: ev.size });
     });
   });
-  const casesForExport = subjectCases.map(c => ({ ...c, evidence: (c.evidence || []).map(({ dataUrl, ...meta }) => meta) }));
+  // ── WAVE 0 — an intentional disclosure projection, not `{ ...case }` ─────
+  //
+  // This line used to be a spread with evidence dataUrls removed, which meant the
+  // downloaded package carried whatever the case object happened to hold —
+  // including, for 378 of 890 historical meetings, the "## HR Advisor Notes"
+  // section of the record, plus `prediction` (887), `riskScore` (52),
+  // `unresolvedSuggestions` (321) and `reviewDraft`.
+  //
+  // Now every disclosed field is named. Anything unrecognised is withheld AND
+  // reported, so the next internal field added to a case cannot appear in the next
+  // DSAR download by default.
+  const casesForExport = subjectCases.map(disclosableCase).filter(Boolean);
+  const caseDisclosure = summariseCaseDisclosure(casesForExport);
 
   return {
     employeeName,
@@ -645,6 +665,10 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
     unreconciledSameNameCount: unreconciledSameNameCases.length,
     otherEmployeeSameNameCount,
     cases: casesForExport,
+    // What was held back from the CASES above, what needs a human decision, and
+    // what Compass did not recognise. Reported rather than silent: a redaction
+    // nobody can see is a decision nobody made.
+    caseDisclosure,
     // Phase 4C.1 — a top-level category, not folded into `cases`, because these
     // meetings genuinely have no case and presenting them under one would
     // misrepresent the record to both the subject and the reviewer.
