@@ -75,7 +75,11 @@ function run(ctx, rows, calls, shape) {
   return { data: matched.map(r => ({ ...r })), error: null };
 }
 
-const START = { orgId: 'org-a', createdBy: 'user-1', meetingTypeId: 'informal', employeeName: 'Dana Keys', startedAt: 'T_START' };
+// E2 — every standalone meeting now states whose it is. employeeName stays as
+// the display snapshot it always was; employeeId is what identifies Dana.
+const START = { orgId: 'org-a', createdBy: 'user-1', meetingTypeId: 'informal',
+  subjectKind: 'employee', employeeId: 'emp-dana',
+  employeeName: 'Dana Keys', startedAt: 'T_START' };
 
 // ═══════════════════════════════════════════════════════════════════════════
 describe('A. the hard storage boundary', () => {

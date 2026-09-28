@@ -87,6 +87,7 @@ import { persistMeeting, transitionMeeting, stampNewMeeting, describeMeetingWrit
 import { MEETING_STATUS, declaredStatus } from './lib/meetingLifecycle';
 import { caseForPersistence, isTableResident } from './lib/meetingStore';
 import { isStandaloneEligible, TABLE_HOME } from './lib/standaloneMeetings';
+import { MEETING_SUBJECT_KIND } from './lib/standaloneMeetings';
 import { startStandaloneMeeting, endStandaloneMeeting, persistStandaloneReviewDraft, persistStandaloneTranscript, fetchStandaloneMeeting, describeStandaloneFailure, STANDALONE_FAILURE } from './lib/standaloneMeetingWrites';
 import { buildReviewDraft, restorableDraft, markDraftEdited, supersedeReviewDraft } from './lib/reviewDraft';
 import { splitMeetingRecord } from './lib/meetingRecordSections';
@@ -1386,7 +1387,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [onboardStep, setOnboardStep] = useState(0);
   const [showOnboard, setShowOnboard] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
-  const [meetingSetup, setMeetingSetup] = useState({employee:"", employeeJobTitle:"", manager:"", chairJobTitle:"", type:"", date:toISODateLocal(new Date()), time:"", locationOrMethod:"", linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
+  const [meetingSetup, setMeetingSetup] = useState({employee:"", employeeId:null, employeeJobTitle:"", manager:"", chairJobTitle:"", type:"", date:toISODateLocal(new Date()), time:"", locationOrMethod:"", linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
   const [liveChatInput, setLiveChatInput] = useState("");
   const [editInstruction, setEditInstruction] = useState("");
   const [shareEmail, setShareEmail] = useState("");
@@ -4980,8 +4981,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       showToast("Select which employee this concern is about before starting the conversation.", "error");
       return;
     }
-    setMeetingSetup(p=>({...p, employee:referral.employeeName, employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"", type:"informal", date:toISODateLocal(new Date()), time:"", locationOrMethod:"", linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]}));
-    setCaseInfo(p=>({...p, employee:referral.employeeName, employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"",
+    setMeetingSetup(p=>({...p, employee:referral.employeeName, employeeId:referral.employeeId||null, employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"", type:"informal", date:toISODateLocal(new Date()), time:"", locationOrMethod:"", linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]}));
+    setCaseInfo(p=>({...p, employee:referral.employeeName, employeeId:referral.employeeId||null, employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"",
       context: [referral.aiSummary, referral.description].filter(Boolean).join("\n\n"),
       _linkedCaseId:null, _linkedCaseName:null, _linkedReferralId:referral.id, _linkedReferralName:referral.employeeName,
       _linkedReferralEmployeeId:employeeId}));
@@ -7300,7 +7301,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // startStandaloneMeeting reports as success with the STORED row. That is what
   // stops a second attempt from restamping started_at.
   const pendingStandaloneRef = useRef(null);
-  const beginStandaloneMeeting = async ({ type, manager, attendees, employee, email }) => {
+  const beginStandaloneMeeting = async ({ type, manager, attendees, employee, email, employeeId, linkedCaseId }) => {
     if(!org?.id || !user?.id) {
       showToast(describeStandaloneFailure(STANDALONE_FAILURE.ORG_REQUIRED), "error");
       return { ok: false, reason: STANDALONE_FAILURE.ORG_REQUIRED };
@@ -7310,12 +7311,38 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       : { id: newId("meeting"), startedAt: startInstant() };
     pendingStandaloneRef.current = attempt;
 
+    // ── E2: canonical parentage, decided HERE and only here.
+    //
+    // A meeting reached with a case already in mind is a WITNESS INTERVIEW: the
+    // "+ Witness interview" entry points set _linkedCaseId without setting
+    // caseId, which is why this standalone path is the one that creates it. The
+    // process owns that meeting, so it carries NO employee_id — the only person
+    // named on it is the witness, and naming them as the subject is precisely how
+    // a witness ends up with someone else's investigation in their own file.
+    //
+    // Anything else is an employee's own meeting and needs the employee.
+    const isWitnessInterview = !!linkedCaseId;
+    const subjectKind = isWitnessInterview
+      ? MEETING_SUBJECT_KIND.PROCESS_WITNESS
+      : MEETING_SUBJECT_KIND.EMPLOYEE;
+    if (!isWitnessInterview && !employeeId) {
+      // Fails closed rather than writing a meeting nobody owns. The UI already
+      // disables Start without a selection; this is the second door.
+      showToast(describeStandaloneFailure(STANDALONE_FAILURE.EMPLOYEE_REQUIRED), "error");
+      return { ok: false, reason: STANDALONE_FAILURE.EMPLOYEE_REQUIRED };
+    }
+
     const result = await startStandaloneMeeting(supabase, {
       id: attempt.id,
       orgId: org.id,
       createdBy: user.id,
       // The stable registry id, never the display label.
       meetingTypeId: type?.id,
+      subjectKind,
+      employeeId: isWitnessInterview ? null : employeeId,
+      // A witness may be external, so this is a bounded name and never an
+      // employee record Compass invented to hold it.
+      witness: isWitnessInterview ? { name: (employee || "").trim() } : null,
       employeeName: employee || "",
       employeeEmail: email || "",
       manager: manager || "",
@@ -7374,7 +7401,11 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       if(isStandaloneEligible(type?.id)) {
         return beginStandaloneMeeting({ type, manager, attendees,
           employee: ctx.employee !== undefined ? ctx.employee : caseInfo.employee,
-          email: ctx.email !== undefined ? ctx.email : caseInfo.email });
+          email: ctx.email !== undefined ? ctx.email : caseInfo.email,
+          // E2 — read from ctx first for the same reason every other field is:
+          // HomeMeetingScreen's commit has only just called setCaseInfo.
+          employeeId: ctx.employeeId !== undefined ? ctx.employeeId : caseInfo.employeeId,
+          linkedCaseId: ctx._linkedCaseId !== undefined ? ctx._linkedCaseId : caseInfo._linkedCaseId });
       }
       // Every other type: unchanged. A hearing or an appeal still has no
       // business existing without the process it belongs to.
@@ -11404,7 +11435,7 @@ Please produce:
           // "New case" from CreateMenu's popover entirely for them.
           onNewCase: member?.case_access_level === 3 ? undefined : () => setShowCasePrompt(true),
           onNewMeeting: () => {
-            setMeetingSetup({employee:"", employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"", type:"", date:toISODateLocal(new Date()), time:"", locationOrMethod:"", linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
+            setMeetingSetup({employee:"", employeeId:null, employeeJobTitle:"", manager:currentUser?.name||"", chairJobTitle:"", type:"", date:toISODateLocal(new Date()), time:"", locationOrMethod:"", linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
             setScreen(SCREENS.HOME+"_meeting");
           },
           onRaiseConcern: () => { setConcernFormAutoOpen(true); setScreen(SCREENS.CONCERNS); },
@@ -11417,7 +11448,7 @@ Please produce:
           onStartCaseMeeting: () => {
             const cs = cases.find(c=>c.id===activeCaseId);
             if(!cs) return;
-            setMeetingSetup({employee:cs.employeeName, employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"", manager:cs.manager||"", chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"", type:"", date:toISODateLocal(new Date()), time:"", locationOrMethod:"", linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
+            setMeetingSetup({employee:cs.employeeName, employeeId:cs.employeeId||null, employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"", manager:cs.manager||"", chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"", type:"", date:toISODateLocal(new Date()), time:"", locationOrMethod:"", linkedCaseId:null, linkedCaseName:null, representative:"", representativeRole:"colleague", participants:[]});
             setScreen(SCREENS.HOME+"_meeting");
           },
         }}
@@ -11516,7 +11547,7 @@ Please produce:
 
       {/* ══ HOME MEETING SETUP ══ */}
       {screen===SCREENS.HOME+"_meeting"&&(
-        <HomeMeetingScreen beginMeeting={beginMeeting} scheduleCaseMeeting={scheduleCaseMeeting} meetingSetup={meetingSetup} setMeetingSetup={setMeetingSetup} orgMembers={orgMembers} getEmployeeRecord={getEmployeeRecord} cases={cases} getCaseStage={getCaseStage} activeCaseId={activeCaseId} setActiveCaseId={setActiveCaseId} needsInvitation={needsInvitation} setCaseInfo={setCaseInfo} setMeetingType={setMeetingType} setPendingLetterType={setPendingLetterType} setShowLetterModal={setShowLetterModal} setScreen={setScreen} setTranscript={setTranscript} setPrepNotes={setPrepNotes} setPrepQuestions={setPrepQuestions} setMeetingEvidenceSuggestions={setMeetingEvidenceSuggestions} setMeetingActionSuggestions={setMeetingActionSuggestions} setReviewOutput={setReviewOutput} setReviewOutputOriginal={setReviewOutputOriginal} setMeetingSummary={setMeetingSummary} setLetterOutput={setLetterOutput} setRiskScore={setRiskScore} setLiveChatHistory={setLiveChatHistory} setParticipants={setParticipants} setDismissedCoachingTipKeys={setDismissedCoachingTipKeys} fmtDate={fmtDate} startSession={startSession} />
+        <HomeMeetingScreen beginMeeting={beginMeeting} scheduleCaseMeeting={scheduleCaseMeeting} meetingSetup={meetingSetup} setMeetingSetup={setMeetingSetup} orgMembers={orgMembers} employeeRecords={employeeRecords} cases={cases} getCaseStage={getCaseStage} activeCaseId={activeCaseId} setActiveCaseId={setActiveCaseId} needsInvitation={needsInvitation} setCaseInfo={setCaseInfo} setMeetingType={setMeetingType} setPendingLetterType={setPendingLetterType} setShowLetterModal={setShowLetterModal} setScreen={setScreen} setTranscript={setTranscript} setPrepNotes={setPrepNotes} setPrepQuestions={setPrepQuestions} setMeetingEvidenceSuggestions={setMeetingEvidenceSuggestions} setMeetingActionSuggestions={setMeetingActionSuggestions} setReviewOutput={setReviewOutput} setReviewOutputOriginal={setReviewOutputOriginal} setMeetingSummary={setMeetingSummary} setLetterOutput={setLetterOutput} setRiskScore={setRiskScore} setLiveChatHistory={setLiveChatHistory} setParticipants={setParticipants} setDismissedCoachingTipKeys={setDismissedCoachingTipKeys} fmtDate={fmtDate} startSession={startSession} />
       )}
 
             {screen===SCREENS.PEOPLE&&(

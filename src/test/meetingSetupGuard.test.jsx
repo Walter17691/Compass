@@ -177,13 +177,16 @@ describe('9/10. the Phase 2.1 backstop is untouched', () => {
 
 // ── rendered screen ──
 const noop = () => {};
-const baseSetup = { employee: 'Sam Patel', type: '', date: '', time: '', participants: [] };
+// E2 — Sam is now identified by id, not by the name in the box. These tests are
+// about the CASE-REQUIREMENT guard, so parentage is satisfied here and the
+// parentage rules themselves are proven in canonicalMeetingParentage.test.js.
+const baseSetup = { employee: 'Sam Patel', employeeId: 'emp-sam', type: '', date: '', time: '', participants: [] };
 const renderHome = (setup = {}, over = {}) => {
   const setScreen = vi.fn();
   const utils = render(<HomeMeetingScreen
     beginMeeting={vi.fn()} scheduleCaseMeeting={vi.fn()}
     meetingSetup={{ ...baseSetup, ...setup }} setMeetingSetup={noop}
-    orgMembers={[]} getEmployeeRecord={() => null} cases={[]} getCaseStage={() => 'open'}
+    orgMembers={[]} employeeRecords={[{ id: 'emp-sam', name: 'Sam Patel' }]} cases={[]} getCaseStage={() => 'open'}
     activeCaseId={over.activeCaseId ?? null} setActiveCaseId={noop}
     needsInvitation={() => false} setCaseInfo={noop} setMeetingType={noop}
     setPendingLetterType={noop} setShowLetterModal={noop} setScreen={setScreen}

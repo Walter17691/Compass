@@ -836,3 +836,143 @@ The `appeal` **stage** of a misconduct process is not the same thing as a case
 typed `appeal`. The validated progression
 `investigation → disciplinary → appeal → closure` inside one misconduct case is
 unaffected by anything above.
+
+---
+
+## AD-007 — Canonical meeting parentage
+
+**Status:** **implemented** in phase E2 (2026-09-28), for the table-resident
+meeting domain. The jsonb formal-meeting domain is explicitly out of scope and
+the reason is recorded below.
+
+### There are no loose employee meetings
+
+A meeting recorded in `public.meetings` must say whose it is. Parentage is
+**typed**, not nullable-and-hopeful:
+
+| `subject_kind` | `employee_id` | Who owns the meeting |
+|---|---|---|
+| `employee` | **required** | that employee's own Employee File |
+| `process_witness` | **must be NULL** | the formal process it belongs to |
+| `legacy_unreconciled` | NULL | nobody — preserved pre-E2 rows only |
+
+The column DEFAULT is `legacy_unreconciled` and the INSERT policy forbids it, so
+a write that forgets to state its parentage is **refused** rather than becoming a
+loose meeting. That is the fail-closed direction on purpose.
+
+### The defect this closed
+
+`meetings.employee_name` meant **two different people**. HomeMeetingScreen
+labelled one input "Employee name" normally and "Witness name" when a case was
+linked, and both answers went to the same column — so a witness interview stored
+the *witness* as its employee. DSAR then matched standalone meetings by that
+name, because "a standalone meeting has no case to inherit the subject from", and
+returned another employee's investigation as part of the **witness's** own
+personal data.
+
+Adding a nullable `employee_id` populated from that field would have made the
+defect structural. Hence `subject_kind`.
+
+### Participation is not ownership
+
+Three concepts, kept apart by constraints rather than convention:
+
+- **subject** — whose employment history this is (`employee_id`);
+- **participant** — who was in the room (`witness`, `participants`);
+- **Employee File ownership** — `employee_id`, and nothing else.
+
+A `process_witness` row's `employee_id` is NULL **by CHECK**, so no projection
+keyed on an employee can ever reach it. A witness interview therefore cannot
+appear on the witness's Employee File — structurally, not as a display rule.
+`witness` may carry an internal `employeeId` for reference and that still confers
+nothing.
+
+**An external witness needs no employee record.** No fake employee is created to
+satisfy a foreign key, and a witness never appears in People.
+
+### employeeSnapshot and employee_name are not identity
+
+`employee_name` remains a display snapshot for letters and headings. Identity is
+a uuid. `HomeMeetingScreen` now uses the canonical `EmployeeSelect`, which
+returns a uuid and selects nothing on typing alone; its free-text input and its
+`datalist` of case-subject names are gone.
+
+The last name-equality read in an active screen — "previous meetings with this
+employee", matched on `cases.employeeName === the typed name` and recorded at
+E0.7 as waiting for this phase — is replaced by an `employee_id` match with **no
+name fallback**. Until historical cases are reconciled that panel is empty, which
+is correct: a list of someone else's meetings is worse than no list.
+
+### Access follows the parent, and authorship is not a parent
+
+- `case_id IS NOT NULL` → **case access**, through an RLS-filtered `EXISTS` on
+  `cases`. Deliberately unchanged, so formal-process confidentiality is not
+  weakened by this phase.
+- `case_id IS NULL`, `subject_kind = 'employee'` → **bounded by Employee File
+  access**, and additionally HR, creator, chair, or a Location Manager authorised
+  for that employee.
+- `case_id IS NULL`, `subject_kind = 'process_witness'` → stays with HR, creator
+  or chair until it is linked. It must never fall back to an employee boundary,
+  because the only employee identity it holds is the witness's.
+
+Before E2 a non-case meeting was visible to HR, its creator or its chair, and the
+employee was never consulted — so a creator kept access forever regardless of
+whether they could still open that employee's file. The employee bound removes
+that, the same way E1.7A removed it for employment events (AD-006). An Auditor
+gains nothing it did not already have; widening read access to a new role was not
+part of this decision.
+
+Access reads the **effective** employee location (AD-006), so a pending transfer
+does not move meeting access early.
+
+### Parentage immutability
+
+`subject_kind` can never change — it is a category, and changing it would strip
+an Employee File of its history or graft one on. `employee_id` may only change
+while `status = 'scheduled'`; once a meeting has begun, reparenting it would
+rewrite whose employment history a real conversation belongs to. The patch
+allow-list also omits both fields, so no patch can express the change at all.
+
+A subject meeting cannot be linked to a case about a different employee. That
+check is dormant while every case is unreconciled and correct the moment one
+is not. It is deliberately **not** applied to witness meetings, and that
+exception is stated once, in the guard, rather than left as a loophole.
+
+### What E2 did NOT do, and why
+
+- **No backfill.** Not one `employee_id` was written to an existing row. It is not
+  possible: all 2,960 cases have `employee_id IS NULL`, no jsonb meeting or
+  `employeeSnapshot` carries an id, and both preserved UAT rows have
+  `employee_name = 'UAT - Standalone Meeting'`, a placeholder rather than a
+  person. Doing it by name is the inference this programme exists to remove.
+- **The 890 jsonb formal meetings are not migrated to rows.** They live inside
+  `cases.meetings` across 779 cases and already inherit case authority, which is
+  the correct parent boundary. Canonicalising them has a **hard prerequisite**:
+  `cases.employee_id` must be reconciled first (E0.5B built that tool; it has
+  never been run). Restructuring 890 meetings *and* the validated misconduct
+  workflow in the same phase that changes parentage semantics is the opposite of
+  bounded.
+- **`meeting_type_id` is not extended.** A 1:1 is already representable as
+  `informal` — the jsonb type label is literally "Informal / 1-1". No
+  organisation-level meeting type is encoded before those process domains exist
+  (AD-001).
+- **No `employee_activity_id`.** An Employee Activity and a Meeting are related
+  but not identical, and adding the column without a proven parentage gain would
+  be inventing a model the product does not have. A retrospective activity still
+  requires no meeting.
+- **Table-resident meetings still do not appear on the Employee File**, and are
+  not passed to its builder. Their parentage now makes that projection *safe*, but
+  it is a new surface with its own duplication question (an activity and a meeting
+  are separate records, and rendering both raw reads as "1:1 / Meeting / 1:1
+  completed"), so it is reported rather than half-built.
+- **`compass_meeting_draft` is unchanged**, and no new persistent sensitive
+  meeting cache was introduced. The existing draft persistence remains recorded
+  debt (AD-004's sweep), not remediated here.
+
+### Organisation-level compatibility is retained
+
+`employee_id` is nullable, so AD-001's future whistleblowing, redundancy and
+multi-person processes can own meetings without one Employee File owner. That
+nullability is not a loophole: it is legal **only** for a recognised
+non-employee-owned category, and a future organisation-level category would be a
+new `subject_kind` value with its own rule, not a silent NULL.

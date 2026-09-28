@@ -164,7 +164,20 @@ export function buildRecentActivity(ctx, { viewer = {}, limit = 6 } = {}) {
       events.push({ id: `outcome:${cs.id}`, at: cs.outcomeIssuedAt, label: `Outcome issued — ${cs.outcome}`, caseId: cs.id });
     }
     // Meetings are reached THROUGH the case, which is authoritative parentage.
-    // No meeting is matched to this employee by name anywhere in E1.
+    // No meeting is matched to this employee by name — not in E1, and not in E2.
+    //
+    // E2 note: table-resident meetings still do not appear here, and are not
+    // passed to this builder at all. That is deliberate rather than pending.
+    // Their parentage is now canonical, so projecting an employee's own 1:1 onto
+    // their file has become SAFE — but it is a new product surface with its own
+    // duplication question (an E1.6 activity and a meeting are separate records,
+    // and showing both as raw rows is the "1:1 / Meeting / 1:1 completed" triple
+    // that reads as three things happening), so it is reported rather than
+    // half-built here.
+    //
+    // What E2 does guarantee is the prohibition: a WITNESS INTERVIEW can never
+    // appear on the witness's Employee File, because it carries no employee_id at
+    // all. That holds structurally, whatever any future projection does.
     (cs.meetings || []).filter(isGenuineMeetingRecord).filter(isMeetingComplete).forEach(m => {
       events.push({ id: `meeting:${cs.id}:${m.id}`, at: m.date || m.completedAt || null, label: `${m.type || "Meeting"} completed`, caseId: cs.id });
     });

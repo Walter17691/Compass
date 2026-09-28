@@ -445,10 +445,15 @@ describe('15-22. non-regression', () => {
   });
 
   it('20/21/22. no case, meeting or UAT-row migration happened', () => {
-    // No backfill helper, no reconciliation, no meeting employee parentage.
+    // The protection: nothing anywhere BACKFILLS or RECONCILES identity. That is
+    // the assertion that matters and it still holds — E2 gave meetings canonical
+    // parentage for NEW writes and reconciled no historical row, by name or
+    // otherwise. The two preserved UAT meeting rows still carry no employee.
     expect(appCode).not.toMatch(/backfillEmployee|reconcileEmployee|migrateCasesToEmployee/);
-    const standalone = readFileSync('src/lib/standaloneMeetings.js', 'utf8');
-    expect(standalone).not.toContain('employeeId');
+    const e2 = readFileSync('supabase/canonical_meeting_parentage_2026-09-28.sql', 'utf8');
+    expect(e2).not.toMatch(/^\s*update public\.meetings/mi);
+    expect(e2).not.toMatch(/^\s*set employee_id/mi);
+    // meetingStore.js is the cases.meetings side and is genuinely untouched.
     const store = readFileSync('src/lib/meetingStore.js', 'utf8');
     expect(store).not.toContain('employeeId');
   });

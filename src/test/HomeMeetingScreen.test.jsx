@@ -18,11 +18,13 @@ const meetingSetup = { type: '', employee: '', manager: '', chairJobTitle: '', n
 
 describe('HomeMeetingScreen — field labelling (Phase 6.5, Batch 13)', () => {
   it('associates every standalone text/select field with its real, visible label', () => {
-    render(<HomeMeetingScreen meetingSetup={meetingSetup} setMeetingSetup={noop} orgMembers={[]} getEmployeeRecord={noop} cases={[]} getCaseStage={()=>"open"} activeCaseId={null} setActiveCaseId={noop} needsInvitation={()=>false} setCaseInfo={noop} setMeetingType={noop} setPendingLetterType={noop} setShowLetterModal={noop} setScreen={noop} setTranscript={noop} setPrepNotes={noop} setPrepQuestions={noop} setMeetingEvidenceSuggestions={noop} setMeetingActionSuggestions={noop} setReviewOutput={noop} setReviewOutputOriginal={noop} setMeetingSummary={noop} setLetterOutput={noop} setRiskScore={noop} setLiveChatHistory={noop} setParticipants={noop} setDismissedCoachingTipKeys={noop} fmtDate={d=>d} startSession={noop} />);
+    render(<HomeMeetingScreen meetingSetup={meetingSetup} setMeetingSetup={noop} orgMembers={[]} employeeRecords={[]} cases={[]} getCaseStage={()=>"open"} activeCaseId={null} setActiveCaseId={noop} needsInvitation={()=>false} setCaseInfo={noop} setMeetingType={noop} setPendingLetterType={noop} setShowLetterModal={noop} setScreen={noop} setTranscript={noop} setPrepNotes={noop} setPrepQuestions={noop} setMeetingEvidenceSuggestions={noop} setMeetingActionSuggestions={noop} setReviewOutput={noop} setReviewOutputOriginal={noop} setMeetingSummary={noop} setLetterOutput={noop} setRiskScore={noop} setLiveChatHistory={noop} setParticipants={noop} setDismissedCoachingTipKeys={noop} fmtDate={d=>d} startSession={noop} />);
     expect(screen.getByLabelText('Your name (chair)')).toBeInTheDocument();
     expect(screen.getByLabelText(/Chair job title/)).toBeInTheDocument();
     expect(screen.getByLabelText(/Notetaker/)).toBeInTheDocument();
-    expect(screen.getByLabelText('Employee name')).toBeInTheDocument();
+    // E2 — "Employee name" was a free-text box. It is now the canonical
+    // selector, and the question it asks is the label.
+    expect(screen.getByLabelText('Who is this meeting with?')).toBeInTheDocument();
     expect(screen.getByLabelText(/Employee job title/)).toBeInTheDocument();
     expect(screen.getByLabelText(/Link to case/)).toBeInTheDocument();
     expect(screen.getByLabelText('Date')).toBeInTheDocument();
@@ -30,7 +32,7 @@ describe('HomeMeetingScreen — field labelling (Phase 6.5, Batch 13)', () => {
 
   it('labels the representative-role select even though it shares a visible label with the name field', () => {
     const withInvitation = { ...meetingSetup, type: 'disciplinary' };
-    render(<HomeMeetingScreen meetingSetup={withInvitation} setMeetingSetup={noop} orgMembers={[]} getEmployeeRecord={noop} cases={[]} getCaseStage={()=>"open"} activeCaseId={null} setActiveCaseId={noop} needsInvitation={()=>true} setCaseInfo={noop} setMeetingType={noop} setPendingLetterType={noop} setShowLetterModal={noop} setScreen={noop} setTranscript={noop} setPrepNotes={noop} setPrepQuestions={noop} setMeetingEvidenceSuggestions={noop} setMeetingActionSuggestions={noop} setReviewOutput={noop} setReviewOutputOriginal={noop} setMeetingSummary={noop} setLetterOutput={noop} setRiskScore={noop} setLiveChatHistory={noop} setParticipants={noop} setDismissedCoachingTipKeys={noop} fmtDate={d=>d} startSession={noop} />);
+    render(<HomeMeetingScreen meetingSetup={withInvitation} setMeetingSetup={noop} orgMembers={[]} employeeRecords={[]} cases={[]} getCaseStage={()=>"open"} activeCaseId={null} setActiveCaseId={noop} needsInvitation={()=>true} setCaseInfo={noop} setMeetingType={noop} setPendingLetterType={noop} setShowLetterModal={noop} setScreen={noop} setTranscript={noop} setPrepNotes={noop} setPrepQuestions={noop} setMeetingEvidenceSuggestions={noop} setMeetingActionSuggestions={noop} setReviewOutput={noop} setReviewOutputOriginal={noop} setMeetingSummary={noop} setLetterOutput={noop} setRiskScore={noop} setLiveChatHistory={noop} setParticipants={noop} setDismissedCoachingTipKeys={noop} fmtDate={d=>d} startSession={noop} />);
     expect(screen.getByLabelText(/Representative \/ companion/)).toBeInTheDocument();
     expect(screen.getByLabelText("Representative's relationship")).toBeInTheDocument();
   });

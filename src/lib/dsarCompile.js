@@ -1,4 +1,5 @@
 import { classifyIdentityByName, IDENTITY } from './employeeRecords.js';
+import { MEETING_SUBJECT_KIND } from './standaloneMeetings.js';
 // Compiles everything Compass holds about one named individual, for a UK
 // GDPR/DPA 2018 Subject Access Request. Pure/client-side — the data is
 // already loaded into the app, so this needs no new API route.
@@ -159,7 +160,32 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
   // is the DSAR compiler's established pattern, not a new inference: it is not
   // being used to grant access (RLS does that, and never reads a name), only to
   // decide what to disclose to a subject who has asked.
-  const subjectStandaloneMeetings = standaloneMeetings.filter(m => nameMatchesSubject(m?.employeeName));
+  // ── Phase E2 — a standalone meeting's subject is its employee_id, or nobody.
+  //
+  // Two corrections, and they have to land together.
+  //
+  // 1. WITNESS PARTICIPATION IS NOT OWNERSHIP. A witness interview stores the
+  //    witness's name in employee_name (that is what the field meant on that
+  //    path before E2), so the name rule below returned another employee's
+  //    investigation as part of the WITNESS's own personal data. subject_kind
+  //    settles it: a process_witness meeting belongs to the process, never to
+  //    the person interviewed, so it is never their own record.
+  //
+  // 2. NO NAME FALLBACK where an id exists. An employee-owned meeting always
+  //    carries employee_id, so if we do not know the subject's canonical id we
+  //    cannot claim the meeting is theirs — two same-named employees must not
+  //    inherit each other's conversations.
+  //
+  // Legacy pre-E2 rows keep the historical name behaviour exactly, so a DSAR for
+  // an unreconciled subject still returns what it always did.
+  const isSubjectsOwnStandaloneMeeting = m => {
+    if (m?.subjectKind === MEETING_SUBJECT_KIND.PROCESS_WITNESS) return false;
+    if (m?.subjectKind === MEETING_SUBJECT_KIND.EMPLOYEE) {
+      return !!canonicalEmployeeId && m?.employeeId === canonicalEmployeeId;
+    }
+    return nameMatchesSubject(m?.employeeName);
+  };
+  const subjectStandaloneMeetings = standaloneMeetings.filter(isSubjectsOwnStandaloneMeeting);
   const onboarding = starterInstances.filter(s => s.name === employeeName);
   const offboarding = leaverInstances.filter(s => s.name === employeeName);
   // ── Phase E0.6 — canonical routes where one now exists ───────────────────
@@ -417,7 +443,12 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
   // Phase 4C.1 — the mirror case: the subject named inside SOMEONE ELSE's
   // standalone meeting. Same rule as another person's case record: it is a
   // third-party disclosure decision for a human, not an automatic inclusion.
-  standaloneMeetings.filter(m => m?.employeeName !== employeeName).forEach(m => {
+  // Everything NOT established above as the subject's own meeting. Defined as the
+  // exact complement on purpose: this used to be `employeeName !== employeeName`,
+  // and once ownership stopped being a name comparison, a witness interview that
+  // happened to share the subject's name would have fallen out of BOTH sets and
+  // disappeared from the response entirely.
+  standaloneMeetings.filter(m => !isSubjectsOwnStandaloneMeeting(m)).forEach(m => {
     scanForSubjectAsThirdParty(m.record, { standalone: true, meetingId: m.id, field: 'record', meetingType: m.meetingTypeId, date: m.schedule?.date || m.startedAt });
     scanForSubjectAsThirdParty(m.summary, { standalone: true, meetingId: m.id, field: 'summary', meetingType: m.meetingTypeId, date: m.schedule?.date || m.startedAt });
     (m.transcript || []).forEach((u, i) => scanForSubjectAsThirdParty(u.text, { standalone: true, meetingId: m.id, field: `transcript[${i}]`, meetingType: m.meetingTypeId, date: m.schedule?.date || m.startedAt }));
@@ -483,8 +514,10 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
       onboarding: "employee_name", offboarding: "employee_name",
       signingRequests: "employee_name", portalAccounts: "employee_name",
       orgMembership: "employee_name", redundancyCases: "employee_name",
-      // Meetings are deferred to E2 — see standaloneMeetingsDisposition below.
-      standaloneMeetings: "employee_name",
+      // E2: canonical where the row is canonical. A legacy pre-E2 row still has
+      // only a name, so the basis genuinely differs per row and the honest
+      // summary says both.
+      standaloneMeetings: canonicalEmployeeId ? "employee_id" : "employee_name",
     },
     // Kept for compatibility with readers written against E0.5B.
     nonCaseIdentityBasis: "employee_name",
@@ -493,24 +526,51 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
     // silently dropped — the record exists, it just is not confirmed as theirs.
     unattributedWellbeingNotes,
     unattributedConcernReferrals,
-    // ── The standalone-meeting limitation, stated rather than hidden ───────
+    // ── The standalone-meeting position after E2, stated rather than hidden ──
     //
-    // public.meetings has NO employee_id: meeting identity is deferred to E2 as
-    // one coherent migration. So a table-resident meeting cannot be canonically
-    // attributed to this subject, and name-matching it would be exactly the
-    // inference this programme removes.
+    // E2 gave public.meetings a canonical employee_id, so a meeting held outside
+    // a case IS now attributable — by id, never by name.
     //
-    // The package therefore must NOT claim to contain all of an employee's
-    // meeting data. This flag exists so the UI can say so out loud.
+    // Two things are still deliberately NOT claimed:
+    //   * a PRE-E2 legacy row carries no id, so it is matched by name exactly as
+    //     before and cannot be confirmed as this subject's;
+    //   * a WITNESS INTERVIEW is never the witness's own record, however its
+    //     employee_name reads. It belongs to the process. Where such a meeting
+    //     names this subject it is reported through the third-party mentions
+    //     above, for a human to decide, rather than bundled in as their own.
     standaloneMeetingsDisposition: {
-      basis: null,
-      canonicallyAttributable: false,
+      // The BASIS is now canonical where a canonical subject exists. This is the
+      // part E2 fixed: attribution is by employee_id, and a witness interview is
+      // never the witness's own record however its employee_name reads.
+      basis: canonicalEmployeeId ? "employee_id" : "employee_name",
+      canonicallyAttributable: !!canonicalEmployeeId,
       included: subjectStandaloneMeetings.length,
-      // TRUE whenever no standalone meetings were supplied to the compiler,
-      // which in production is always: no caller passes them. The package must
-      // therefore never be described as a complete meeting history.
+      // Supplied to the compiler but NOT this subject's own — a witness
+      // interview, another employee's meeting, or an unreconciled legacy row.
+      // Reported so exclusion is never mistaken for the records not existing.
+      excludedCount: standaloneMeetings.length - subjectStandaloneMeetings.length,
+      witnessInterviewsExcluded: standaloneMeetings.filter(
+        m => m?.subjectKind === MEETING_SUBJECT_KIND.PROCESS_WITNESS
+      ).length,
+      legacyUnreconciled: standaloneMeetings.filter(
+        m => m?.subjectKind === MEETING_SUBJECT_KIND.LEGACY
+      ).length,
+      // ── STILL TRUE, AND STILL THE HONEST HEADLINE ────────────────────────
+      //
+      // E2 gave public.meetings a canonical employee_id, so the compiler CAN
+      // now attribute a meeting correctly. What it cannot do is attribute
+      // meetings it was never given, and DsarScreen still does not pass them
+      // (recorded at E0.6, unchanged here — wiring a new data source into the
+      // DSAR package is its own decision, with its own authorisation question).
+      //
+      // So this flag means what it always meant: the package must not be
+      // described as a complete meeting history.
       excluded: standaloneMeetings.length === 0,
-      note: "Meetings held outside a case are NOT included in this package. public.meetings carries no canonical employee reference until Phase E2, so Compass cannot confirm which employee record such a meeting belongs to, and will not attribute one by name. This package is complete for cases and case-owned records; it may be incomplete for meetings held outside a case.",
+      note: standaloneMeetings.length === 0
+        ? "Meetings held outside a case are NOT included in this package. Compass can now identify which employee such a meeting belongs to — Phase E2 gave them a canonical employee reference — but they are not yet compiled into this package. This package is complete for cases and case-owned records; it may be incomplete for meetings held outside a case."
+        : (canonicalEmployeeId
+          ? "Meetings held outside a case are attributed by canonical employee reference, never by name. Interviews where this person attended as a witness belong to the process being investigated, not to this person's own record, and are reported under third-party mentions rather than included here. Meetings recorded before Phase E2 carry no canonical reference and are matched by name only."
+          : "This subject has no canonical employee record, so meetings held outside a case are matched by name only and cannot be confirmed as theirs. This package may be incomplete for meetings held outside a case."),
     },
     // Same-name records deliberately EXCLUDED. Metadata only — these may
     // belong to somebody else, so no content is carried here. Reported so that

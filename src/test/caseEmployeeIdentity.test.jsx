@@ -325,10 +325,17 @@ describe('10/14/15. audit and non-regression', () => {
     });
   });
 
-  it('meetings were not touched', () => {
+  it('meetings were not touched BY THIS MIGRATION', () => {
+    // The protection this pins is that the E0 identity migration stayed out of
+    // the meeting domain. It did, and that is still asserted.
+    //
+    // What changed: meetings DID later gain canonical parentage, in Phase E2,
+    // through their own migration. So the old companion assertion — that
+    // standaloneMeetings.js contains no employeeId — was a true statement about
+    // the codebase at E0 and is deliberately no longer made here. E2's own
+    // suite owns it (src/test/canonicalMeetingParentage.test.js).
     expect(sqlCode).not.toContain('public.meetings');
-    const standaloneLib = readFileSync('src/lib/standaloneMeetings.js', 'utf8');
-    expect(standaloneLib).not.toContain('employeeId');
+    expect(sqlCode).not.toContain('meetings');
   });
 
   it('UNIQUE(org_id, name) is still not dropped, and analytics migration is recorded', () => {

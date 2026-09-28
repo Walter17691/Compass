@@ -37,9 +37,41 @@ export const STANDALONE_REFUSAL = Object.freeze({
   // either from, so both must be supplied explicitly.
   ORG_REQUIRED: "org_required",
   CREATOR_REQUIRED: "creator_required",
+  // ── E2. There is no such thing as a meeting with nobody's name on it.
+  EMPLOYEE_REQUIRED: "employee_required",
+  WITNESS_REQUIRED: "witness_required",
+  PARENTAGE_REQUIRED: "parentage_required",
+});
+
+// ── E2: what kind of parentage a meeting has ───────────────────────────────
+//
+// Three concepts the product must never conflate, made three values rather than
+// three conventions:
+//
+//   EMPLOYEE        the meeting is part of this person's own employment history.
+//   PROCESS_WITNESS the meeting belongs to a formal process. The witness attends
+//                   it; it is NOT their employment history, and it never appears
+//                   on their Employee File.
+//   LEGACY          a preserved pre-E2 row whose subject was never recorded as an
+//                   id. Tolerated where it already exists; never created again.
+//
+// Mirrors the database CHECK exactly. The strings are the contract.
+export const MEETING_SUBJECT_KIND = Object.freeze({
+  EMPLOYEE: "employee",
+  PROCESS_WITNESS: "process_witness",
+  LEGACY: "legacy_unreconciled",
 });
 
 const isNonEmptyString = v => typeof v === "string" && v.trim().length > 0;
+
+// Is this meeting genuinely part of the employee's own history?
+//
+// The one predicate every surface should ask before projecting a meeting onto an
+// Employee File. A witness interview answers false, which is the whole point.
+export function isEmployeeOwnedMeeting(meeting) {
+  return meeting?.subjectKind === MEETING_SUBJECT_KIND.EMPLOYEE
+    && isNonEmptyString(meeting?.employeeId);
+}
 
 // May a meeting of this type be created with no parent case?
 //
@@ -60,7 +92,9 @@ export const STANDALONE_ELIGIBLE_TYPE_IDS = Object.freeze(
 //
 // Pure. Performs no write, touches no network, and never consults an employee
 // name — parentage and tenancy arrive as explicit ids or they do not arrive.
-export function planStandaloneCreate({ meetingTypeId, orgId, createdBy }) {
+export function planStandaloneCreate({
+  meetingTypeId, orgId, createdBy, subjectKind, employeeId, witness,
+}) {
   if (!isNonEmptyString(meetingTypeId)) {
     return { ok: false, reason: STANDALONE_REFUSAL.TYPE_REQUIRED };
   }
@@ -75,7 +109,40 @@ export function planStandaloneCreate({ meetingTypeId, orgId, createdBy }) {
   }
   if (!isNonEmptyString(orgId)) return { ok: false, reason: STANDALONE_REFUSAL.ORG_REQUIRED };
   if (!isNonEmptyString(createdBy)) return { ok: false, reason: STANDALONE_REFUSAL.CREATOR_REQUIRED };
-  return { ok: true, meetingTypeId, orgId, createdBy };
+
+  // ── E2: canonical parentage, refused here as well as by the database.
+  //
+  // Both layers on purpose. The database is authoritative — it is what a
+  // hand-rolled request meets — but a UI that only finds out at the write has
+  // already let the user conduct a meeting it cannot save.
+  //
+  // LEGACY is not offered. It exists to describe rows that predate this rule,
+  // and a create path that could select it would recreate loose meetings.
+  if (subjectKind === MEETING_SUBJECT_KIND.EMPLOYEE) {
+    if (!isNonEmptyString(employeeId)) {
+      return { ok: false, reason: STANDALONE_REFUSAL.EMPLOYEE_REQUIRED };
+    }
+  } else if (subjectKind === MEETING_SUBJECT_KIND.PROCESS_WITNESS) {
+    // A witness meeting must say who was interviewed. It carries no employeeId,
+    // because the process owns it — so without a name it would be a meeting with
+    // no identifiable participant and no parent at all.
+    if (!isNonEmptyString(witness?.name)) {
+      return { ok: false, reason: STANDALONE_REFUSAL.WITNESS_REQUIRED };
+    }
+    if (isNonEmptyString(employeeId)) {
+      // Ownership and participation must not arrive together. An internal
+      // witness is referenced inside `witness`, never as the subject.
+      return { ok: false, reason: STANDALONE_REFUSAL.PARENTAGE_REQUIRED };
+    }
+  } else {
+    return { ok: false, reason: STANDALONE_REFUSAL.PARENTAGE_REQUIRED };
+  }
+
+  return {
+    ok: true, meetingTypeId, orgId, createdBy, subjectKind,
+    employeeId: subjectKind === MEETING_SUBJECT_KIND.EMPLOYEE ? employeeId : null,
+    witness: subjectKind === MEETING_SUBJECT_KIND.PROCESS_WITNESS ? witness : null,
+  };
 }
 
 // ── Row ↔ object mapping ───────────────────────────────────────────────────
@@ -105,6 +172,21 @@ export function meetingRowToObject(row) {
     storageHome: TABLE_HOME,
     meetingTypeId: row.meeting_type_id ?? null,
     status: row.status ?? null,
+    // ── E2 canonical parentage ───────────────────────────────────────────
+    // employeeId is the SUBJECT employee — the Employee File that owns this
+    // meeting. subjectKind says which kind of parentage this row has, so a null
+    // employeeId is legible rather than loose:
+    //   employee            → owned by employeeId's Employee File
+    //   process_witness     → owned by the process; witness identity in `witness`
+    //   legacy_unreconciled → a preserved pre-E2 row, owned by nothing
+    subjectKind: row.subject_kind ?? null,
+    employeeId: row.employee_id ?? null,
+    // Participation, never ownership. An internal witness may carry employeeId
+    // here and that still grants their Employee File nothing, because ownership
+    // is the column above and a witness row's is NULL by CHECK constraint.
+    witness: row.witness ?? null,
+    // employeeName is a DISPLAY SNAPSHOT and not identity. Before E2 this field
+    // held the subject's name — or the WITNESS's name when a case was linked.
     employeeName: row.employee_name ?? null,
     employeeEmail: row.employee_email ?? null,
     manager: row.manager ?? null,
@@ -139,9 +221,14 @@ export function meetingRowToObject(row) {
 // a meeting is born standalone (the database trigger rejects an insert carrying
 // a case_id), and link provenance is stamped only by the permitted fill. Omitting
 // them here means no caller can accidentally supply one.
+// subjectKind has NO default. A caller that forgets to say what kind of meeting
+// this is gets `undefined`, the column falls to its 'legacy_unreconciled'
+// default, and the INSERT policy refuses it — so the failure mode of forgetting
+// parentage is a refused write, never a loose meeting.
 export function newStandaloneMeetingRow({
   id, orgId, createdBy, meetingTypeId,
   status = MEETING_STATUS.SCHEDULED,
+  subjectKind, employeeId = null, witness = null,
   employeeName = null, employeeEmail = null, manager = null, chairUserId = null,
   participants = [], schedule = null, preparation = null, startedAt = null,
 }) {
@@ -150,6 +237,9 @@ export function newStandaloneMeetingRow({
     org_id: orgId,
     meeting_type_id: meetingTypeId,
     status,
+    subject_kind: subjectKind,
+    employee_id: employeeId,
+    witness,
     employee_name: employeeName,
     employee_email: employeeEmail,
     manager,

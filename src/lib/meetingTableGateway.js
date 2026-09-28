@@ -30,6 +30,11 @@ export const MEETINGS_TABLE = "meetings";
 
 export const DISCOVERY_COLUMNS = [
   "id", "org_id", "case_id", "meeting_type_id", "status",
+  // E2 canonical parentage. Discovery needs it to answer "whose meeting is
+  // this?" without matching a name — and `witness` is included because a surface
+  // must be able to tell a witness interview apart from an employee's own
+  // meeting BEFORE deciding where to show it.
+  "subject_kind", "employee_id", "witness",
   "employee_name", "manager", "chair_user_id",
   "schedule", "started_at", "ended_at",
   "created_by", "created_at", "updated_at", "linked_at", "linked_by",

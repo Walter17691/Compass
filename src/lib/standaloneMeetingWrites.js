@@ -54,6 +54,11 @@ export const STANDALONE_FAILURE = Object.freeze({
   // move from — the equivalent of meetingWrites' STALE_STATUS.
   STALE_STATUS: "stale_status",
   ERROR: "error",
+  // ── E2. Canonical parentage is not optional, and the refusal says which
+  // half is missing so the surface can ask the right question.
+  EMPLOYEE_REQUIRED: "employee_required",
+  WITNESS_REQUIRED: "witness_required",
+  PARENTAGE_REQUIRED: "parentage_required",
 });
 
 // Every column, for the paths that genuinely need content (Resume, Review).
@@ -80,6 +85,9 @@ function classifyError(error) {
 // and the database trigger rejects an insert that carries a case.
 export async function startStandaloneMeeting(client, {
   id, orgId, createdBy, meetingTypeId,
+  // ── E2: who this meeting is actually about, as an id and a stated kind.
+  // employeeName stays for display only and is no longer identity.
+  subjectKind, employeeId = null, witness = null,
   employeeName = null, employeeEmail = null, manager = null, chairUserId = null,
   participants = [], startedAt,
 } = {}) {
@@ -87,12 +95,15 @@ export async function startStandaloneMeeting(client, {
   if (!isNonEmptyString(id)) return { ok: false, reason: STANDALONE_FAILURE.ID_REQUIRED };
 
   // The single eligibility gate, shared with the UI so the two cannot disagree.
-  const plan = planStandaloneCreate({ meetingTypeId, orgId, createdBy });
+  const plan = planStandaloneCreate({ meetingTypeId, orgId, createdBy, subjectKind, employeeId, witness });
   if (!plan.ok) {
     return {
       ok: false,
       reason: plan.reason === "org_required" ? STANDALONE_FAILURE.ORG_REQUIRED
         : plan.reason === "creator_required" ? STANDALONE_FAILURE.CREATOR_REQUIRED
+        : plan.reason === "employee_required" ? STANDALONE_FAILURE.EMPLOYEE_REQUIRED
+        : plan.reason === "witness_required" ? STANDALONE_FAILURE.WITNESS_REQUIRED
+        : plan.reason === "parentage_required" ? STANDALONE_FAILURE.PARENTAGE_REQUIRED
         : STANDALONE_FAILURE.NOT_ELIGIBLE,
     };
   }
@@ -100,6 +111,10 @@ export async function startStandaloneMeeting(client, {
   const row = newStandaloneMeetingRow({
     id, orgId, createdBy, meetingTypeId,
     status: MEETING_STATUS.IN_PROGRESS,
+    // From the PLAN, not from the arguments: the plan has already nulled the
+    // field that does not belong to this kind of meeting, so ownership and
+    // participation cannot both reach the row.
+    subjectKind: plan.subjectKind, employeeId: plan.employeeId, witness: plan.witness,
     employeeName, employeeEmail, manager, chairUserId, participants,
     startedAt: startedAt || new Date().toISOString(),
   });
@@ -261,6 +276,14 @@ export function describeStandaloneFailure(reason) {
       return "Sign in again before starting a meeting — Compass couldn't confirm who you are.";
     case STANDALONE_FAILURE.STALE_STATUS:
       return "This meeting has already moved on. Open it again to see where it is now.";
+    // Says what to do, not what rule was broken. "Canonical parentage" is our
+    // word for it; the user's word is the person's name.
+    case STANDALONE_FAILURE.EMPLOYEE_REQUIRED:
+      return "Choose who this meeting is with before starting it.";
+    case STANDALONE_FAILURE.WITNESS_REQUIRED:
+      return "Enter the name of the person being interviewed before starting.";
+    case STANDALONE_FAILURE.PARENTAGE_REQUIRED:
+      return "Compass couldn't tell who this meeting is about. Start it again from the employee or the case.";
     case STANDALONE_FAILURE.DENIED:
     case STANDALONE_FAILURE.NOT_FOUND:
       return "That meeting isn't available to you.";

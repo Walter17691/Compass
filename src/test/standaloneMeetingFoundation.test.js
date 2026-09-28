@@ -86,7 +86,13 @@ describe('D. type eligibility — only the approved standalone set', () => {
   it('10/11/12. accepts informal, return and investigation', () => {
     ['informal', 'return', 'investigation'].forEach(id => {
       expect(isStandaloneEligible(id), id).toBe(true);
-      expect(planStandaloneCreate({ meetingTypeId: id, orgId: ORG_A, createdBy: MANAGER }).ok, id).toBe(true);
+      // E2 — a plan must also state WHOSE meeting it is. Type eligibility is
+      // still what this test is about, so parentage is supplied and the
+      // canonical-parentage rules are proven in canonicalMeetingParentage.test.js.
+      expect(planStandaloneCreate({
+        meetingTypeId: id, orgId: ORG_A, createdBy: MANAGER,
+        subjectKind: 'employee', employeeId: 'emp-1',
+      }).ok, id).toBe(true);
     });
   });
 

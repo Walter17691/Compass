@@ -1,5 +1,6 @@
 import { isGenuineMeetingRecord } from '../lib/caseStage.js';
 import { useState } from 'react';
+import { EmployeeSelect } from '../components/EmployeeSelect';
 import { SCREENS, MEETING_TYPES } from '../constants';
 import { invitationGuidance } from '../lib/invitationGuidance';
 import { caseRequirementNotice, CASE_REQUIREMENT } from '../lib/meetingCaseRequirement';
@@ -43,7 +44,7 @@ const FIELD_WRAP_STYLE = {marginBottom:20};
 const FIELD_LABEL_STYLE = {display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:7};
 const OPTIONAL_TAG_STYLE = {fontWeight:400,color:"#9B9098"};
 
-export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSetup, setMeetingSetup, orgMembers, getEmployeeRecord, cases, getCaseStage, activeCaseId, setActiveCaseId, needsInvitation, setCaseInfo, setMeetingType, setPendingLetterType, setShowLetterModal, setScreen, setTranscript, setPrepNotes, setPrepQuestions, setMeetingEvidenceSuggestions, setMeetingActionSuggestions, setReviewOutput, setReviewOutputOriginal, setMeetingSummary, setLetterOutput, setRiskScore, setLiveChatHistory, setParticipants, setDismissedCoachingTipKeys, fmtDate, startSession }) {
+export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSetup, setMeetingSetup, orgMembers, employeeRecords = [], cases, getCaseStage, activeCaseId, setActiveCaseId, needsInvitation, setCaseInfo, setMeetingType, setPendingLetterType, setShowLetterModal, setScreen, setTranscript, setPrepNotes, setPrepQuestions, setMeetingEvidenceSuggestions, setMeetingActionSuggestions, setReviewOutput, setReviewOutputOriginal, setMeetingSummary, setLetterOutput, setRiskScore, setLiveChatHistory, setParticipants, setDismissedCoachingTipKeys, fmtDate, startSession }) {
   const isGroupMeeting = meetingSetup.type === "redundancy-atrisk" || meetingSetup.type === "redundancy-consult";
   const [newParticipantName, setNewParticipantName] = useState("");
   const [newParticipantRole, setNewParticipantRole] = useState(isGroupMeeting ? "Affected employee" : "Witness");
@@ -67,8 +68,21 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
   // produced an outcome letter carries letterType 'outcome' alongside a real
   // record and transcript and must stay visible. Legacy meetings predating
   // letterType have content and are unaffected.
-  const prevMeetings = meetingSetup.employee
-    ? cases.filter(cs=>cs.employeeName===meetingSetup.employee.trim()).flatMap(cs=>(cs.meetings||[]).map(m=>({...m,caseType:cs.caseType}))).filter(isGenuineMeetingRecord).sort((a,b)=>new Date(b.date)-new Date(a.date))
+  // ── E2: previous meetings are found by IDENTITY or not at all.
+  //
+  // This matched cases.employeeName === the typed name, which was the last
+  // name-equality read in an active screen (recorded at E0.7 as waiting for this
+  // phase). Two people who share a name shared their meeting history, and with a
+  // WITNESS name in that field it listed the meetings of whichever employee
+  // happened to be called the same thing.
+  //
+  // It now requires a canonically selected employee and matches cases on
+  // employee_id. There is deliberately NO name fallback: until historical cases
+  // are reconciled to canonical employees (E0.5B's tool, never run — all 2,960
+  // are still unreconciled) this panel stays empty. Empty is correct; a list of
+  // someone else's meetings is not.
+  const prevMeetings = (!meetingSetup.linkedCaseId && meetingSetup.employeeId)
+    ? cases.filter(cs=>cs.employeeId && cs.employeeId===meetingSetup.employeeId).flatMap(cs=>(cs.meetings||[]).map(m=>({...m,caseType:cs.caseType}))).filter(isGenuineMeetingRecord).sort((a,b)=>new Date(b.date)-new Date(a.date))
     : [];
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",display:"flex",flexDirection:"column"}}>
@@ -137,23 +151,57 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
               <div style={{fontSize:12,color:"#7C5CFC"}}>This interview will be saved as evidence in {meetingSetup.linkedCaseName} case</div>
             </div>
           )}
-          <div style={FIELD_WRAP_STYLE}>
-            <label htmlFor="meeting-employee-name" style={FIELD_LABEL_STYLE}>{meetingSetup.linkedCaseId?"Witness name":"Employee name"}</label>
-            <input id="meeting-employee-name" placeholder={meetingSetup.linkedCaseId?"e.g. John Smith (witness)":"e.g. Sarah Johnson"}
-              value={meetingSetup.employee}
-              onChange={e=>{
-                const val=e.target.value;
-                const rec=getEmployeeRecord(val.trim());
-                setMeetingSetup(p=>({...p,employee:val,employeeJobTitle:rec?(rec.jobTitle||""):p.employeeJobTitle}));
-              }}
-              list="employee-list"
-              style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
-              onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.1)";}}
-              onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
-            <datalist id="employee-list">
-              {[...new Set(cases.map(cs=>cs.employeeName).filter(Boolean))].map(n=><option key={n} value={n}/>)}
-            </datalist>
-          </div>
+          {/* ── E2: WHO IS THIS MEETING WITH? ─────────────────────────────────
+              One field used to answer two different questions. Its label said
+              "Employee name" normally and "Witness name" when a case was linked,
+              and both answers went to the same place — so a witness interview
+              recorded the witness as the meeting's employee.
+
+              They are now genuinely different questions, because they have
+              different answers:
+
+                no case linked → this meeting is part of someone's employment
+                                 history, so it needs THAT PERSON, canonically.
+                case linked    → this is a witness interview. It belongs to the
+                                 process. The witness is who we are speaking to,
+                                 not whose file this lands in. */}
+          {meetingSetup.linkedCaseId ? (
+            <div style={FIELD_WRAP_STYLE}>
+              <label htmlFor="meeting-witness-name" style={FIELD_LABEL_STYLE}>Witness name</label>
+              <input id="meeting-witness-name" placeholder="e.g. John Smith"
+                value={meetingSetup.employee}
+                onChange={e=>setMeetingSetup(p=>({...p,employee:e.target.value,employeeId:null}))}
+                style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:10,padding:"12px 16px",fontSize:15,color:"#1A1535",outline:"none",boxSizing:"border-box",boxShadow:"0 1px 2px rgba(26,21,53,0.04)"}}
+                onFocus={e=>{e.target.style.borderColor="#7C5CFC";e.target.style.boxShadow="0 0 0 3px rgba(124,92,252,0.1)";}}
+                onBlur={e=>{e.target.style.borderColor="#E8E0D0";e.target.style.boxShadow="0 1px 2px rgba(26,21,53,0.04)";}}/>
+              {/* Said plainly, because it is the whole distinction: a free-text
+                  name is CORRECT here. A witness may be an external contractor
+                  or a customer, and Compass must not invent an employee record
+                  to hold their name. */}
+              <div style={{fontSize:12,color:"#6B6375",marginTop:7,lineHeight:1.5}}>
+                This interview belongs to the {meetingSetup.linkedCaseName} case, not to the
+                witness's own record. It will not appear on their Employee File.
+                They do not need to be an employee.
+              </div>
+            </div>
+          ) : (
+            <div style={FIELD_WRAP_STYLE}>
+              <EmployeeSelect
+                inputId="meeting-employee-name"
+                label="Who is this meeting with?"
+                employeeRecords={employeeRecords}
+                value={meetingSetup.employeeId || null}
+                onChange={(employeeId, employee)=>setMeetingSetup(p=>({
+                  ...p,
+                  employeeId: employeeId || null,
+                  // The name travels on as a DISPLAY snapshot for letters and
+                  // headings. It is no longer what identifies the person.
+                  employee: employee?.name || "",
+                  employeeJobTitle: employee?.jobTitle || "",
+                }))}
+              />
+            </div>
+          )}
 
           {!meetingSetup.linkedCaseId&&(
             <div style={FIELD_WRAP_STYLE}>
@@ -437,7 +485,12 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
             // "Link to case" select, or an already-active case. Never a name.
             const linkedCaseIdForGuard = meetingSetup.preparedCaseId||meetingSetup.linkedCaseId||activeCaseId||null;
             const caseNotice = caseRequirementNotice(meetingSetup.type, !!linkedCaseIdForGuard, { isDevGroup: isDev });
-            const disabled = !meetingSetup.employee.trim()||!meetingSetup.type||!!caseNotice;
+            // E2: a witness interview needs a name; an employee meeting needs
+            // the EMPLOYEE, not a string that resembles one.
+            const parentageMissing = meetingSetup.linkedCaseId
+              ? !meetingSetup.employee.trim()
+              : !meetingSetup.employeeId;
+            const disabled = parentageMissing||!meetingSetup.type||!!caseNotice;
             // Shared by both buttons below — sets meeting type/caseInfo/
             // participants identically, only the final destination screen
             // differs. Kept as a closure over meetingSetup rather than a
@@ -445,7 +498,12 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
             const commit = () => {
               const mt = selected||{id:meetingSetup.type,label:meetingSetup.type,mode:"er",group:"formal"};
               setMeetingType(mt);
-              setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),employeeJobTitle:meetingSetup.employeeJobTitle||"",date:meetingSetup.date,time:meetingSetup.time||"",locationOrMethod:meetingSetup.locationOrMethod||"",manager:meetingSetup.manager||"",chairJobTitle:meetingSetup.chairJobTitle||"",notetaker:meetingSetup.notetaker||"",representative:meetingSetup.representative||"",representativeRole:meetingSetup.representativeRole||"colleague",_linkedCaseId:meetingSetup.linkedCaseId||p._linkedCaseId,_linkedCaseName:meetingSetup.linkedCaseName||p._linkedCaseName,preparedCaseId:meetingSetup.preparedCaseId||meetingSetup.linkedCaseId||p.preparedCaseId||null,
+              setCaseInfo(p=>({...p,employee:meetingSetup.employee.trim(),employeeJobTitle:meetingSetup.employeeJobTitle||"",
+                // ── E2: canonical parentage travels with the commit.
+                // employeeId is the SUBJECT. It is deliberately null on the
+                // witness path, where `employee` holds the witness's name and
+                // nobody's Employee File owns the meeting.
+                employeeId:meetingSetup.linkedCaseId?null:(meetingSetup.employeeId||null),date:meetingSetup.date,time:meetingSetup.time||"",locationOrMethod:meetingSetup.locationOrMethod||"",manager:meetingSetup.manager||"",chairJobTitle:meetingSetup.chairJobTitle||"",notetaker:meetingSetup.notetaker||"",representative:meetingSetup.representative||"",representativeRole:meetingSetup.representativeRole||"colleague",_linkedCaseId:meetingSetup.linkedCaseId||p._linkedCaseId,_linkedCaseName:meetingSetup.linkedCaseName||p._linkedCaseName,preparedCaseId:meetingSetup.preparedCaseId||meetingSetup.linkedCaseId||p.preparedCaseId||null,
                 // Release 1 Phase 2.1 — authoritative parentage (NEW-20).
                 // The "Link to case" select above writes activeCaseId and
                 // renders it as the chosen case, so this is the parent the
