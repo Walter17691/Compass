@@ -4,6 +4,7 @@ import { Btn } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
 import { DateInput } from '../components/DateInput';
 import { LockIcon } from '../components/Icons';
+import { EmployeeSelect } from '../components/EmployeeSelect';
 
 const CATEGORY_LABEL = { agenda:"Agenda", evidence:"Evidence", clarification:"Clarification", unanswered:"Unanswered", general:"General" };
 
@@ -62,7 +63,7 @@ function PrepQuestionRow({ q, index, total, linkedCaseAllegations, linkedCaseEvi
   );
 }
 
-export function PrepScreen({ beginMeeting, isMobile, meetingType, setMeetingType, caseInfo, setCaseInfo, handlePrepare, aiProcessing, aiError, setScreen, bgDoc, setBgDoc, prepNotes,
+export function PrepScreen({ beginMeeting, isMobile, meetingType, setMeetingType, caseInfo, setCaseInfo, employeeRecords = [], handlePrepare, aiProcessing, aiError, setScreen, bgDoc, setBgDoc, prepNotes,
   prepQuestions=[], linkedCaseAllegations=[], linkedCaseEvidence=[],
   onAddPrepQuestion, onUpdatePrepQuestionText, onRemovePrepQuestion, onMovePrepQuestion, onTogglePrepQuestionEssential, onLinkPrepQuestionToAllegation, onLinkPrepQuestionToEvidence,
 }) {
@@ -120,11 +121,37 @@ export function PrepScreen({ beginMeeting, isMobile, meetingType, setMeetingType
         )}
       </div>
 
+      {/* ── E2: this screen has its own "Start meeting", so it is a creation
+          route and must be able to establish canonical identity.
+
+          It used to collect the employee as free text. Two problems: editing the
+          name here left caseInfo.employeeId pointing at whoever was originally
+          selected, so the stored snapshot disagreed with the identity; and a
+          visitor arriving without a canonical employee could type a name, press
+          Start, and be refused by the database with no way on this screen to put
+          it right.
+
+          So: when the employee is already known, show WHO and do not ask again.
+          When they are not, ask canonically. */}
       <div style={{textAlign:"left",marginBottom:16}}>
-        <label htmlFor="prep-employee-name" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Employee name <span style={{color:"#C84B2F"}}>*</span></label>
-        <input id="prep-employee-name" placeholder="e.g. Sarah Johnson" value={caseInfo.employee}
-          onChange={e=>setCaseInfo(p=>({...p,employee:e.target.value}))}
-          style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 16px",fontSize:15,outline:"none",color:"#1A1535",boxSizing:"border-box"}} />
+        {caseInfo.employeeId ? (
+          <>
+            <div style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Employee</div>
+            <div style={{width:"100%",background:"#F7F5F0",border:"1px solid #E8E0D0",borderRadius:8,padding:"14px 16px",fontSize:15,color:"#1A1535",boxSizing:"border-box"}}>
+              {caseInfo.employee || "Selected employee"}
+            </div>
+          </>
+        ) : (
+          <EmployeeSelect
+            inputId="prep-employee-name"
+            label="Who is this meeting with?"
+            employeeRecords={employeeRecords}
+            value={null}
+            onChange={(employeeId, employee)=>setCaseInfo(p=>({
+              ...p, employeeId: employeeId || null, employee: employee?.name || "",
+            }))}
+          />
+        )}
       </div>
 
       <div style={{textAlign:"left",marginBottom:16}}>

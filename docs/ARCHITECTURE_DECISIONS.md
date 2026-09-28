@@ -969,6 +969,20 @@ exception is stated once, in the guard, rather than left as a loophole.
   meeting cache was introduced. The existing draft persistence remains recorded
   debt (AD-004's sweep), not remediated here.
 
+### Every creation route must be able to answer the question
+
+A screen with its own "Start meeting" is a creation route. `PrepScreen` had one
+and collected the employee as free text, which meant editing the name there left
+`employeeId` pointing at whoever was selected earlier while the stored snapshot
+said someone else — and a visitor arriving with no canonical employee could type a
+name, press Start, and be refused by the database with no way on that screen to
+put it right. It now shows the known employee without asking again, and asks
+canonically when there is none.
+
+Both doors are checked: the form disables Start without parentage, and the write
+handler refuses independently. A UI that only finds out at the write has already
+let someone conduct a meeting it cannot save.
+
 ### Organisation-level compatibility is retained
 
 `employee_id` is nullable, so AD-001's future whistleblowing, redundancy and

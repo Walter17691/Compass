@@ -11733,7 +11733,7 @@ Please produce:
 
 {/* ══ PREP ══ */}
       {screen===SCREENS.PREP&&(
-        <PrepScreen beginMeeting={beginMeeting} isMobile={isMobile} meetingType={meetingType} setMeetingType={setMeetingType} caseInfo={caseInfo} setCaseInfo={setCaseInfo} handlePrepare={handlePrepare} aiProcessing={aiProcessing} aiError={aiError} setScreen={setScreen} bgDoc={bgDoc} setBgDoc={setBgDoc} prepNotes={prepNotes}
+        <PrepScreen beginMeeting={beginMeeting} isMobile={isMobile} meetingType={meetingType} setMeetingType={setMeetingType} caseInfo={caseInfo} setCaseInfo={setCaseInfo} employeeRecords={employeeRecords} handlePrepare={handlePrepare} aiProcessing={aiProcessing} aiError={aiError} setScreen={setScreen} bgDoc={bgDoc} setBgDoc={setBgDoc} prepNotes={prepNotes}
           prepQuestions={prepQuestions}
           linkedCaseAllegations={caseInfo._linkedCaseId ? allegationsForCase(allegations, caseInfo._linkedCaseId) : []}
           linkedCaseEvidence={caseInfo._linkedCaseId ? (cases.find(c=>c.id===caseInfo._linkedCaseId)?.evidence||[]) : []}

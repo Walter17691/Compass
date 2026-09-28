@@ -49,6 +49,7 @@ const homeMeetingRaw = read('src/screens/HomeMeetingScreen.jsx');
 const homeMeeting = stripJs(homeMeetingRaw);
 const dsar = stripJs(read('src/lib/dsarCompile.js'));
 const employeeFileRaw = read('src/lib/employeeFile.js');
+const prepScreen = stripJs(read('src/screens/PrepScreen.jsx'));
 const employeeFile = stripJs(employeeFileRaw);
 
 // Slices out one named constraint's own definition. Asserting that a constraint
@@ -285,6 +286,26 @@ describe('E2 — identity is a uuid, never a name', () => {
     });
     expect(obj.employeeId).toBe(JOHN);
     expect(obj.subjectKind).toBe('employee');
+  });
+});
+
+describe('E2 — every creation route can establish identity', () => {
+  it('PrepScreen no longer collects the employee as free text', () => {
+    // It has its own "Start meeting", so it is a creation route. Collecting a
+    // name there left employeeId pointing at whoever was selected earlier while
+    // the snapshot said something else — and a visitor with no canonical employee
+    // could type a name, press Start, and be refused with no way to put it right.
+    expect(prepScreen).not.toMatch(/placeholder="e\.g\. Sarah Johnson" value=\{caseInfo\.employee\}/);
+    expect(prepScreen).not.toMatch(/setCaseInfo\(p=>\(\{\.\.\.p,employee:e\.target\.value\}\)\)/);
+    expect(prepScreen).toContain('EmployeeSelect');
+    // Known employee: show who, and do not ask again.
+    expect(prepScreen).toMatch(/caseInfo\.employeeId \?/);
+  });
+
+  it('the standalone write refuses rather than trusting the screen', () => {
+    // Both doors. The UI disables Start, and the handler still checks.
+    expect(appCode).toMatch(/if \(!isWitnessInterview && !employeeId\)/);
+    expect(appCode).toMatch(/STANDALONE_FAILURE\.EMPLOYEE_REQUIRED/);
   });
 });
 

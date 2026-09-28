@@ -37,7 +37,10 @@ describe('PrepScreen — field labelling (Phase 6.5, Batch 13)', () => {
   it('labels the meeting setup fields', () => {
     render(<PrepScreen {...baseProps} />);
     expect(screen.getByLabelText(/Meeting type/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Employee name/)).toBeInTheDocument();
+    // E2 — PrepScreen is a creation route, so it establishes canonical identity
+    // rather than collecting a name. With no employee selected it asks
+    // canonically; with one selected it shows who, and does not ask again.
+    expect(screen.getByLabelText(/Who is this meeting with\?/)).toBeInTheDocument();
     expect(screen.getByLabelText('Your name')).toBeInTheDocument();
     expect(screen.getByLabelText(/Background/)).toBeInTheDocument();
   });
