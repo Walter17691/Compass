@@ -318,38 +318,78 @@ describe('Part D — DSAR canonical routes', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-describe('the standalone-meeting DSAR limitation is represented truthfully', () => {
-  it('the package says meetings outside a case are NOT included', () => {
+describe('the standalone-meeting DSAR position, after E2A closed the gap', () => {
+  // This block used to pin the OPPOSITE: that meetings held outside a case were
+  // excluded, that the compiler would name-match them if ever passed, and that
+  // the guarantee lived in NOT passing them. E2A is the phase that closed that
+  // gap, so those assertions are replaced rather than relaxed — and what they
+  // were protecting (never claim completeness you do not have, never attribute by
+  // name) is asserted here in its post-E2A form.
+
+  it('no meetings supplied is reported as exactly that, not as completeness', () => {
     const out = compileSubjectData('Dana Keys', { employeeRecords: [EMP] });
     const d = out.standaloneMeetingsDisposition;
     expect(d.excluded).toBe(true);
-    expect(d.canonicallyAttributable).toBe(false);
     expect(d.included).toBe(0);
-    expect(d.note).toContain('NOT included');
-    expect(d.note).toContain('E2');
-    // It must not claim completeness it does not have.
-    expect(d.note).toContain('may be incomplete for meetings');
+    expect(d.readFailed).toBe(false);
+    expect(d.note).toContain('No meetings held outside a case were found');
   });
 
-  it('the exclusion is a STATED position, with both reasons recorded', () => {
-    // 1. no canonical route exists until E2; 2. the discovery gateway is
-    // metadata-only, so disclosing content needs a new read path.
-    expect(dsarProse).toContain('no caller ever supplied it');
-    expect(dsarProse).toContain('metadata-only by design');
-    expect(dsarProse).toContain('belongs with meeting identity');
+  it('a FAILED read is a different fact from "there were none"', () => {
+    const out = compileSubjectData('Dana Keys', { employeeRecords: [EMP], meetingFetchFailed: true });
+    const d = out.standaloneMeetingsDisposition;
+    expect(d.readFailed).toBe(true);
+    expect(d.note).toContain('could not read');
+    expect(d.note).toContain('Re-compile before responding');
   });
 
-  it('the reviewer is told before they treat the package as complete', () => {
-    expect(dsarScreen).toContain('Meetings held outside a case are not included');
-    expect(dsarScreen).toContain('will not attribute one by name');
-    expect(dsarScreen).toContain('compiled.standaloneMeetingsDisposition?.excluded');
+  it('the production screen now FETCHES and PASSES them', () => {
+    // The gap was never in the compiler — it was that no caller supplied them.
+    expect(dsarScreen).toContain('fetchDsarMeetings');
+    expect(dsarScreen).toMatch(/standaloneMeetings,/);
+    // Through the ordinary authenticated client, so RLS applies. Completeness is
+    // not a reason to reach for the service role.
+    expect(dsarScreen).toContain("from '../supabase'");
+    expect(dsarScreen).not.toMatch(/dsar-lookup[^\n]*meetings/);
   });
 
-  it('nothing name-matches a table meeting into the package', () => {
-    // If standaloneMeetings were ever passed, the compiler would match by name —
-    // so the guarantee lives in NOT passing them, and that is asserted.
-    expect(dsarScreen).not.toContain('standaloneMeetings,\n      cases');
-    expect(compile).toContain('nameMatchesSubject(m?.employeeName)');
+  it('the reviewer is no longer told something untrue', () => {
+    // The old notice said meetings were not included. They are.
+    expect(dsarScreen).not.toContain('Meetings held outside a case are not included');
+    expect(dsarScreen).not.toContain('will not attribute one by name');
+    // What replaced it: a read failure, withheld internal analysis, and witness
+    // interviews that are not the subject's own record.
+    expect(dsarScreen).toContain('could not be read');
+    expect(dsarScreen).toContain('has been held back');
+    expect(dsarScreen).toContain("not\n                treated as this person's own record");
+  });
+
+  it('the compiler states WHY witness participation is not ownership', () => {
+    // The reasoning has to survive in the file, because the next person to touch
+    // this function will otherwise see a filter that looks over-cautious.
+    expect(compile).toContain('WITNESS PARTICIPATION IS NOT OWNERSHIP');
+    expect(compile).toContain('NO NAME FALLBACK where an id exists');
+    // And the name-matching branch is reachable ONLY for legacy rows.
+    const own = compile.slice(compile.indexOf('const isSubjectsOwnStandaloneMeeting'), compile.indexOf('const subjectStandaloneMeetings'));
+    expect(own.match(/nameMatchesSubject/g)).toHaveLength(1);
+  });
+
+  it('the screen explains the new position to whoever reads the code', () => {
+    expect(dsarProse).toContain('meetings held outside a case now reach the package');
+    expect(dsarProse).toContain('completeness a reason to widen access');
+  });
+
+  it('canonical rows are never name-matched, and legacy rows still are', () => {
+    const canonical = compileSubjectData('Dana Keys', {
+      employeeRecords: [EMP], canonicalEmployeeId: EMP.id,
+      standaloneMeetings: [
+        { id: 'mine', subjectKind: 'employee', employeeId: EMP.id, employeeName: 'Dana Keys', transcript: [] },
+        { id: 'theirs', subjectKind: 'employee', employeeId: 'someone-else', employeeName: 'Dana Keys', transcript: [] },
+        { id: 'legacy', subjectKind: 'legacy_unreconciled', employeeId: null, employeeName: 'Dana Keys', transcript: [] },
+      ],
+    });
+    expect(canonical.standaloneMeetings.map(m => m.id).sort()).toEqual(['legacy', 'mine']);
+    expect(canonical.standaloneMeetingsDisposition.legacyUnreconciled).toBe(1);
   });
 
   it('fail-closed identity gating is untouched', () => {

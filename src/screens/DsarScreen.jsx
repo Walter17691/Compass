@@ -10,6 +10,8 @@ import { WarningIcon } from '../components/Icons';
 import { PageHeader } from '../components/design/PageHeader';
 import { COLOR, RADIUS, FONT } from '../styles/tokens';
 import { EmployeeSelect } from '../components/EmployeeSelect';
+import { supabase } from '../supabase';
+import { fetchDsarMeetings } from '../lib/meetingTableGateway';
 
 const STATUS_LABEL = { received:"Received", in_progress:"In progress", ready_to_send:"Ready to send", completed:"Completed" };
 
@@ -50,6 +52,26 @@ function RequestDetail({ req, cases, employeeRecords, employeeActivities = [], e
       const r = await authedFetch(`/api/portal/dsar-lookup?orgId=${encodeURIComponent(orgId)}&employeeName=${encodeURIComponent(req.employeeName)}`);
       if (r.ok) { const d = await r.json(); signingRequests = d.signingRequests || []; portalAccounts = d.portalAccounts || []; portalInvites = d.portalInvites || []; profiles = d.profiles || []; caseViews = d.caseViews || []; }
     } catch (e) { console.error('dsar-lookup failed:', e.message); }
+
+    // ── Phase E2A — meetings held outside a case now reach the package ───────
+    //
+    // E2 gave public.meetings a canonical employee_id, which removed the reason
+    // this was withheld: attribution no longer depends on the name on the meeting.
+    //
+    // Deliberately through the ORDINARY authenticated client, not through
+    // /api/portal/dsar-lookup above. That endpoint uses the service role to read
+    // tables the browser cannot, and routing meetings through it would make
+    // completeness a reason to widen access. E2's meeting policies apply here
+    // unchanged, so the compiler is only ever handed rows the person compiling
+    // this request may already read.
+    //
+    // A failure does NOT block the package — but it must not look like "there
+    // were none" either, so the disposition below reports it.
+    let standaloneMeetings = [];
+    let meetingFetchFailed = false;
+    const meetingResult = await fetchDsarMeetings(supabase, { orgId });
+    if (meetingResult.ok) standaloneMeetings = meetingResult.meetings;
+    else meetingFetchFailed = true;
     setCompiled(compileSubjectData(req.employeeName, {
       // Phase E0.6 — the canonical subject, where the request recorded one. With
       // it, cases/wellbeing/referrals are selected by employee_id and a same-name
@@ -58,8 +80,14 @@ function RequestDetail({ req, cases, employeeRecords, employeeActivities = [], e
       // Phase E1.6 — activities join subject data from day one rather than
       // becoming a blind spot discovered later. Selected by employee_id only.
       employeeActivities, employeeActivityRecords, employmentEvents,
-      // Phase E0.6 — standaloneMeetings is STILL not passed, and that is now a
-      // stated position rather than an oversight.
+      // Phase E2A — standaloneMeetings ARE now passed. The two reasons recorded
+      // below for withholding them were both resolved by E2 (canonical
+      // employee_id) and E2A (a content-bearing, RLS-scoped read). The original
+      // reasoning is kept because it is why the gap existed, and why closing it
+      // needed identity first.
+      standaloneMeetings,
+      meetingFetchFailed,
+      // ── the ORIGINAL position, for the record ───────────────────────────
       //
       // The audit finding: this parameter has existed since Phase 4C.1 but no
       // caller ever supplied it, so every package has silently omitted meetings
@@ -167,17 +195,44 @@ function RequestDetail({ req, cases, employeeRecords, employeeActivities = [], e
               </div>
             </div>
           )}
-          {/* Phase E0.6 — a scope statement, not a warning. The package is
-              complete for cases and case-owned records but NOT for meetings held
-              outside a case, and a reviewer about to send a DSAR response needs to
-              know that before they describe it as complete. */}
-          {compiled.standaloneMeetingsDisposition?.excluded&&(
+          {/* Phase E2A — meetings held outside a case ARE now included, by
+              canonical employee reference. The copy therefore had to change: it
+              told the reviewer they were excluded, which would now be false. A
+              notice that promises something the model does not do is worse than
+              no notice.
+
+              Two situations still need saying out loud, and they are different
+              facts: the read FAILED (so completeness is unknown), or Compass
+              deliberately WITHHELD internal analysis. */}
+          {compiled.standaloneMeetingsDisposition?.readFailed&&(
+            <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FEF5E7",border:"1px solid #F5E6C4",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
+              <WarningIcon size={14} color="#B87520" style={{flexShrink:0,marginTop:1}}/>
+              <div style={{fontSize:12,color:"#7A5C1A",lineHeight:1.6}}>
+                <strong>Meetings held outside a case could not be read.</strong> None are included, and this package
+                cannot be described as their complete record. Compile it again before responding.
+              </div>
+            </div>
+          )}
+          {compiled.standaloneMeetingsDisposition?.internalAnalysisWithheld?.length>0&&(
             <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
               <WarningIcon size={14} color="#6B6375" style={{flexShrink:0,marginTop:1}}/>
               <div style={{fontSize:12,color:"#6B6375",lineHeight:1.6}}>
-                <strong>Meetings held outside a case are not included.</strong> Compass cannot yet confirm which
-                employee record such a meeting belongs to, and will not attribute one by name. Check whether any
-                exist for this person before treating this package as their complete record.
+                <strong>Compass's own analysis of {compiled.standaloneMeetingsDisposition.internalAnalysisWithheld.length}{" "}
+                meeting{compiled.standaloneMeetingsDisposition.internalAnalysisWithheld.length===1?"":"s"} has been held back.</strong>{" "}
+                The employee's own record and the notes taken at the meeting are included. HR advisory notes, unfinished
+                review drafts and generated risk scoring are not — decide whether an exemption genuinely applies before
+                relying on that.
+              </div>
+            </div>
+          )}
+          {compiled.standaloneMeetingsDisposition?.witnessInterviewsExcluded>0&&(
+            <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
+              <WarningIcon size={14} color="#6B6375" style={{flexShrink:0,marginTop:1}}/>
+              <div style={{fontSize:12,color:"#6B6375",lineHeight:1.6}}>
+                <strong>{compiled.standaloneMeetingsDisposition.witnessInterviewsExcluded} witness
+                interview{compiled.standaloneMeetingsDisposition.witnessInterviewsExcluded===1?"":"s"} {compiled.standaloneMeetingsDisposition.witnessInterviewsExcluded===1?"is":"are"} not
+                treated as this person's own record.</strong> An interview where someone attended as a witness belongs to
+                the process being investigated. Where it mentions this person, it appears under third-party mentions.
               </div>
             </div>
           )}

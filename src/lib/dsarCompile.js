@@ -1,5 +1,6 @@
 import { classifyIdentityByName, IDENTITY } from './employeeRecords.js';
 import { MEETING_SUBJECT_KIND } from './standaloneMeetings.js';
+import { splitMeetingRecord } from './meetingRecordSections.js';
 // Compiles everything Compass holds about one named individual, for a UK
 // GDPR/DPA 2018 Subject Access Request. Pure/client-side — the data is
 // already loaded into the app, so this needs no new API route.
@@ -63,7 +64,7 @@ import { MEETING_SUBJECT_KIND } from './standaloneMeetings.js';
 //    regardless of whose case it was on) is folded into the existing
 //    subjectAuditLog filter directly rather than a separate section,
 //    since it's the same shape of record either way.
-export function compileSubjectData(employeeName, { canonicalEmployeeId = null, cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [], wellbeingNotes = [], concernReferrals = [], allegations = [], caseSignals = [], caseTasks = [], hrReviewRequests = [], auditLog = [], signingRequests = [], portalAccounts = [], dsarRequests = [], orgMembers = [], profiles = [], caseViews = [], portalInvites = [], orgEvents = [], improvementInitiatives = [], managerCapabilityInsights = [], organisationThemes = [], caseAccess = [], redundancyCases = [], standaloneMeetings = [],
+export function compileSubjectData(employeeName, { canonicalEmployeeId = null, cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [], wellbeingNotes = [], concernReferrals = [], allegations = [], caseSignals = [], caseTasks = [], hrReviewRequests = [], auditLog = [], signingRequests = [], portalAccounts = [], dsarRequests = [], orgMembers = [], profiles = [], caseViews = [], portalInvites = [], orgEvents = [], improvementInitiatives = [], managerCapabilityInsights = [], organisationThemes = [], caseAccess = [], redundancyCases = [], standaloneMeetings = [], meetingFetchFailed = false,
     employeeActivities = [], employeeActivityRecords = [], employmentEvents = [],
   } = {}) {
   // ── Phase E0.5B — CANONICAL IDENTITY TAKES PRECEDENCE OVER THE NAME ───────
@@ -185,7 +186,52 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
     }
     return nameMatchesSubject(m?.employeeName);
   };
-  const subjectStandaloneMeetings = standaloneMeetings.filter(isSubjectsOwnStandaloneMeeting);
+  const ownedStandaloneMeetings = standaloneMeetings.filter(isSubjectsOwnStandaloneMeeting);
+
+  // ── Phase E2A — WHAT OF A MEETING IS THE EMPLOYEE'S PERSONAL DATA ────────
+  //
+  // A meeting row carries both the employee's own record and Compass's internal
+  // analysis of it, in the same object. Disclosing the row wholesale would hand
+  // over the second with the first.
+  //
+  // The split is not invented here: splitMeetingRecord already draws the
+  // employee-facing / internal boundary that the signature path uses, and
+  // stripAdvisorNotes is the read-time projection built on it. This applies that
+  // same rule at the disclosure boundary.
+  //
+  // DISCLOSED — their own words and the record of what happened to them:
+  //   transcript, summary, the employee-facing part of `record`, and the
+  //   parentage/lifecycle metadata (type, dates, status, case link).
+  //
+  // WITHHELD — Compass's internal analysis and working material:
+  //   advisor_notes (an HR advisory note about how to handle them),
+  //   review_draft (an unfinished internal analysis, not a record of the
+  //   meeting), risk (a generated risk score/prediction about the person), and
+  //   the internal half of `record`.
+  //
+  // Withheld items are REPORTED, not silently dropped, so a DPO can see that a
+  // deliberate classification was applied and decide differently if they judge
+  // an exemption does not apply.
+  const classifyMeetingForDisclosure = m => {
+    const { employeeFacing, internal } = splitMeetingRecord(m?.record || "");
+    const withheld = [];
+    if (internal) withheld.push('record.internalAnalysis');
+    if (m?.advisorNotes) withheld.push('advisorNotes');
+    if (m?.reviewDraft) withheld.push('reviewDraft');
+    if (m?.risk) withheld.push('risk');
+    return {
+      id: m?.id, meetingTypeId: m?.meetingTypeId ?? null, status: m?.status ?? null,
+      subjectKind: m?.subjectKind ?? null, employeeId: m?.employeeId ?? null,
+      caseId: m?.caseId ?? null,
+      startedAt: m?.startedAt ?? null, endedAt: m?.endedAt ?? null,
+      scheduledFor: m?.schedule?.date ?? null,
+      record: employeeFacing || null,
+      transcript: Array.isArray(m?.transcript) ? m.transcript : [],
+      summary: m?.summary ?? null,
+      withheldAsInternalAnalysis: withheld,
+    };
+  };
+  const subjectStandaloneMeetings = ownedStandaloneMeetings.map(classifyMeetingForDisclosure);
   const onboarding = starterInstances.filter(s => s.name === employeeName);
   const offboarding = leaverInstances.filter(s => s.name === employeeName);
   // ── Phase E0.6 — canonical routes where one now exists ───────────────────
@@ -356,7 +402,15 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
   // human review, never auto-redacted. caseId is null here by definition, so the
   // location carries standalone:true rather than a case that does not exist;
   // a reviewer must be able to find the source of a flagged line.
-  subjectStandaloneMeetings.forEach(m => {
+  // The RAW owned meetings, deliberately — not the classified export.
+  //
+  // Two different jobs. Classification decides what is DISCLOSED; this scan finds
+  // other people's names in the subject's content so a human can weigh a
+  // third-party disclosure. Scanning the classified objects instead lost
+  // `schedule`, and with it the date a reviewer needs to locate a flagged line —
+  // and it would also have stopped scanning the internal section, where a third
+  // party can be named just as easily.
+  ownedStandaloneMeetings.forEach(m => {
     scanText(m.record, { standalone: true, meetingId: m.id, field: 'record', meetingType: m.meetingTypeId, date: m.schedule?.date || m.startedAt });
     scanText(m.summary, { standalone: true, meetingId: m.id, field: 'summary', meetingType: m.meetingTypeId, date: m.schedule?.date || m.startedAt });
     (m.transcript || []).forEach((u, i) => scanText(u.text, { standalone: true, meetingId: m.id, field: `transcript[${i}]`, meetingType: m.meetingTypeId, date: m.schedule?.date || m.startedAt }));
@@ -544,11 +598,11 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
       // never the witness's own record however its employee_name reads.
       basis: canonicalEmployeeId ? "employee_id" : "employee_name",
       canonicallyAttributable: !!canonicalEmployeeId,
-      included: subjectStandaloneMeetings.length,
+      included: ownedStandaloneMeetings.length,
       // Supplied to the compiler but NOT this subject's own — a witness
       // interview, another employee's meeting, or an unreconciled legacy row.
       // Reported so exclusion is never mistaken for the records not existing.
-      excludedCount: standaloneMeetings.length - subjectStandaloneMeetings.length,
+      excludedCount: standaloneMeetings.length - ownedStandaloneMeetings.length,
       witnessInterviewsExcluded: standaloneMeetings.filter(
         m => m?.subjectKind === MEETING_SUBJECT_KIND.PROCESS_WITNESS
       ).length,
@@ -565,9 +619,21 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
       //
       // So this flag means what it always meant: the package must not be
       // described as a complete meeting history.
+      // TRUE whenever the package cannot be described as a complete meeting
+      // history — nothing was supplied, or the read failed. A failed read is NOT
+      // the same fact as "there were none", and a DSAR that conflated them would
+      // certify completeness it does not have.
       excluded: standaloneMeetings.length === 0,
-      note: standaloneMeetings.length === 0
-        ? "Meetings held outside a case are NOT included in this package. Compass can now identify which employee such a meeting belongs to — Phase E2 gave them a canonical employee reference — but they are not yet compiled into this package. This package is complete for cases and case-owned records; it may be incomplete for meetings held outside a case."
+      readFailed: !!meetingFetchFailed,
+      // What was fetched but deliberately not disclosed, per meeting. Reported so
+      // the classification is visible to the person answering the request.
+      internalAnalysisWithheld: subjectStandaloneMeetings
+        .filter(m => m.withheldAsInternalAnalysis.length > 0)
+        .map(m => ({ meetingId: m.id, withheld: m.withheldAsInternalAnalysis })),
+      note: meetingFetchFailed
+        ? "Compass could not read meetings held outside a case while compiling this package, so none are included and completeness cannot be confirmed for them. Re-compile before responding."
+        : standaloneMeetings.length === 0
+        ? "No meetings held outside a case were found for this organisation, so none are included. This package is complete for cases and case-owned records."
         : (canonicalEmployeeId
           ? "Meetings held outside a case are attributed by canonical employee reference, never by name. Interviews where this person attended as a witness belong to the process being investigated, not to this person's own record, and are reported under third-party mentions rather than included here. Meetings recorded before Phase E2 carry no canonical reference and are matched by name only."
           : "This subject has no canonical employee record, so meetings held outside a case are matched by name only and cannot be confirmed as theirs. This package may be incomplete for meetings held outside a case."),

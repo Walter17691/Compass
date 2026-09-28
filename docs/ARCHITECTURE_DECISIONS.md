@@ -983,6 +983,89 @@ Both doors are checked: the form disables Start without parentage, and the write
 handler refuses independently. A UI that only finds out at the write has already
 let someone conduct a meeting it cannot save.
 
+### Meeting authority — the end state (E2A, 2026-09-28)
+
+**`public.meetings` is the target canonical meeting entity.** Every new meeting
+belongs there eventually: ordinary employee meetings (already), process witness
+meetings (already), formal employee-process meetings, and future
+organisation-level process meetings where appropriate.
+
+**`cases.meetings` jsonb is historical and formal compatibility state**, not a
+rival authority. It keeps serving the 890 historical meetings across 779 cases and
+the formal workflow built on them, and it must not become the permanent home of
+newly created formal meetings.
+
+**There is no dual-authority problem today, and that is not luck.**
+`lib/meetingStore.js` already states the invariant — *a meeting has exactly ONE
+authoritative storage home; no dual-write, no shadow copy* — and decides it with a
+function (`meetingHome`) keyed on an explicit marker, never inferred from the
+absence of a `case_id`. The two stores own **disjoint** sets: meetings born
+standalone live in the table for life, including after `case_id` is filled;
+meetings born inside a case live in the jsonb. `caseForPersistence` strips
+table-resident meetings before any case write, so the jsonb cannot be contaminated
+by a merge. What was missing was not a rule but a stated **direction of travel**,
+which is what this section adds.
+
+**Historical formal meetings are not migrated** until their parent cases carry
+canonical identity and a dedicated migration is approved. All 2,960 cases still
+have `employee_id IS NULL`; E0.5A/E0.5B made *new* cases canonical (both creation
+paths refuse without a selected employee) and built the reconciliation tool, which
+has never been run. Migration is a separate later project.
+
+**No new independent meeting store may be introduced.** Not `employee_meetings`,
+not `formal_meetings`, not `case_meeting_records`. If neither existing store fits a
+requirement, that is a signal to finish the cutover, not to add a third.
+
+#### Why the forward formal cutover was not done in E2A
+
+Three blockers, each verified rather than assumed:
+
+1. **The table cannot hold a formal meeting.** `meetings_standalone_type_only`
+   restricts `meeting_type_id` to `informal | return | investigation`, and both the
+   INSERT policy and the parentage guard forbid a `case_id` at birth — *"meetings
+   born in a case belong in cases.meetings"* is the core statement of that design.
+   A disciplinary or appeal hearing is unstorable there today.
+2. **The formal read model is the jsonb.** **186 references across 50 files** read
+   `cases.meetings` directly — including `caseStage.js`, `nextStep.js` (the
+   validated E1.4 recipes), `processTimeline.js`, `guardrails.js`,
+   `hearingPack.js`, `appealReview.js`, `appealInvitation.js`,
+   `investigationQuality.js` and the employee portal. `meetingsForCase` and
+   `allKnownMeetings` exist for a union read and **no surface imports them**.
+3. **Formal surfaces also WRITE through the case array** — `MeetingsTab` sets
+   `signStatus` by mapping `x.meetings` and calling `saveCases`.
+
+Moving new formal meetings to rows therefore means changing the birth rule, the
+type model, and the read *and* write model of the validated misconduct workflow
+including appeal and signature. That is a restructure, not a bounded phase, so it
+is recorded as the next prerequisite rather than attempted.
+
+**No dual write was introduced.** A transition that wrote both stores would need a
+proven authority rule, id correlation, concurrency, partial-failure handling and a
+guarantee that stale jsonb cannot overwrite a canonical row. None of that can be
+made robust alongside the restructure above, so the dependency is recorded instead.
+
+### DSAR canonical meeting identity
+
+A meeting's DSAR subject is its **`employee_id`**, never a name. The production
+flow — not merely the compiler — now includes them: `DsarScreen` reads them
+through the ordinary authenticated client so E2's meeting policies apply
+unchanged. The privileged `dsar-lookup` endpoint is untouched; completeness is not
+a reason to widen access.
+
+A **witness interview is never the witness's own subject record**. Where it names
+the subject it is surfaced as a third-party mention for a human to weigh, exactly
+as another person's case record already is. A **legacy pre-E2 row** carries no id
+and is matched by name as explicit legacy compatibility; that fallback never
+applies to a canonical row.
+
+**What is disclosed:** the transcript, the summary, the employee-facing part of the
+record, and parentage/lifecycle metadata. **What is withheld:** HR advisory notes,
+the internal half of the record, unfinished review drafts, and generated risk
+scoring — Compass's analysis *of* the person rather than a record of what happened
+to them. The split reuses `splitMeetingRecord`, the boundary the signature path
+already draws. Withheld items are **reported per meeting**, so the classification
+is a visible decision a DPO can overrule rather than a silent omission.
+
 ### Organisation-level compatibility is retained
 
 `employee_id` is nullable, so AD-001's future whistleblowing, redundancy and
