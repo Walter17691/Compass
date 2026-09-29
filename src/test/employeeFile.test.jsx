@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readFileSync, existsSync } from 'node:fs';
 import { EmployeeFileScreen } from '../screens/EmployeeFileScreen.jsx';
@@ -173,11 +173,14 @@ describe('4/12/13/14/15. rendering, permissions and confidentiality', () => {
   });
 
   it('13. wellbeing reaches the file only for an authorised HR viewer', () => {
+    // Wave A: the same guarantee, now asserted against the ONE projection the
+    // Overview and the History tab both render.
     const hr = buildEmployeeFile('u-a', DATA, { isHR: true });
-    expect(hr.recentActivity.some(e => e.label === 'Wellbeing note recorded')).toBe(true);
+    expect(hr.activityEntries.some(e => e.kind === 'wellbeing')).toBe(true);
     const notHr = buildEmployeeFile('u-a', DATA, { isHR: false, role: 'location_manager' });
-    expect(notHr.recentActivity.some(e => e.label === 'Wellbeing note recorded')).toBe(false);
-  });
+    expect(notHr.activityEntries.some(e => e.kind === 'wellbeing')).toBe(false);
+    expect(JSON.stringify(notHr.recentActivity)).not.toMatch(/[Ww]ellbeing/);
+    });
 
   it('14/15. existence is not leaked — the section is OMITTED, never disabled', () => {
     render(<EmployeeFileScreen {...baseProps} isHR={false} role="location_manager" />);
@@ -210,7 +213,10 @@ describe('4/12/13/14/15. rendering, permissions and confidentiality', () => {
   it('13/14. the capability gate is explicit, not "the array happened to be empty"', () => {
     expect(libCode).toContain('canSeeWellbeing: !!isHR');
     expect(libCode).toContain('canSeeDsar: !!isHR');
-    expect(libCode).toContain('if (viewer.canSeeWellbeing)');
+    // Wave A moved the gate from the deleted preview builder into the ONE
+      // projection. It is still a gate, and it still denies by default.
+      expect(libCode).toContain('if (viewer.canSeeWellbeing)');
+      expect(libCode).toContain('if (viewer.canSeeReferrals)');
     const v = employeeFileViewer({ isHR: false, role: 'investigator' });
     expect(v.canSeeWellbeing).toBe(false);
     expect(v.canSeeDsar).toBe(false);
@@ -290,7 +296,10 @@ describe('9/10/11. opening and creating cases', () => {
     const user = userEvent.setup();
     const onNewCase = vi.fn();
     render(<EmployeeFileScreen {...baseProps} onNewCase={onNewCase} />);
-    await user.click(screen.getByRole('button', { name: 'New case' }));
+    // Wave A: New case lives in the overflow — same handler, same preselected
+    // employee, one click further away.
+    await user.click(screen.getByRole('button', { name: /More actions/ }));
+    await user.click(screen.getByRole('menuitem', { name: 'New case' }));
     expect(onNewCase).toHaveBeenCalledWith('u-a');
     // It opens the EXISTING modal with the employee already chosen.
     expect(appCode).toContain('onNewCase={(id)=>{ setCasePromptEmployeeId(id); setShowCasePrompt(true); }}');
@@ -320,7 +329,8 @@ describe('23/24/25/26. deferred tabs are honest, and no AI was added', () => {
   it('the four tabs exist as a real tablist', () => {
     render(<EmployeeFileScreen {...baseProps} />);
     expect(EMPLOYEE_FILE_TABS.map(t => t.label))
-      .toEqual(['Overview', 'Activity', 'HR Processes', 'Documents']);
+      // Wave A relabelled Activity → History; the tab ID is deliberately unchanged.
+      .toEqual(['Overview', 'History', 'HR Processes', 'Documents']);
     expect(screen.getByRole('tablist', { name: 'Employee file sections' })).toBeInTheDocument();
     expect(screen.getAllByRole('tab')).toHaveLength(4);
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
@@ -329,7 +339,8 @@ describe('23/24/25/26. deferred tabs are honest, and no AI was added', () => {
   it('23/24. Activity replaces Timeline and Meetings, and name-matches nothing', () => {
     render(<EmployeeFileScreen {...baseProps} activeTab="activity" />);
     // The chronology explains what it is rather than promising a future feature.
-    expect(screen.getByText(/authorised record of management activity/)).toBeInTheDocument();
+    // Wave A reworded this: "activity" is the domain's word, not the manager's.
+    expect(screen.getByText(/authorised history for this employee/)).toBeInTheDocument();
     // The claim the old Timeline shell existed to protect, kept: nothing here
     // resolves an employee by name.
     expect(tabsCode).not.toContain('employeeName ===');
@@ -428,25 +439,39 @@ describe('14. actions, restraint and the deferred meeting action', () => {
     });
   });
 
-  it('one primary action, secondary actions kept quiet', () => {
+
+  it('ONE primary action, derived from state — and never New case', () => {
     render(<EmployeeFileScreen {...baseProps} onNewCase={() => {}} setEditing={() => {}} />);
-    const primary = screen.getByRole('button', { name: 'New case' });
-    expect(primary).toBeInTheDocument();
-    // Phase E1.7 renamed "Edit details" to "Correct details", because correcting a
-    // typo and recording a real employment change are different intentions and the
-    // one word "edit" covered both.
-    expect(screen.getByRole('button', { name: 'Correct details' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Edit details' })).not.toBeInTheDocument();
+    // Wave A: the default primary action is the everyday one. "New case" is still
+    // fully available, one click away in the overflow.
+    // This fixture has an OPEN case, so the primary action is that process's own
+    // next step — the point of Wave A: the button reflects the most immediate work.
+    expect(screen.getByRole('button', { name: 'Start investigation meeting' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'New case' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /More actions/ })).toBeInTheDocument();
     // Still a focused mode, never a form sitting on Overview.
     expect(screen.queryByLabelText('Job title')).not.toBeInTheDocument();
   });
 
-  it('the two employment intentions are offered as separate, differently-named actions', () => {
+  it('with no active work the primary action is Start conversation', () => {
+    // u-d has nothing recorded — the neutral default, and the everyday action a
+    // manager actually needs. Not "New case", and not "Start 1:1" either.
+    render(<EmployeeFileScreen {...baseProps} employeeId="u-d" onNewCase={() => {}} setEditing={() => {}} />);
+    expect(screen.getByRole('button', { name: 'Start conversation' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'New case' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Start 1:1/ })).not.toBeInTheDocument();
+  });
+
+  it('the two employment intentions stay separate and differently named, in the overflow', () => {
     render(<EmployeeFileScreen {...baseProps} setEditing={() => {}}
       onRecordEmploymentChange={() => {}} onMarkAsLeaver={() => {}} />);
-    expect(screen.getByRole('button', { name: 'Correct details' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Record employment change' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Mark as leaver' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /More actions/ }));
+    // Wave A moved them; it did not merge them. E1.7's wording distinction stands:
+    // correcting a typo and recording a real employment change are different acts.
+    expect(screen.getByRole('menuitem', { name: 'Correct details' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Record employment change' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Mark as leaver' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Edit details' })).not.toBeInTheDocument();
   });
 
   it('the edit flow survived the Person View removal, and writes by id', () => {

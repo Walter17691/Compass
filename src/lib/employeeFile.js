@@ -50,7 +50,14 @@ import { resolveEffectiveEmployee, upcomingChanges, buildEmploymentEventEntries,
 // View / workflow simplification is a separate UX phase and is not started here.
 export const EMPLOYEE_FILE_TABS = Object.freeze([
   { id: "overview", label: "Overview" },
-  { id: "activity", label: "Activity" },
+  // Wave A — the LABEL becomes "History", the id stays "activity".
+  //
+  // Managers were being offered three words for one idea: Activity here, Timeline
+  // on the Case View, and a dead "View timeline" link. "History" is what this is.
+  // The id is deliberately unchanged: it is a stable route key that App state,
+  // deep links and several suites already use, and renaming it would buy nothing
+  // but churn.
+  { id: "activity", label: "History" },
   { id: "processes", label: "HR Processes" },
   { id: "documents", label: "Documents" },
 ]);
@@ -148,93 +155,7 @@ export function buildAttention({ processes = [], dueSoon = [], caseIds = new Set
   return items;
 }
 
-// ── Recent activity — a small Overview preview, NOT the E5 timeline ────────
-//
-// Canonical relationships only. A legacy name-only record is never included: we
-// do not know it is this person's, and a timeline that might be somebody else's
-// is worse than a short one.
-export function buildRecentActivity(ctx, { viewer = {}, limit = 6 } = {}) {
-  const events = [];
-
-  ctx.cases.forEach(cs => {
-    if (cs.createdAt || cs.dateReceived) {
-      events.push({ id: `case-open:${cs.id}`, at: cs.createdAt || cs.dateReceived, label: `${processLabel(cs.caseType)} case opened`, caseId: cs.id });
-    }
-    if (cs.outcome && cs.outcomeIssuedAt) {
-      events.push({ id: `outcome:${cs.id}`, at: cs.outcomeIssuedAt, label: `Outcome issued — ${cs.outcome}`, caseId: cs.id });
-    }
-    // Meetings are reached THROUGH the case, which is authoritative parentage.
-    // No meeting is matched to this employee by name — not in E1, and not in E2.
-    //
-    // E2 note: table-resident meetings still do not appear here, and are not
-    // passed to this builder at all. That is deliberate rather than pending.
-    // Their parentage is now canonical, so projecting an employee's own 1:1 onto
-    // their file has become SAFE — but it is a new product surface with its own
-    // duplication question (an E1.6 activity and a meeting are separate records,
-    // and showing both as raw rows is the "1:1 / Meeting / 1:1 completed" triple
-    // that reads as three things happening), so it is reported rather than
-    // half-built here.
-    //
-    // What E2 does guarantee is the prohibition: a WITNESS INTERVIEW can never
-    // appear on the witness's Employee File, because it carries no employee_id at
-    // all. That holds structurally, whatever any future projection does.
-    (cs.meetings || []).filter(isGenuineMeetingRecord).filter(isMeetingComplete).forEach(m => {
-      events.push({ id: `meeting:${cs.id}:${m.id}`, at: m.date || m.completedAt || null, label: `${m.type || "Meeting"} completed`, caseId: cs.id });
-    });
-  });
-
-  // HR-only collections. Gated on capability, not on the array happening to be
-  // empty, so a non-HR viewer cannot infer existence from a section appearing.
-  if (viewer.canSeeWellbeing) {
-    ctx.wellbeingNotes.forEach(n => {
-      // The TYPE and DATE only. Wellbeing content is not re-disclosed on a
-      // second surface; this is a pointer, and the Wellbeing screen is where
-      // the record is read.
-      events.push({ id: `wellbeing:${n.id}`, at: n.createdAt || n.date || null, label: "Wellbeing note recorded", quiet: true });
-    });
-  }
-  if (viewer.canSeeReferrals) {
-    ctx.concernReferrals.forEach(r => {
-      events.push({ id: `referral:${r.id}`, at: r.createdAt || null, label: "Concern referral triaged", quiet: true });
-    });
-  }
-
-  return events
-    .filter(e => e.at)
-    .sort((a, b) => new Date(b.at) - new Date(a.at))
-    .slice(0, limit);
-}
-
-// ── Current formal warnings. Phase E1.1 ────────────────────────────────────
-//
-// So an authorised user can see whether a live warning exists without opening
-// every past disciplinary case.
-//
-// ┌─ STRUCTURED DATA ONLY ──────────────────────────────────────────────────┐
-// │ A warning exists because an OUTCOME of a warning type was recorded with  │
-// │ an expiry date. Never because the case type is "disciplinary", never     │
-// │ because a letter or note contains the word "warning", and never because  │
-// │ a model thought so. If the structured data cannot establish it, it is    │
-// │ not shown.                                                               │
-// └─────────────────────────────────────────────────────────────────────────┘
-//
-// This CONSUMES the existing authority rather than re-deriving it:
-//   * isWarningOutcome()      — the shared list of warning outcome types
-//   * cases.outcome           — what was actually issued
-//   * cases.outcomeIssuedAt   — when
-//   * cases.warningExpiresAt  — the RECORDED expiry, which is the display and
-//                               decision authority. Duration is never used to
-//                               recompute it; a stored expiry that disagrees
-//                               with issue+duration is still the truth, because
-//                               it is what the outcome letter told the employee.
-//
-// A CLOSED case can hold a LIVE warning. Current warnings are therefore derived
-// from every authorised case, not from open processes — an employee may
-// correctly have no open disciplinary process and still have a live warning.
-
-// Compares calendar DATES, not instants. warning_expires_at is a DATE column,
-// and an instant comparison would make a warning expire at midnight in one
-// timezone and not another.
+// Day-precision comparison, in UTC. Used by the current-warning derivation below.
 const asDay = v => {
   if (!v) return null;
   const d = new Date(v);
@@ -242,28 +163,19 @@ const asDay = v => {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 };
 
-// THE BOUNDARY, AND WHY IT IS STATED RATHER THAN INHERITED.
+// Wave A removed buildRecentActivity().
 //
-// Compass has never compared a warning expiry against the clock anywhere: every
-// existing use of warningExpiresAt is display-only (the outcome tab, the letter
-// grounding, the letter validator). So there was no established semantics to
-// preserve, and this phase establishes one.
+// It was a SECOND, independently assembled chronology feeding the Overview
+// preview, and it disagreed with the History tab about the same employee. It is
+// deleted rather than left exported: an unused chronology builder is precisely
+// what the next person reaches for, and that is how the divergence happened the
+// first time. There is now one projection (see activityEntries below).
 //
-// THE WARNING IS LIVE THROUGH ITS EXPIRY DATE, INCLUSIVE.
-//
-// Compass tells the employee "Expires 11 Mar 2027", and the plain reading of
-// that — on the letter and on this screen — is that the warning still stands on
-// 11 March and is gone on the 12th. It also reads ACAS the clearer way: a
-// warning is current for the specified period and is disregarded AFTER that
-// period, not on its last day.
-//
-//   10 Mar → current
-//   11 Mar → current   (the recorded expiry date itself)
-//   12 Mar → expired
-//
-// Calendar dates only. There is deliberately no time-of-day component: the
-// column is a DATE, and an instant comparison would make a warning lapse at
-// midnight in one timezone and not another.
+// It also carried HR-only wellbeing notes and concern referrals into the Overview
+// preview. Those no longer appear on the Employee File at all — special category
+// health data does not belong on a general overview, and it remains available on
+// the Wellbeing and Concerns screens where it is the subject of the page.
+
 export function isWarningLive(expiresAt, now = new Date()) {
   const expiry = asDay(expiresAt);
   const today = asDay(now);
@@ -388,6 +300,64 @@ export function buildEmployeeFile(employeeId, authorisedData = {}, viewerInput =
   const effectiveEmployee = resolveEffectiveEmployee(ctx.employee, employmentEvents, now);
   const pendingChanges = upcomingChanges(employeeId, employmentEvents, now);
 
+  // ── Wave A — the ONE authoritative employee history ─────────────────────
+  //
+  // Computed once, here, and used for BOTH the full History tab and the Overview
+  // preview. Previously the preview came from a separate builder, so the two
+  // disagreed: the preview knew about cases, meetings, wellbeing notes and
+  // referrals; the tab knew about activities, processes, meetings and employment
+  // events. Neither was the employee's history.
+  //
+  // Everything here is already authorised: activities and employment events
+  // arrive RLS-filtered, and process/meeting entries are reached THROUGH
+  // ctx.cases, which is itself the authorised set. An inaccessible case
+  // contributes nothing because it is ABSENT — not because it was filtered out
+  // in the projection — so no "restricted event" placeholder is needed, and none
+  // exists. Existence itself can be confidential.
+  // HR-only collections, carried into the ONE projection rather than dropped.
+  //
+  // These two used to reach the Overview through the separate preview builder, each
+  // behind its own capability gate. Unifying the projection must not silently
+  // remove them — Wave A was asked to make the two surfaces agree, not to narrow
+  // what an authorised HR user can see. So the gates move here, unchanged, and
+  // canSeeWellbeing / canSeeReferrals stay live rather than becoming orphans.
+  //
+  // `quiet: true` marks them as context rather than management activity, exactly as
+  // the previous builder did.
+  const hrOnlyEntries = [];
+  if (viewer.canSeeWellbeing) {
+    ctx.wellbeingNotes.forEach(n => {
+      if (!n?.id) return;
+      hrOnlyEntries.push({
+        kind: "wellbeing", id: `wellbeing:${n.id}`, typeLabel: "Wellbeing note",
+        title: "", occurredAt: n.createdAt || n.date || null, quiet: true,
+      });
+    });
+  }
+  if (viewer.canSeeReferrals) {
+    ctx.concernReferrals.forEach(r => {
+      if (!r?.id) return;
+      hrOnlyEntries.push({
+        kind: "referral", id: `referral:${r.id}`, typeLabel: "Concern referral",
+        title: "", occurredAt: r.createdAt || null, quiet: true,
+      });
+    });
+  }
+
+  // Meetings are reached THROUGH the case, which is authoritative parentage.
+  // No meeting is matched to this employee by name — not in E1, not in E2, and not
+  // here. Table-resident meetings are still not passed to this builder at all.
+  //
+  // And the E2 prohibition still holds structurally: a WITNESS INTERVIEW can never
+  // appear on the witness's Employee File, because it carries no employee_id and
+  // every entry in this projection is reached either from an authorised case or
+  // from an employee_id-keyed collection.
+  const activityEntries = [
+    ...buildActivityEntries({ activities, activityRecords, cases: ctx.cases }),
+    ...buildEmploymentEventEntries(employmentEvents, { locationName: authorisedData.locationName, today: now }),
+    ...hrOnlyEntries,
+  ].sort((a, b) => new Date(b.occurredAt || 0) - new Date(a.occurredAt || 0));
+
   return {
     viewer,
     context: ctx,
@@ -410,16 +380,23 @@ export function buildEmployeeFile(employeeId, authorisedData = {}, viewerInput =
     // From EVERY authorised case, not just open ones: a closed disciplinary
     // case can still hold a live warning.
     currentWarnings: deriveCurrentWarnings(ctx.cases, authorisedData.allegations, authorisedData.now),
-    recentActivity: buildRecentActivity(ctx, { viewer }),
+    // ── Wave A — ONE authoritative history ───────────────────────────────
+    //
+    // This was `buildRecentActivity(ctx, …)`, a SECOND independently assembled
+    // chronology: it carried case-opened, outcome-issued, meeting-completed,
+    // wellbeing and referral events, and carried NO activities and NO employment
+    // events. So Overview and the History tab disagreed about what had recently
+    // happened to the same person, and the link between them was broken.
+    //
+    // It is now a preview of the same projection the tab renders — assigned
+    // below, once activityEntries exists.
+    recentActivity: activityEntries.slice(0, 5),
     // The Activity tab's chronological projection: activities with their own
     // chronology, formal process milestones, and meetings reached through an
     // authorised case.
     activities,
     activityRecords,
-    activityEntries: [
-      ...buildActivityEntries({ activities, activityRecords, cases: ctx.cases }),
-      ...buildEmploymentEventEntries(employmentEvents, { locationName: authorisedData.locationName, today: now }),
-    ].sort((a, b) => new Date(b.occurredAt || 0) - new Date(a.occurredAt || 0)),
+    activityEntries,
     // Employment events are their own authoritative domain under the same
     // projection — never merged into activities, never turned into a case.
     employmentEvents,
@@ -432,7 +409,20 @@ export function buildEmployeeFile(employeeId, authorisedData = {}, viewerInput =
     openConcerns,
     employmentDetails: buildEmploymentDetails(effectiveEmployee || ctx.employee),
     // A first-class state: an employee with nothing canonically attributed.
-    isEmpty: ctx.isEmpty,
+    // ── Wave A — the Employee File decides its OWN emptiness ────────────────
+    //
+    // This was ctx.isEmpty, which counts cases, wellbeing notes, concern referrals
+    // and DSAR requests — the E1-era collections, all of it predating conversations
+    // and employment events.
+    //
+    // So an employee whose history was a 1:1 and a job-title change rendered the
+    // empty state: "No recorded activity yet." That is not a cosmetic wrong answer.
+    // It hid their real history, and with it Coming up and Recent history, on the
+    // exact surface Wave A makes the manager's working home. Found by rendering the
+    // screen, not by reading it.
+    //
+    // The file is empty when there is genuinely nothing it would show.
+    isEmpty: ctx.isEmpty && activityEntries.length === 0 && pendingChanges.length === 0,
     // Organisation-wide and employee-agnostic — it must never read as
     // "this person has older records", because Compass does not know that.
     showUnattributedNotice: viewer.canSeeUnattributedNotice && hasUnattributedRecords(ctx),

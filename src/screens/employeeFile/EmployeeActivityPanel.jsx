@@ -55,7 +55,7 @@ export function StartActivityForm({ onCreate, onCancel, defaultType = "conversat
     <section style={{ border: `1px solid ${COLOR.border}`, borderRadius: RADIUS.card,
                       padding: SPACE.lg, background: COLOR.surface, maxWidth: 620 }}>
       <div style={{ ...TYPE.rowName, color: COLOR.ink, marginBottom: SPACE.md }}>
-        {mode === "record" ? "Record something that happened" : "Start an activity"}
+        {mode === "record" ? "Record something that happened" : "Start a conversation"}
       </div>
 
       {/* Two modes, said plainly. A manager writing up yesterday's conversation
@@ -75,7 +75,7 @@ export function StartActivityForm({ onCreate, onCancel, defaultType = "conversat
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: SPACE.md }}>
         <div>
-          <label htmlFor="activity-type" style={label}>What kind of activity</label>
+          <label htmlFor="activity-type" style={label}>What kind of conversation</label>
           <select id="activity-type" value={activityType} onChange={e => setActivityType(e.target.value)} style={field}>
             {ACTIVITY_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
           </select>
@@ -297,9 +297,12 @@ function PendingChangeActions({ entry, onCancelChange, onEditChange, busy }) {
 
 export function EmployeeActivityPanel({
   file, onCreateActivity, onAddRecord, onResolveConcern, onOpenCase, fmtDate, busy = false,
-  onCancelChange, onEditChange,
+  onCancelChange, onEditChange, startOpen = false,
 }) {
-  const [starting, setStarting] = useState(false);
+  // Wave A — "Start conversation" in the header lands here with the chooser ALREADY
+  // OPEN. Routing to the tab and leaving a second button to find would have left the
+  // everyday action two clicks deep, which is the problem Wave A exists to fix.
+  const [starting, setStarting] = useState(!!startOpen);
   const entries = file?.activityEntries || [];
   const openConcerns = (file?.openConcerns || []).length;
 
@@ -315,11 +318,11 @@ export function EmployeeActivityPanel({
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
                       gap: SPACE.md, marginBottom: SPACE.lg, flexWrap: "wrap" }}>
           <p style={{ ...TYPE.metadata, color: COLOR.inkQuiet, margin: 0, lineHeight: 1.6, maxWidth: 520 }}>
-            This is the authorised record of management activity for this employee — conversations,
-            concerns, and the formal processes and meetings already on file.
+            This is the authorised history for this employee — conversations, concerns,
+            employment changes, and the formal processes and meetings already on file.
           </p>
           <button type="button" onClick={() => setStarting(true)} style={{ ...primaryBtn, flexShrink: 0 }}>
-            Record an activity
+            Start a conversation
           </button>
         </div>
       )}

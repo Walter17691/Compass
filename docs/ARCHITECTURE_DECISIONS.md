@@ -1121,3 +1121,109 @@ multi-person processes can own meetings without one Employee File owner. That
 nullability is not a loophole: it is legal **only** for a recognised
 non-employee-owned category, and a future organisation-level category would be a
 new `subject_kind` value with its own rule, not a silent NULL.
+
+---
+
+## AD-008 — The Employee File is the working surface
+
+**Status:** **implemented** in Wave A (2026-09-29). UX-1 audited; this implements
+its first wave for the Employee File and the conversation entry only.
+
+### The default action is a conversation
+
+The primary action was static: **"New case"** whenever the viewer could create
+one. So the most consequential act was the default the screen offered, and the
+everyday one — having a conversation — had no entry point in the header or on
+Overview at all. A product whose purpose is to keep conversations informal for as
+long as they should be must not open with formal escalation.
+
+There is now **one** primary action, resolved deterministically from authorised
+state, and its neutral default is **Start conversation** — not "Start 1:1",
+because Compass supports more than 1:1s.
+
+### The priority order
+
+The most immediate **actionable work** wins, never the most serious historical
+object. `ACTION_PRIORITY` in `lib/employeeFileActions.js` *is* the documented
+order — the resolver walks that array, so the two cannot drift apart:
+
+1. Resume meeting — a meeting is live; someone is in a room
+2. Complete review — a record is unfinished and memory is decaying
+3. Start meeting — scheduled for today or overdue
+4. Prepare for meeting — scheduled ahead
+5. Chase signature — a document went out and has not come back
+6. Record follow-up — a follow-up the manager committed to
+7. Send documentation — an effective change whose paperwork is outstanding
+8. *The process's own next step* — taken verbatim from the validated recipe
+9. Continue concern — an open concern with nothing yet due
+10. **Start conversation**
+
+A live warning and a closed case are **context, not work**, and never become the
+primary action. A former employee is offered **nothing** — there is no
+conversation to have with someone who has left, and a null primary action is a
+real answer.
+
+Formal-process work uses the recipe's **own** next step rather than a relabelling
+of it, so Employee File and Case View cannot disagree about what happens next, and
+nothing is invented for a process Compass has no recipe for.
+
+### It cannot reveal what the viewer cannot see
+
+The resolver is **pure**, takes exactly one data source — the `file` built from
+RLS-filtered collections — and performs no authorisation of its own. An
+inaccessible confidential case is **absent** from `file`, not hidden inside it, so
+it cannot reach an action label. The resolver must never become a second
+permission boundary that could drift from the real one.
+
+It is also deterministic. No AI, no scoring, no "Compass recommends starting a
+disciplinary". Compass may know the process; it must not make the employment
+decision.
+
+### One authoritative history
+
+`buildRecentActivity()` is **deleted**. It was a second, independently assembled
+chronology feeding the Overview preview: it carried case milestones, meetings,
+wellbeing notes and referrals, and carried **no** conversations and **no**
+employment events. The tab carried the opposite set. Neither was the employee's
+history, and the link between them — "View timeline" — targeted a tab id that has
+not existed since E1.6, so it set an invalid tab, fell back to Overview, and did
+nothing at all.
+
+There is now one projection. The Overview preview is `activityEntries.slice(0, 5)`
+and the link goes to the real tab. The builder was deleted rather than left
+exported, because an unused chronology builder is exactly what the next person
+reaches for. HR-only wellbeing notes and concern referrals moved **into** that one
+projection behind their existing capability gates, so unifying lost nothing an
+authorised viewer could see before.
+
+### The empty state stopped lying
+
+`isEmpty` came from a context count of the E1-era collections — cases, wellbeing
+notes, referrals, DSAR requests — all of it predating conversations and employment
+events. So an employee whose history was a 1:1 and a job-title change rendered
+*"No recorded activity yet."*, hiding their real history along with Coming up and
+Recent history, on the exact surface Wave A makes the manager's home. The file is
+now empty only when there is genuinely nothing it would show. **Found by rendering
+the screen, not by reading it.**
+
+### Coming up
+
+Future-dated employment changes appear in their own restrained section, from
+E1.7's effective-dated truth — so a cancelled event never appears and nothing
+takes effect early. Edit and Cancel stay with the change itself in History rather
+than being duplicated.
+
+### What did NOT change
+
+Current Warnings derivation (E1.1), formal case access, confidentiality, meeting
+parentage (E2/E2A), the DSAR disclosure projection (Wave 0), process recipes,
+Case View, Live Meeting, Review, Outcome, Appeal, and Documents. No permissions
+changed: the administrative actions moved into an overflow, and every action a
+viewer could reach before is still reachable.
+
+### One intent experience
+
+There is exactly one `StartActivityForm` in the product. "Start conversation"
+opens it directly rather than landing on the tab and leaving a second button to
+find. The global way in (People) selects the employee canonically first and then
+reuses the same experience.

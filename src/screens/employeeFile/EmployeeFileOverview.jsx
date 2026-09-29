@@ -78,10 +78,31 @@ function ProcessBlock({ process, onOpenCase, compact = false }) {
   );
 }
 
+// One history entry, in words a manager reads rather than a type id. The entry
+// already carries a human typeLabel from its own domain; this only decides how
+// the two halves read together, and never invents a label the domain did not give.
+function historyLabel(e) {
+  const type = e?.typeLabel || "Record";
+  const title = (e?.title || "").trim();
+  if (e?.kind === "employment_event") return title ? `${type} — ${title}` : type;
+  return title ? `${type} — ${title}` : type;
+}
+
+// A pending employment change, described by what it will do. `label` and
+// `newValue` are exactly the fields upcomingChanges() produces — a location change
+// carries no newValue (it has a location id instead), so it reads as the change
+// alone and the destination stays in History rather than being half-guessed here.
+function comingUpLabel(c) {
+  const type = c?.label || "Employment change";
+  const to = (c?.newValue || "").trim();
+  return to ? `${type} — ${to}` : type;
+}
+
 export function EmployeeFileOverview({ file, onOpenCase, onGoToTab, onReconcile }) {
   const [showDetails, setShowDetails] = useState(false);
   const { openProcesses, currentProcess, hasMultipleOpen, attention, recentActivity,
-          employmentDetails, isEmpty, showUnattributedNotice, currentWarnings = [] } = file;
+          employmentDetails, isEmpty, showUnattributedNotice, currentWarnings = [],
+          pendingChanges = [] } = file;
 
   // ── The empty file is a first-class state, not a failure ─────────────────
   if (isEmpty) {
@@ -210,15 +231,56 @@ export function EmployeeFileOverview({ file, onOpenCase, onGoToTab, onReconcile 
         </Section>
       )}
 
-      {/* ── Recent activity — a bounded preview, not the E5 timeline ──────── */}
+      {/* ── Coming up — Wave A ───────────────────────────────────────────────
+          Only future-dated employment changes, and only real ones: E1.7's
+          effective-dated truth, which excludes cancelled events by construction
+          and never applies a change early. Nothing renders when there is nothing
+          coming.
+
+          Placed after attention and before history because it is neither a task
+          nor the past — it is what the manager should not be surprised by. */}
+      {pendingChanges.length > 0 && (
+        <Section title="Coming up">
+          <ul style={{ listStyle: "none", margin: 0, padding: 0,
+                       border: `1px solid ${COLOR.border}`, borderRadius: RADIUS.card, overflow: "hidden" }}>
+            {pendingChanges.map((c, i) => (
+              <li key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline",
+                                      gap: SPACE.md, padding: `${SPACE.md}px ${SPACE.lg}px`, background: COLOR.surface,
+                                      borderTop: i === 0 ? "none" : `1px solid ${COLOR.borderFaint}`, flexWrap: "wrap" }}>
+                <span style={{ ...TYPE.rowContext, color: COLOR.ink, minWidth: 0 }}>{comingUpLabel(c)}</span>
+                <span style={{ ...TYPE.metadata, color: COLOR.inkQuiet, flexShrink: 0 }}>
+                  {formatWhen(c.effectiveDate)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {/* Edit and Cancel live with the change itself, in History, rather than
+              being duplicated here — one place to act on it. */}
+          <button type="button" onClick={() => onGoToTab("activity")}
+            style={{ ...TYPE.metadata, background: "none", border: "none", padding: 0, marginTop: SPACE.sm,
+                     color: COLOR.purple, cursor: "pointer", fontFamily: FONT.sans }}>
+            Manage upcoming changes
+          </button>
+        </Section>
+      )}
+
+      {/* ── Recent history — Wave A ──────────────────────────────────────────
+          A slice of the SAME authoritative projection the History tab renders.
+          This used to be a separately assembled list that knew about cases and
+          meetings but not about conversations or employment changes, so the two
+          surfaces disagreed about the same person.
+
+          The link used to target "timeline", which has not been a tab id since
+          E1.6 — so it set an invalid tab, fell back to Overview, and did nothing
+          at all. It now goes to the real tab. */}
       {recentActivity.length > 0 && (
         <Section
-          title="Recent activity"
+          title="Recent history"
           action={
-            <button type="button" onClick={() => onGoToTab("timeline")}
+            <button type="button" onClick={() => onGoToTab("activity")}
               style={{ ...TYPE.metadata, background: "none", border: "none", padding: 0,
                        color: COLOR.purple, cursor: "pointer", fontFamily: FONT.sans }}>
-              View timeline
+              View full history
             </button>
           }>
           <ul style={{ listStyle: "none", margin: 0, padding: 0,
@@ -227,8 +289,8 @@ export function EmployeeFileOverview({ file, onOpenCase, onGoToTab, onReconcile 
               <li key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline",
                                       gap: SPACE.md, padding: `${SPACE.md}px ${SPACE.lg}px`, background: COLOR.surface,
                                       borderTop: i === 0 ? "none" : `1px solid ${COLOR.borderFaint}`, flexWrap: "wrap" }}>
-                <span style={{ ...TYPE.rowContext, color: COLOR.ink, minWidth: 0 }}>{e.label}</span>
-                <span style={{ ...TYPE.metadata, color: COLOR.inkQuiet, flexShrink: 0 }}>{formatWhen(e.at)}</span>
+                <span style={{ ...TYPE.rowContext, color: COLOR.ink, minWidth: 0 }}>{historyLabel(e)}</span>
+                <span style={{ ...TYPE.metadata, color: COLOR.inkQuiet, flexShrink: 0 }}>{formatWhen(e.occurredAt)}</span>
               </li>
             ))}
           </ul>

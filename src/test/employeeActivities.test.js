@@ -429,7 +429,9 @@ describe('needs your attention', () => {
 describe('Employee File information architecture', () => {
   it('is the approved four-tab model', () => {
     expect(EMPLOYEE_FILE_TABS.map(t => t.id)).toEqual(['overview', 'activity', 'processes', 'documents']);
-    expect(EMPLOYEE_FILE_TABS.map(t => t.label)).toEqual(['Overview', 'Activity', 'HR Processes', 'Documents']);
+    // Wave A relabelled Activity → History. The IDs are the stable contract and
+    // are unchanged, which is why this assertion splits the two.
+    expect(EMPLOYEE_FILE_TABS.map(t => t.label)).toEqual(['Overview', 'History', 'HR Processes', 'Documents']);
   });
 
   it('Timeline and Meetings are no longer separate tabs', () => {

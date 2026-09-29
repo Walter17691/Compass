@@ -223,8 +223,8 @@ export function PeopleScreen({ cases, employeeRecords = [], wellbeingNotes = [],
                 between "a case" and "a meeting". The roster here is already
                 RLS-filtered, so this offers nobody the viewer cannot access. */}
             <button type="button" onClick={()=>{setActiveEmployeeId(p.id);setScreen(SCREENS.EMPLOYEE_FILE);onStartActivity?.();}}
-              style={{fontSize:12,background:"none",border:"none",padding:"5px 8px",color:COLOR.purple,cursor:"pointer",fontWeight:600,fontFamily:FONT.sans,flexShrink:0}}>+ Record activity</button>
-            <button type="button" onClick={()=>{setMeetingSetup(s=>({...s,employee:p.name}));setScreen(SCREENS.HOME+"_meeting");}}
+              style={{fontSize:12,background:"none",border:"none",padding:"5px 8px",color:COLOR.purple,cursor:"pointer",fontWeight:600,fontFamily:FONT.sans,flexShrink:0}}>+ Start conversation</button>
+            <button type="button" onClick={()=>{setMeetingSetup(s=>({...s,employee:p.name,employeeId:p.id}));setScreen(SCREENS.HOME+"_meeting");}}
               style={{fontSize:12,background:"none",border:"none",padding:"5px 8px",color:COLOR.purple,cursor:"pointer",fontWeight:600,fontFamily:FONT.sans,flexShrink:0,marginRight:4}}>+ New meeting</button>
           </DataRow>
         ))}

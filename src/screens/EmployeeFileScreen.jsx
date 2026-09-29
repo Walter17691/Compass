@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { SCREENS } from '../constants';
 import { COLOR, SPACE, TYPE } from '../styles/tokens';
 import { buildEmployeeFile, EMPLOYEE_FILE_TABS, isEmployeeFileTab } from '../lib/employeeFile';
+import { resolvePrimaryAction, EMPLOYEE_FILE_ACTION } from '../lib/employeeFileActions';
 import { EmployeeFileHeader, EmployeeFileTabs } from './employeeFile/EmployeeFileHeader';
 import { EmployeeFileOverview } from './employeeFile/EmployeeFileOverview';
 import { ProcessesTabPanel, DocumentsTabPanel } from './employeeFile/EmployeeFileTabs';
@@ -90,6 +91,71 @@ export function EmployeeFileScreen({
     setScreen(SCREENS.CASE_VIEW);
   };
 
+  // ── Wave A — ONE primary action, derived, never fixed ────────────────────
+  //
+  // Resolved from the same authorised `file` the rest of the screen renders, so
+  // the button cannot name a case or meeting the viewer is not allowed to know
+  // exists — an inaccessible case is absent from `file`, not hidden inside it.
+  const primary = useMemo(() => resolvePrimaryAction(file), [file]);
+
+  // Set only when the header's primary action navigated here, so the chooser opens
+  // for that click and not every time someone browses to History.
+  const [openChooser, setOpenChooser] = useState(false);
+  const openActivityTab = ({ chooser = false } = {}) => {
+    setOpenChooser(chooser);
+    setActiveTab("activity");
+  };
+
+  const primaryAction = useMemo(() => {
+    if (!primary) return null;
+    const goToCase = () => openCase(primary.caseId);
+    switch (primary.kind) {
+      // Every action lands the user where the work actually is. Wave A routes
+      // into the EXISTING screens; it does not reimplement any of them.
+      case EMPLOYEE_FILE_ACTION.START_CONVERSATION:
+        return { label: primary.label, onClick: () => openActivityTab({ chooser: true }) };
+      case EMPLOYEE_FILE_ACTION.RECORD_FOLLOW_UP:
+      case EMPLOYEE_FILE_ACTION.CONTINUE_CONCERN:
+        return { label: primary.label, onClick: openActivityTab };
+      case EMPLOYEE_FILE_ACTION.SEND_DOCUMENTATION:
+        return { label: primary.label, onClick: openActivityTab };
+      default:
+        // Meeting and formal-process work lives in the case.
+        return { label: primary.label, onClick: primary.caseId ? goToCase : openActivityTab };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [primary]);
+
+  // The administrative actions, in a restrained overflow. Identical availability
+  // rules to before — this moves them, it does not gate them.
+  const overflowActions = useMemo(() => {
+    if (editing || employmentMode) return [];
+    const items = [];
+    if (file.viewer.canCreateCase && onNewCase) {
+      // Still fully available, deliberately: formal escalation must not become
+      // hard to find when it is genuinely the right thing to do.
+      items.push({ label: "New case", onClick: () => onNewCase(file.employee.id) });
+    }
+    if (file.viewer.canEditEmployee && setEditing) {
+      // Worded as the two different intentions they are, not as one "edit" that
+      // silently means both.
+      items.push({ label: "Correct details", onClick: () => {
+        setEditJobTitle?.(file.employee.jobTitle || "");
+        setEditStartDate?.(file.employee.startDate || "");
+        setEditing(true);
+      } });
+      if (onRecordEmploymentChange) {
+        items.push({ label: "Record employment change", onClick: () => setEmploymentMode("change") });
+      }
+      if (onMarkAsLeaver && file.isCurrentEmployee) {
+        items.push({ label: "Mark as leaver", onClick: () => setEmploymentMode("leaver") });
+      }
+    }
+    return items;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [file, editing, employmentMode, onNewCase, onRecordEmploymentChange, onMarkAsLeaver, setEditing]);
+
+
   // A uuid that resolves to nobody is a real state — a stale deep link, or a
   // roster row deleted since the URL was shared. It gets a plain explanation
   // rather than a blank screen or a crash.
@@ -111,26 +177,8 @@ export function EmployeeFileScreen({
       <EmployeeFileHeader
         employee={file.employee}
         onBack={() => setScreen(SCREENS.PEOPLE)}
-        // One primary action. "New case" is safe: cases carry a canonical
-        // employee_id, so the employee is preselected and the user is taken
-        // through the EXISTING case-creation flow — this screen never creates a
-        // case itself, and never bypasses its required fields.
-        primaryAction={file.viewer.canCreateCase && onNewCase
-          ? { label: "New case", onClick: () => onNewCase(file.employee.id) }
-          : null}
-        secondaryActions={file.viewer.canEditEmployee && setEditing && !editing && !employmentMode
-          ? [
-              // Worded as the two different intentions they are, not as one
-              // "edit" that silently means both.
-              { label: "Correct details", onClick: () => {
-                setEditJobTitle?.(file.employee.jobTitle || "");
-                setEditStartDate?.(file.employee.startDate || "");
-                setEditing(true);
-              } },
-              ...(onRecordEmploymentChange ? [{ label: "Record employment change", onClick: () => setEmploymentMode("change") }] : []),
-              ...(onMarkAsLeaver && file.isCurrentEmployee ? [{ label: "Mark as leaver", onClick: () => setEmploymentMode("leaver") }] : []),
-            ]
-          : []}
+        primaryAction={primaryAction}
+        overflowActions={overflowActions}
       />
 
       {!editing && !employmentMode && <EmployeeFileTabs tabs={EMPLOYEE_FILE_TABS} active={tab} onSelect={setActiveTab} />}
@@ -191,6 +239,7 @@ export function EmployeeFileScreen({
             busy={activityBusy || employmentBusy}
             onCancelChange={onCancelEmploymentChange}
             onEditChange={onEditEmploymentChange}
+            startOpen={openChooser}
           />
         )}
         {tab === "processes" && <ProcessesTabPanel file={file} onOpenCase={openCase} fmtDate={fmtDate} />}

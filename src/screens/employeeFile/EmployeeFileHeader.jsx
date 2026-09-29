@@ -1,4 +1,5 @@
 import { COLOR, TYPE, FONT, SPACE, RADIUS } from '../../styles/tokens';
+import { ActionMenu } from '../../components/design/ActionMenu';
 
 // ─────────────────────────────────────────────────────────────────────────
 // The Employee File header. Phase E1.
@@ -14,7 +15,7 @@ import { COLOR, TYPE, FONT, SPACE, RADIUS } from '../../styles/tokens';
 
 const STATUS_LABEL = { active: "Active", leaver: "Left the organisation", unknown: null };
 
-export function EmployeeFileHeader({ employee, onBack, primaryAction, secondaryActions = [] }) {
+export function EmployeeFileHeader({ employee, onBack, primaryAction, overflowActions = [] }) {
   const name = employee?.name || "Unknown employee";
   // Ordered most-identifying first, so a truncated line still distinguishes two
   // colleagues who share a display name.
@@ -53,24 +54,30 @@ export function EmployeeFileHeader({ employee, onBack, primaryAction, secondaryA
             )}
           </div>
 
-          {(primaryAction || secondaryActions.length > 0) && (
+          {(primaryAction || overflowActions.length > 0) && (
             <div style={{ display: "flex", alignItems: "center", gap: SPACE.sm, flexWrap: "wrap", flexShrink: 0 }}>
-              {/* One primary action. Secondary actions are quiet text buttons —
-                  five equally prominent buttons is how a header stops being
-                  readable. */}
-              {secondaryActions.map(a => (
-                <button key={a.label} type="button" onClick={a.onClick}
-                  style={{ ...TYPE.metadata, background: "none", border: `1px solid ${COLOR.border}`,
-                           borderRadius: RADIUS.button, padding: "7px 12px", color: COLOR.inkSoft,
-                           cursor: "pointer", fontFamily: FONT.sans }}>
-                  {a.label}
-                </button>
-              ))}
+              {/* ── Wave A ────────────────────────────────────────────────────
+                  ONE primary action, and it is now the most immediate piece of
+                  work rather than a fixed "New case".
+
+                  The administrative actions — New case, Correct details, Record
+                  employment change, Mark as leaver — move into a restrained
+                  overflow. Nothing is removed and no permission changes: an action
+                  the viewer could reach before is still reachable, one click
+                  further away, which is the right cost for something done rarely
+                  and deliberately.
+
+                  ActionMenu is reused rather than reimplemented, so the menu
+                  semantics (aria-haspopup, role=menu/menuitem, blur to close) are
+                  the ones already proven elsewhere in the product. */}
+              {overflowActions.length > 0 && (
+                <ActionMenu label="More actions" actions={overflowActions} />
+              )}
               {primaryAction && (
                 <button type="button" onClick={primaryAction.onClick}
                   style={{ ...TYPE.metadata, fontWeight: 700, background: COLOR.purple, border: "none",
                            borderRadius: RADIUS.button, padding: "8px 14px", color: COLOR.paper,
-                           cursor: "pointer", fontFamily: FONT.sans }}>
+                           cursor: "pointer", fontFamily: FONT.sans, minHeight: 36 }}>
                   {primaryAction.label}
                 </button>
               )}

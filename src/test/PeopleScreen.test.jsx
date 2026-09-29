@@ -83,6 +83,9 @@ describe('PeopleScreen — "+ New meeting" (IA & User Journey pass, §37)', () =
     await user.click(screen.getByRole('button', { name: '+ New meeting' }));
     expect(setScreen).toHaveBeenCalledWith('home_meeting');
     const updater = setMeetingSetup.mock.calls[0][0];
-    expect(updater({})).toEqual({ employee: 'Sam Employee' });
+    // Wave A: the canonical id travels with the name now. Before this, the button
+      // carried the name only, so after E2 the meeting form could not complete even
+      // though the person had been chosen on this very row.
+      expect(updater({})).toEqual({ employee: 'Sam Employee', employeeId: 'uuid-sam' });
   });
 });
