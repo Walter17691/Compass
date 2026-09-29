@@ -1227,3 +1227,80 @@ There is exactly one `StartActivityForm` in the product. "Start conversation"
 opens it directly rather than landing on the tab and leaving a second button to
 find. The global way in (People) selects the employee canonically first and then
 reuses the same experience.
+
+---
+
+## AD-009 — A case is one page, not twelve destinations
+
+**Status:** **implemented** in Wave B (2026-09-29). Presentation only — the process
+engine is untouched.
+
+### The case became readable without being navigated
+
+Case View carried **twelve destinations** (three visible — Overview, Timeline,
+Evidence — plus nine behind a "More" popover) and **eleven analysis panels** on its
+default surface. Understanding a case meant navigating it: the chronology lived
+behind a Timeline tab, the allegations behind More.
+
+It is now **one page**, read top to bottom:
+
+```
+header (employee · process · STATUS · owner)   + one primary action + More actions
+What is happening
+Needs your attention
+Guardrails                       (only when there are open process-risk signals)
+Case record                      ← the spine
+Case details                     ← progressive sections
+```
+
+### Nothing was removed
+
+All twelve former tab bodies still render, unchanged, as progressive sections —
+keyed on the **same `activeTab` value**, so every existing deep link
+(`openTimelineSource`, `initialTab`, the reply-capture "Update Meeting" action)
+keeps working and simply expands a section instead of switching a tab. One section
+is open at a time, so the page cannot become the old wall.
+
+A section that does not apply does not appear; a section **explicitly requested**
+by a deep link is restored even when empty, because an empty Participants list
+must not make a link land on nothing.
+
+### No second engine
+
+`getNextStep` remains the sole authority on what happens next, `buildCaseTimeline`
+on what happened, `getCaseStage` on where the case is. `lib/caseViewSummary.js` is
+presentation over those three and holds no process knowledge:
+
+- **Status** maps the validated stages to words. An unrecognised stage reads "In
+  progress" — true of every open case, claiming nothing further. `inv_report` is a
+  column value and never reaches a manager.
+- **What is happening** is assembled from counts and lifecycle state. Every clause
+  is a fact the case already holds; it never reads `prediction` or `riskScore`,
+  because restating Compass's analysis *of* a person as the case's own factual
+  state is how a prediction becomes "what is happening". It returns **nothing**
+  when there is no fact worth a sentence.
+- **The case record** calls `buildCaseTimeline` with **no audit log**: the record
+  is meaningful process history, not technical audit history. Every "case viewed"
+  row would bury the hearing. The full record is still reachable, unchanged.
+
+### What stays prominent, and why
+
+**Guardrails stay on the main surface.** They are deterministic process-risk
+signals carrying policy citations, and proceeding past one is a recorded policy
+deviation. Safety-critical information is not demoted for visual cleanliness.
+
+**The primary action is not repeated.** It lives in the header; "Needs your
+attention" carries overdue work only, matched on the case id and never on a
+display name. The screen should not say the same instruction three times.
+
+**A closed case offers no workflow action.** It previously fell through to
+"+ New meeting", inviting a manager to reopen finished work. Starting a meeting is
+still available, in the menu.
+
+**"AI Assistant" is now "Compass analysis"** — the old label named the mechanism.
+
+### E1.4 is unchanged
+
+A process type with no validated recipe still gets a neutral state and no invented
+next step. Nothing in this wave softened that, and it is asserted here as well as
+in its own suite.

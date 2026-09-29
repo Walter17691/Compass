@@ -152,56 +152,53 @@ describe('CaseViewScreen — tab smoke test (Phase 6.5, task #205)', () => {
 // one of the 12 original tab labels is still a real, clickable button —
 // rather than trusting the module's own "these three lists partition
 // TABS completely" comment.
-// IA & User Journey pass, §11 — the permanent row is reduced to
-// Overview/Timeline/Evidence; the other nine tabs move behind a "More"
-// popover, grouped under the same Case/Work/Decision labels the old flat
-// row used (MORE_GROUPS derives from TAB_GROUPS, so the partition can't
-// silently drop a tab). No route, id, or active-tab logic changed here —
-// only which control reaches each tab.
-describe('CaseViewScreen — Overview/Timeline/Evidence + More navigation (IA & User Journey pass, §11)', () => {
-  it('renders exactly Overview, Timeline and Evidence as permanent tabs, plus a More trigger', () => {
-    render(<CaseViewScreen {...baseProps} />);
-    expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Timeline' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Evidence' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'More' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Allegations' })).not.toBeInTheDocument();
+  // Wave B — the twelve-destination navigation is gone. The case is ONE page:
+  // what is happening, what needs doing, the record, then supporting detail as
+  // progressive sections. These replace the old Overview/Timeline/Evidence +
+  // More(9) assertions, which pinned exactly the navigation this wave removed.
+  describe('CaseViewScreen — one page, progressive sections (Wave B)', () => {
+    it('no tab row and no More popover survive', () => {
+      render(<CaseViewScreen {...baseProps} />);
+      expect(screen.queryByRole('menu', { name: 'More case tabs' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Timeline' })).not.toBeInTheDocument();
+    });
+
+    it('the case record is visible WITHOUT selecting anything', () => {
+      render(<CaseViewScreen {...baseProps} />);
+      expect(screen.getByRole('heading', { name: 'Case record' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'View full record' })).toBeInTheDocument();
+    });
+
+    it('supporting material is reachable as collapsed sections that expose their state', () => {
+      render(<CaseViewScreen {...baseProps} />);
+      expect(screen.getByRole('heading', { name: 'Case details' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Allegations/ })).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('expanding a section shows its existing panel, unchanged', async () => {
+      const user = userEvent.setup();
+      render(<CaseViewScreen {...baseProps} />);
+      await user.click(screen.getByRole('button', { name: /^Allegations/ }));
+      expect(screen.getByText(/No allegations recorded yet/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Allegations/ })).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('only one section is open at a time, so the page cannot become the old wall', async () => {
+      const user = userEvent.setup();
+      render(<CaseViewScreen {...baseProps} />);
+      await user.click(screen.getByRole('button', { name: /^Allegations/ }));
+      await user.click(screen.getByRole('button', { name: /^Evidence/ }));
+      expect(screen.getByRole('button', { name: /^Allegations/ })).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.getByRole('button', { name: /^Evidence/ })).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('a deep link still lands, even on a section that would be empty', () => {
+      render(<CaseViewScreen {...baseProps} initialTab="people" />);
+      expect(screen.getByRole('button', { name: /^Participants/ })).toHaveAttribute('aria-expanded', 'true');
+    });
   });
 
-  it('reveals the other nine tabs, grouped under Case/Work/Decision, once More is opened', async () => {
-    const user = userEvent.setup();
-    render(<CaseViewScreen {...baseProps} />);
-    await user.click(screen.getByRole('button', { name: 'More' }));
-    expect(screen.getByRole('menu', { name: 'More case tabs' })).toBeInTheDocument();
-    const remainingLabels = ['Allegations','Meetings','Participants','Tasks','Documents','Communications','Themes','Outcome','AI Assistant'];
-    for (const label of remainingLabels) {
-      expect(screen.getByRole('button', { name: new RegExp(`^${label}`) })).toBeInTheDocument();
-    }
-    expect(screen.getByText('Case')).toBeInTheDocument();
-    expect(screen.getByText('Work')).toBeInTheDocument();
-    expect(screen.getByText('Decision')).toBeInTheDocument();
-  });
-
-  it('switching tabs still works through More — clicking Allegations shows the Allegations tab body and closes the popover', async () => {
-    const user = userEvent.setup();
-    render(<CaseViewScreen {...baseProps} />);
-    await user.click(screen.getByRole('button', { name: 'More' }));
-    await user.click(screen.getByRole('button', { name: 'Allegations' }));
-    expect(screen.getByText(/No allegations recorded yet/)).toBeInTheDocument();
-    expect(screen.queryByRole('menu', { name: 'More case tabs' })).not.toBeInTheDocument();
-  });
-
-  it('shows the active tab\'s own label on the More trigger when a "more" tab is selected, so context is not lost', async () => {
-    const user = userEvent.setup();
-    render(<CaseViewScreen {...baseProps} />);
-    await user.click(screen.getByRole('button', { name: 'More' }));
-    // Two "Allegations" buttons exist for a moment: the popover item just
-    // clicked, and the trigger this click is about to relabel — scope to
-    // the popover explicitly to avoid ambiguity.
-    await user.click(within(screen.getByRole('menu', { name: 'More case tabs' })).getByRole('button', { name: 'Allegations' }));
-    expect(screen.getByRole('button', { name: 'Allegations' })).toHaveAttribute('aria-haspopup', 'true');
-  });
-});
 
 // Phase 2A — the five equal-weight header buttons (Mark confidential,
 // Reassign, Assign investigator, HR Intervention, +New meeting) become

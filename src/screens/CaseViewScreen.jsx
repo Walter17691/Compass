@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { SCREENS, MEETING_TYPES } from '../constants';
 import { toISODateLocal, isPastLocalDate } from '../lib/dates';
 import { appealInvitationLogistics } from '../lib/appealInvitation';
@@ -7,6 +7,7 @@ import { getCurrentRisk, isGrievanceCase } from '../lib/caseStage';
 // adding a callee inside App.jsx's component is what silently disabled lint
 // analysis in an earlier phase, and this file already imports from lib above.
 import { hasGuidedProcess } from '../lib/nextStep';
+import { caseStatusLabel, isClosedStage, describeWhatIsHappening, caseRecordEntries, caseDetailSections, withRequestedSection } from '../lib/caseViewSummary';
 import { resumableMeetingFor, scheduledMeetingsFor } from '../lib/meetingLifecycle';
 import { fmtMeetingTime } from '../lib/meetingTiming';
 import { MDRenderer } from '../components/MDRenderer';
@@ -39,7 +40,6 @@ import { CaseReadinessBadge } from '../components/CaseReadinessBadge';
 import { InvestigatorChecklistView } from '../components/InvestigatorChecklistView';
 import { NotetakerView } from '../components/NotetakerView';
 import { ActionMenu } from '../components/design/ActionMenu';
-import { usePopoverPosition } from '../hooks/usePopoverPosition';
 import { FONT, COLOR, TYPE, RADIUS, BUTTON, CONTENT_MAX_WIDTH } from '../styles/tokens';
 
 const ORDINAL = {2:"2nd",3:"3rd",4:"4th",5:"5th",6:"6th",7:"7th",8:"8th",9:"9th",10:"10th"};
@@ -49,49 +49,13 @@ const ORDINAL = {2:"2nd",3:"3rd",4:"4th",5:"5th",6:"6th",7:"7th",8:"8th",9:"9th"
 // actually passes to setDraftedType/handleLetter above.
 const DRAFTED_TYPE_LABELS = { invite:"invitation letter", outcome:"outcome letter", appeal:"appeal outcome letter", "no-case-answer":"response letter" };
 
-const TABS = [
-  { id:"overview", label:"Overview" },
-  { id:"timeline", label:"Timeline" },
-  { id:"allegations", label:"Allegations" },
-  { id:"meetings", label:"Meetings" },
-  { id:"evidence", label:"Evidence" },
-  { id:"people", label:"Participants" }, // "People" collides with the top-nav employee directory — this is who's involved in THIS case
-  { id:"tasks", label:"Tasks" },
-  { id:"documents", label:"Documents" },
-  { id:"communications", label:"Communications" },
-  { id:"themes", label:"Themes" },
-  { id:"outcome", label:"Outcome" },
-  { id:"ai", label:"AI Assistant" },
-];
-
-// Phase 2A (Compass Design Vision) — purely a rendering-order/visual
-// grouping of the same 12 tabs above; no id, route, or active-tab logic
-// depends on this. Every tab still belongs to exactly one group (the
-// three lists partition TABS completely) so nothing can silently
-// disappear from the workspace if a tab is ever added without also
-// being added here — that would just render ungrouped-nowhere, which is
-// why this file's own tests check the partition is complete.
-const TAB_GROUPS = [
-  { label: "Case", ids: ["overview","timeline","allegations","evidence"] },
-  { label: "Work", ids: ["meetings","people","tasks","documents","communications"] },
-  { label: "Decision", ids: ["themes","outcome","ai"] },
-];
-
-// IA & User Journey pass, §11 — "aggressively reduce permanent case nav"
-// down to Overview/Timeline/Evidence/More. These three (plus Overview,
-// which the case always opens on) are the tabs a normal working session
-// touches every time; the other nine are genuinely specialised or
-// lower-frequency (allegations detail, meeting records, participants,
-// tasks, documents, communications, themes, outcome, the AI assistant) —
-// still one click away behind More, not removed. MORE_GROUPS is derived
-// from TAB_GROUPS rather than a second hand-written list so the two can
-// never drift apart: every tab not promoted to the permanent row above
-// automatically ends up in More, under the same conceptual grouping this
-// file already used for the old flat 12-tab row.
-const PRIMARY_TAB_IDS = ["overview","timeline","evidence"];
-const MORE_GROUPS = TAB_GROUPS
-  .map(g => ({ label: g.label, ids: g.ids.filter(id => !PRIMARY_TAB_IDS.includes(id)) }))
-  .filter(g => g.ids.length > 0);
+// Wave B — the tab MODEL is gone, not just its row.
+//
+// TABS / TAB_GROUPS / PRIMARY_TAB_IDS / MORE_GROUPS described twelve destinations
+// and which three were promoted. There are no destinations now: the case is one
+// page, and the former tab contents are progressive sections whose ids come from
+// lib/caseViewSummary.caseDetailSections(). Deleted rather than left unused,
+// because a dormant tab model is what a future change would reach for.
 
 // Phase 6.5 hardening (Batch 10b, task #205) — was 132 individually
 // destructured props (2 of them, concludeInvestigation/assignInvestigator,
@@ -149,24 +113,12 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   const [changesBannerDismissed, setChangesBannerDismissed] = useState(false);
   // IA & User Journey pass, §11 — More tab popover; same open/outside-
   // click/Escape shape as AppSidebar's own More menu.
-  const [showMoreTabs, setShowMoreTabs] = useState(false);
   // Case Closure Safety P0 remediation — declared here, alongside every
   // other hook, rather than down by requestCloseCase's own definition
   // (which only *uses* it): this component has an early return above for
   // a not-yet-loaded/missing case, and React's hooks must never be called
   // conditionally relative to that.
   const [closingCase, setClosingCase] = useState(false);
-  const moreTabsRef = useRef(null);
-  const moreTabsBtnRef = useRef(null);
-  const moreTabsPopoverStyle = usePopoverPosition(moreTabsBtnRef, showMoreTabs, { minHeight: 260 });
-  useEffect(() => {
-    if (!showMoreTabs) return;
-    const onKeyDown = e => { if (e.key === "Escape") setShowMoreTabs(false); };
-    const onClickOutside = e => { if (moreTabsRef.current && !moreTabsRef.current.contains(e.target)) setShowMoreTabs(false); };
-    document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('mousedown', onClickOutside);
-    return () => { document.removeEventListener('keydown', onKeyDown); document.removeEventListener('mousedown', onClickOutside); };
-  }, [showMoreTabs]);
   const cs = cases.find(x=>x.id===activeCaseId);
   // Release 1 Phase 2.2 — deterministic live-meeting discovery. Declared
   // status only; never inferred from record/transcript/latest-meeting.
@@ -306,6 +258,43 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   // this logic. Behaviour is byte-for-byte unchanged — same branches,
   // same side effects, same order — only its location moved from an
   // inline closure to a named function referenced from two places.
+  // ── Wave B — the composed case surface, derived from existing engines ─────
+  //
+  // getNextStep stays the sole authority on what happens next, buildCaseTimeline
+  // on what happened, and getCaseStage on where the case is. Nothing here is a
+  // second engine; it is presentation over those three.
+  const statusLabel = caseStatusLabel(stage);
+  const caseClosed = isClosedStage(stage);
+  const whatIsHappening = describeWhatIsHappening({ cs, stage, allegations: caseAllegations, meetings: cs.meetings || [] });
+  const caseRecord = caseRecordEntries(cs, caseAllegations, { limit: 8 });
+
+  // Overdue work only. Taken from the SAME deadline engine the Employee File
+  // uses, matched on this case's id — never on the deadline's own display name.
+  const caseAttention = (overview.dueSoon || [])
+    .filter(d => d && d.caseId === cs.id && d.overdue)
+    .map(d => ({ key: d.key || d.caseId, label: d.label || "Overdue item",
+                 context: d.daysOverdue ? `${d.daysOverdue} day${d.daysOverdue === 1 ? "" : "s"} overdue` : "Overdue" }));
+
+  const openGuardrails = (caseSignals || []).filter(sig => sig && sig.caseId === cs.id
+    && sig.kind === "process_risk" && sig.status === "open");
+
+  // A section the user has EXPLICITLY asked for always renders, even when empty.
+  // Deep links (openTimelineSource, initialTab, the reply-capture "Update Meeting"
+  // action) name a section directly, and an empty Participants list must not make
+  // the link land on nothing. Empty sections still stay out of the default list.
+  const detailSections = withRequestedSection(activeTab, caseDetailSections({
+    allegations: caseAllegations,
+    evidence: cs.evidence || [],
+    meetings: cs.meetings || [],
+    tasks: caseTaskList,
+    participants: (cs.meetings || []).flatMap(m => m?.participants || []),
+    documents: cs.evidence || [],
+    communications: [],
+    hasOutcome: !!cs.outcome || stage === "outcome" || caseClosed,
+    canSeeAnalysis: true,
+    canSeeThemes: isHR,
+  }));
+
   const handleNextStepAction = () => {
     if(!nextStep) return;
     // meetingType-derived search term for finding "the meeting this step
@@ -676,15 +665,20 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
                 )}
               </div>
               <div style={{...TYPE.metadata,color:COLOR.inkFaint,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                {getProceedingTitle(cs)}{cs.manager&&<> · Owner: {cs.manager}</>}
+                {getProceedingTitle(cs)} · {statusLabel}{cs.manager&&<> · Owner: {cs.manager}</>}
               </div>
             </div>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
             {(()=>{
               const showNextStepPrimary = nextStep&&stage!=="closed";
+              // Wave B — a CLOSED case reads as completed history and offers no
+              // workflow action. It previously fell through to "+ New meeting",
+              // inviting the manager to reopen work on a finished process. Starting
+              // a new meeting is still available, in the menu.
               const primary = showNextStepPrimary
                 ? { label: nextStep.action==="inv_report"&&concludingInvestigation?"Generating report...":nextStep.label, onClick: handleNextStepAction, disabled: (nextStep.action==="inv_report"&&concludingInvestigation)||(nextStep.action==="close_case"&&closingCase) }
+                : caseClosed ? null
                 : { label: "+ New meeting", onClick: startMeetingFromHeader };
               const menuActions = [
                 { label: cs.confidential?"Remove confidentiality":"Mark confidential", onClick: async()=>{
@@ -698,70 +692,28 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
                 isHR && { label: currentInvestigator?`Investigator: ${currentInvestigator.name}`:"Assign investigator...", onClick: ()=>setShowAssignInvestigatorModal(true) },
                 isHR && { label: cs.investigationPaused?"Paused (HR Intervention)":"HR Intervention", onClick: ()=>openHrInterventionModal(cs.id) },
                 !isHR && { label: "Ask HR", onClick: ()=>openEscalateModal(cs.id) },
-                showNextStepPrimary && { label: "+ New meeting", onClick: startMeetingFromHeader },
+                (showNextStepPrimary || caseClosed) && { label: "+ New meeting", onClick: startMeetingFromHeader },
               ];
               return (
                 <>
-                  <button onClick={primary.onClick} disabled={primary.disabled} style={{...BUTTON.primary,fontSize:13,padding:"9px 18px",cursor:primary.disabled?"not-allowed":"pointer",opacity:primary.disabled?0.6:1}}>{primary.label}</button>
+                  {primary && <button onClick={primary.onClick} disabled={primary.disabled} style={{...BUTTON.primary,fontSize:13,padding:"9px 18px",cursor:primary.disabled?"not-allowed":"pointer",opacity:primary.disabled?0.6:1}}>{primary.label}</button>}
                   <ActionMenu actions={menuActions}/>
                 </>
               );
             })()}
           </div>
         </div>
-        {/* IA & User Journey pass, §11 — the old flat/grouped 12-tab row
-            (see git history) is reduced to the three tabs a normal
-            working session touches every visit — Overview/Timeline/
-            Evidence — plus a "More" popover for the other nine, grouped
-            under the same Case/Work/Decision labels the old row already
-            used (MORE_GROUPS derives from TAB_GROUPS above, so nothing
-            here can silently omit a tab). No route, id, or active-tab
-            logic changed — this is which control reaches each tab, not
-            what the tabs are. */}
-        <div style={{display:"flex",alignItems:"center",gap:2}} ref={moreTabsRef}>
-          {TABS.filter(t=>PRIMARY_TAB_IDS.includes(t.id)).map(t=>(
-            <button key={t.id} onClick={()=>setActiveTab(t.id)}
-              style={{padding:"6px 9px",borderRadius:6,border:"none",background:activeTab===t.id?COLOR.purpleTint:"none",color:activeTab===t.id?COLOR.purpleDeep:COLOR.inkSoft,fontWeight:activeTab===t.id?600:400,fontSize:13,cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap"}}>
-              {t.label}
-            </button>
-          ))}
-          {(()=>{
-            const moreActive = !PRIMARY_TAB_IDS.includes(activeTab);
-            const activeMoreTab = moreActive ? TABS.find(t=>t.id===activeTab) : null;
-            // Same badge signal the old flat row gave per-tab, surfaced
-            // on the collapsed trigger instead so "there's an open
-            // allegation/task" doesn't silently disappear just because
-            // those tabs moved behind More.
-            const badgeCount = caseAllegations.length + caseTaskList.filter(x=>x.status!=="done").length;
-            return (
-              <div style={{position:"relative"}}>
-                <button ref={moreTabsBtnRef} onClick={()=>setShowMoreTabs(v=>!v)} aria-expanded={showMoreTabs} aria-haspopup="true"
-                  style={{padding:"6px 9px",borderRadius:6,border:"none",background:moreActive||showMoreTabs?COLOR.purpleTint:"none",color:moreActive?COLOR.purpleDeep:COLOR.inkSoft,fontWeight:moreActive?600:400,fontSize:13,cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5}}>
-                  {activeMoreTab ? activeMoreTab.label : "More"}
-                  {!moreActive&&badgeCount>0&&<span style={{fontSize:10,background:COLOR.border,color:COLOR.inkSoft,borderRadius:10,padding:"1px 6px",fontWeight:600}}>{badgeCount}</span>}
-                  <span aria-hidden="true" style={{fontSize:9}}>▾</span>
-                </button>
-                {showMoreTabs&&moreTabsPopoverStyle&&(
-                  <div role="menu" aria-label="More case tabs" style={{...moreTabsPopoverStyle,width:200,maxWidth:"calc(100vw - 24px)",background:COLOR.surface,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",zIndex:250,padding:"8px"}}>
-                    {MORE_GROUPS.map((group,gi)=>(
-                      <div key={group.label} style={{marginTop:gi>0?8:0}}>
-                        <div style={{...TYPE.micro,color:COLOR.inkQuiet,padding:"4px 8px"}}>{group.label}</div>
-                        {TABS.filter(t=>group.ids.includes(t.id)).map(t=>(
-                          <button key={t.id} onClick={()=>{setActiveTab(t.id);setShowMoreTabs(false);}}
-                            style={{display:"flex",alignItems:"center",width:"100%",textAlign:"left",background:activeTab===t.id?COLOR.purpleTint:"none",border:"none",color:activeTab===t.id?COLOR.purpleDeep:COLOR.ink,padding:"7px 8px",borderRadius:6,fontSize:13,fontWeight:activeTab===t.id?600:400,cursor:"pointer",fontFamily:FONT.sans}}>
-                            {t.label}
-                            {t.id==="allegations"&&caseAllegations.length>0&&<span style={{fontSize:10,marginLeft:5,background:COLOR.border,color:COLOR.inkSoft,borderRadius:10,padding:"1px 6px",fontWeight:600}}>{caseAllegations.length}</span>}
-                            {t.id==="tasks"&&caseTaskList.filter(x=>x.status!=="done").length>0&&<span style={{fontSize:10,marginLeft:5,background:COLOR.border,color:COLOR.inkSoft,borderRadius:10,padding:"1px 6px",fontWeight:600}}>{caseTaskList.filter(x=>x.status!=="done").length}</span>}
-                          </button>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-        </div>
+        {/* Wave B — the twelve-destination navigation is gone.
+
+            It was three visible tabs plus a "More" popover holding nine more, so
+            understanding a case meant navigating it: the chronology lived behind
+            Timeline, the allegations behind More, and the default surface carried
+            eleven analysis panels.
+
+            Nothing is removed. The same panels render as progressive sections
+            under Case details below, keyed on the SAME activeTab value — so every
+            existing deep link (openTimelineSource, initialTab) keeps working and
+            simply expands a section instead of switching a tab. */}
         </div>
       </div>
 
@@ -1153,8 +1105,101 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
             would have misaligned every OTHER tab against the now-capped
             header if left at 800 while only Overview changed). One
             shared token, one coherent workspace width for every tab. */}
-        <div style={{maxWidth:CONTENT_MAX_WIDTH,margin:"0 auto"}}>
-          {activeTab==="overview"&&(
+        {/* ── Wave B — the composed case surface ────────────────────────────
+            Header (above) → what is happening → what needs doing → the record →
+            supporting detail. The manager reads down the page instead of
+            navigating across twelve destinations. */}
+        <div style={{maxWidth:CONTENT_MAX_WIDTH,margin:"0 auto",padding:"0 28px 40px"}}>
+
+          {/* WHAT IS HAPPENING — assembled from counts and lifecycle state. No AI,
+              no narrative generation, and nothing said that the case does not
+              already record. Renders nothing when there is nothing factual. */}
+          {whatIsHappening && (
+            <section style={{marginTop:20}}>
+              <h2 style={{...TYPE.sectionHeading,color:COLOR.ink,margin:"0 0 6px"}}>What is happening</h2>
+              <p style={{...TYPE.rowContext,color:COLOR.inkSoft,margin:0,lineHeight:1.6,maxWidth:640}}>{whatIsHappening}</p>
+              {nextStep?.reason && stage!=="closed" && (
+                <p style={{...TYPE.metadata,color:COLOR.inkQuiet,margin:"6px 0 0",lineHeight:1.6,maxWidth:640}}>{nextStep.reason}</p>
+              )}
+            </section>
+          )}
+
+          {/* NEEDS YOUR ATTENTION — overdue work only, from the engines that already
+              own it. The primary action lives in the header and is deliberately NOT
+              repeated here: the screen should not say the same instruction three
+              times. */}
+          {caseAttention.length > 0 && (
+            <section style={{marginTop:28}}>
+              <h2 style={{...TYPE.sectionHeading,color:COLOR.ink,margin:"0 0 10px"}}>Needs your attention</h2>
+              <ul style={{listStyle:"none",margin:0,padding:0,display:"grid",gap:8}}>
+                {caseAttention.slice(0,3).map(a=>(
+                  <li key={a.key} style={{background:COLOR.amberTint,border:"1px solid #EADFC4",borderLeft:`3px solid ${COLOR.amber}`,borderRadius:RADIUS.card,padding:"12px 16px"}}>
+                    <div style={{...TYPE.rowContext,color:COLOR.ink}}>{a.label}</div>
+                    {a.context && <div style={{...TYPE.metadata,color:COLOR.inkFaint,marginTop:2}}>{a.context}</div>}
+                  </li>
+                ))}
+              </ul>
+              {caseAttention.length > 3 && (
+                <button type="button" onClick={()=>setActiveTab("tasks")}
+                  style={{...TYPE.metadata,background:"none",border:"none",padding:0,marginTop:8,color:COLOR.purple,cursor:"pointer",fontFamily:FONT.sans}}>
+                  View all {caseAttention.length}
+                </button>
+              )}
+            </section>
+          )}
+
+          {/* GUARDRAILS stay on the main surface. They are deterministic process-risk
+              signals carrying policy citations, and proceeding past one is a recorded
+              policy deviation — safety-critical information is not hidden for visual
+              cleanliness. */}
+          {openGuardrails.length > 0 && (
+            <section style={{marginTop:28}}>
+              <GuardrailsPanel cs={cs} signals={caseSignals} changeSignalStatus={changeSignalStatus}
+                createCaseTask={createCaseTask} onAskWhy={setWhySignal}
+                requestOverrideReason={overview.requestOverrideReason}
+                requestPolicyDeviationReason={overview.requestPolicyDeviationReason}/>
+            </section>
+          )}
+
+          {/* THE CASE RECORD — the spine. Previously this lived behind a Timeline tab,
+              so the manager had to navigate to find out what had happened. Meaningful
+              process milestones only: buildCaseTimeline is called without the audit
+              log, so "case viewed" and field-level edits do not bury the hearing. */}
+          <section style={{marginTop:32}}>
+            <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:12,marginBottom:10}}>
+              <h2 style={{...TYPE.sectionHeading,color:COLOR.ink,margin:0}}>Case record</h2>
+              <button type="button" onClick={()=>setActiveTab("timeline")}
+                style={{...TYPE.metadata,background:"none",border:"none",padding:0,color:COLOR.purple,cursor:"pointer",fontFamily:FONT.sans}}>
+                View full record
+              </button>
+            </div>
+            {caseRecord.length === 0 ? (
+              <p style={{...TYPE.rowContext,color:COLOR.inkFaint,margin:0}}>Nothing has been recorded on this case yet.</p>
+            ) : (
+              <ul style={{listStyle:"none",margin:0,padding:0,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.card,overflow:"hidden"}}>
+                {caseRecord.map((e,i)=>(
+                  <li key={e.key} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:12,padding:"12px 16px",background:COLOR.surface,borderTop:i===0?"none":`1px solid ${COLOR.borderFaint}`,flexWrap:"wrap"}}>
+                    <span style={{...TYPE.rowContext,color:COLOR.ink,minWidth:0}}>
+                      {e.description}
+                      {e.actor && <span style={{...TYPE.metadata,color:COLOR.inkFaint}}> · {e.actor}</span>}
+                    </span>
+                    <span style={{...TYPE.metadata,color:COLOR.inkQuiet,flexShrink:0}}>{fmtDate(e.date)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {/* CASE DETAILS — everything the old tab row held, as progressive sections.
+              Keyed on the SAME activeTab value, so every deep link still lands. A
+              section that does not apply to this case does not appear. */}
+          <section style={{marginTop:36}}>
+            <h2 style={{...TYPE.sectionHeading,color:COLOR.ink,margin:"0 0 10px"}}>Case details</h2>
+            <div style={{border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.card,overflow:"hidden"}}>
+              {detailSections.map((s,i)=>{
+                const open = activeTab===s.id;
+                const SECTION_CONTENT = {
+                      overview: (
             <OverviewTab cs={cs}
               caseCtx={{ cases, saveCases, stage, currentRisk, empRecord, repeatCount }}
               shell={{ setScreen, screens, confirmDialog }}
@@ -1165,40 +1210,64 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
               review={{ isApprover: isHR, respondToReview: overview.respondToReview, resolveInvestigationReview: overview.resolveInvestigationReview, assignCaseRole: overview.assignCaseRole }}
               automation={{ automationLevels: overview.automationLevels, onResendReminder: overview.onResendReminder }}
             />
-          )}
-          {activeTab==="timeline"&&(
+            ),
+                      timeline: (
             <TimelinePanel cs={cs} allegations={allegations} auditLog={auditLog} fmtDate={fmtDate} onOpenSource={openTimelineSource} onToggleExclude={timeline.toggleTimelineExclude} onEditDescription={timeline.editTimelineDescription} onGenerateRelevance={timeline.generateTimelineRelevance} relevanceLoading={timeline.timelineRelevanceLoading?.[cs.id]} loadJsPDF={timeline.loadJsPDF}/>
-          )}
-          {activeTab==="allegations"&&(
+            ),
+                      allegations: (
             <AllegationsPanel cs={cs} allegations={caseAllegations} allAllegations={allegations} createAllegation={allegationsTab.createAllegation} patchAllegation={allegationsTab.patchAllegation} changeAllegationStatus={allegationsTab.changeAllegationStatus} deleteAllegation={allegationsTab.deleteAllegation} saveCases={saveCases} cases={cases} confirmDialog={confirmDialog} showToast={showToast} evidenceSuggestions={allegationsTab.evidenceSuggestions?.[cs.id]||[]} evidenceSuggestionsLoading={allegationsTab.evidenceSuggestionsLoading?.[cs.id]} generateEvidenceSuggestions={allegationsTab.generateEvidenceSuggestions} acceptEvidenceSuggestion={allegationsTab.acceptEvidenceSuggestion} rejectEvidenceSuggestion={allegationsTab.rejectEvidenceSuggestion} setReviewOutput={setReviewOutput} setScreen={setScreen} screens={screens} orgMembers={orgMembers} fmtDate={fmtDate} caseSignals={caseSignals} onAskWhy={setWhySignal} generateAppealReview={allegationsTab.generateAppealReview} appealReviewLoading={allegationsTab.appealReviewLoading} recordAppealOutcome={allegationsTab.recordAppealOutcome} policies={allegationsTab.policies} consistencyReview={allegationsTab.consistencyReview?.[cs.id]} consistencyReviewLoading={allegationsTab.consistencyReviewLoading?.[cs.id]} generateConsistencyReview={allegationsTab.generateConsistencyReview} canDecide={canDecide} canDecideAppeal={canDecideAppeal}/>
-          )}
-          {activeTab==="meetings"&&(
+            ),
+                      meetings: (
             <MeetingsTab cs={cs} cases={cases} saveCases={saveCases} activeCaseStage={meetingsTab.activeCaseStage} setActiveCaseStage={meetingsTab.setActiveCaseStage} setMeetingSetup={setMeetingSetup} setCaseInfo={setCaseInfo} getEmployeeRecord={getEmployeeRecord} orgMembers={orgMembers} setScreen={setScreen} screens={screens} setReviewOutput={setReviewOutput} setMeetingType={setMeetingType} meetingTypes={MEETING_TYPES} fmtDate={fmtDate} attemptSubmitInvestigation={attemptSubmitInvestigation} concludingInvestigation={concludingInvestigation} investigationReportDraft={investigationReportDraft} setShowHandoffModal={setShowHandoffModal} setLetterOutput={setLetterOutput} onAcceptSavedSuggestion={meetingsTab.onAcceptSavedSuggestion} onDismissSavedSuggestion={meetingsTab.onDismissSavedSuggestion} promptDialog={promptDialog} audit={audit}/>
-          )}
-          {activeTab==="evidence"&&(
+            ),
+                      evidence: (
             <EvidenceTab cs={cs} cases={cases} saveCases={saveCases} currentUser={currentUser} showToast={showToast} setReviewOutput={setReviewOutput} setScreen={setScreen} screens={screens} fmtDate={fmtDate} setMeetingSetup={setMeetingSetup} setCaseInfo={setCaseInfo} orgMembers={orgMembers} allegations={caseAllegations} documentFindings={evidenceTab.documentFindings} documentAnalysisLoading={evidenceTab.documentAnalysisLoading} onAnalyseEvidence={(evidenceId)=>evidenceTab.analyseEvidenceDocument(cs, evidenceId)} onAcceptFinding={(evidenceId, finding)=>evidenceTab.acceptDocumentFinding(cs, evidenceId, finding)} onDismissFinding={(evidenceId, finding)=>evidenceTab.dismissDocumentFinding(cs, evidenceId, finding)} onRemoveEvidence={(evidenceId)=>evidenceTab.removeEvidence(cs.id, evidenceId)} promptDialog={promptDialog} audit={audit}/>
-          )}
-          {activeTab==="people"&&(
+            ),
+                      people: (
             <PeopleTab cs={cs}/>
-          )}
-          {activeTab==="tasks"&&(
+            ),
+                      tasks: (
             <CaseTasksPanel cs={cs} tasks={caseTaskList} createCaseTask={createCaseTask} toggleCaseTaskDone={toggleCaseTaskDone} deleteCaseTask={deleteCaseTask} fmtDate={fmtDate} isHR={isHR} onGeneratePlan={()=>generateInvestigationPlan(cs)} planLoading={!!investigationPlanLoading[cs.id]}/>
-          )}
-          {activeTab==="documents"&&(
+            ),
+                      documents: (
             <DocumentsTab cs={cs} setLetterOutput={setLetterOutput} setScreen={setScreen} screens={screens} fmtDate={fmtDate} onGenerateHearingPack={documentsTab.onGenerateHearingPack} hearingPackGenerating={!!documentsTab.hearingPackGenerating?.[cs.id]} hearingPackReady={documentsTab.hearingPackReady?.[cs.id]||null} onDismissHearingPackReady={()=>documentsTab.onDismissHearingPackReady?.(cs.id)} onDraftCorrespondence={documentsTab.onDraftCorrespondence}/>
-          )}
-          {activeTab==="communications"&&(
+            ),
+                      communications: (
             <CommunicationsTab cs={cs} allegations={allegations} auditLog={auditLog} fmtDate={fmtDate} onOpenSource={openTimelineSource}/>
-          )}
-          {activeTab==="themes"&&(
+            ),
+                      themes: (
             <ThemesTab cs={cs} organisationThemes={themesTab.organisationThemes} caseThemes={themesTab.caseThemes} suggestions={themesTab.themeSuggestions?.[cs.id]} suggesting={!!themesTab.themeSuggestionLoading?.[cs.id]} isHR={isHR} onSuggest={themesTab.onSuggestThemes} onConfirmSuggestion={themesTab.onConfirmThemeSuggestion} onDismissSuggestion={themesTab.onDismissThemeSuggestion} onAssignExisting={themesTab.onAssignExistingTheme} onRemove={themesTab.onRemoveTheme}/>
-          )}
-          {activeTab==="outcome"&&(
+            ),
+                      outcome: (
             <OutcomeTab cs={cs} stage={stage} fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} setOutcomeType={setOutcomeType} setCompletingOutcomeDetails={setCompletingOutcomeDetails} canDecide={canDecide} onDraftOutcomeLetter={draftOutcomeLetter}/>
-          )}
-          {activeTab==="ai"&&(
+            ),
+                      ai: (
             <AIAssistantTab cs={cs} chatHistory={aiTab.caseChatHistory[cs.id]||[]} chatInput={aiTab.caseChatInput} setChatInput={aiTab.setCaseChatInput} chatProcessing={aiTab.caseChatProcessing} sendChat={()=>aiTab.sendCaseChat(cs)} overview={aiTab.caseOverview[cs.id]} overviewLoading={!!aiTab.caseOverviewLoading[cs.id]} generateOverview={()=>aiTab.generateCaseOverview(cs)} overviewSources={aiTab.caseOverviewSources?.[cs.id]} onAskWhy={setWhySignal}/>
-          )}
+            ),
+    };
+
+    return (
+                  <div key={s.id} style={{borderTop:i===0?"none":`1px solid ${COLOR.borderFaint}`}}>
+                    <button type="button" aria-expanded={open} aria-controls={`case-section-${s.id}`}
+                      onClick={()=>setActiveTab(open?null:s.id)}
+                      style={{display:"flex",width:"100%",alignItems:"center",justifyContent:"space-between",gap:12,
+                              background:open?COLOR.paper:COLOR.surface,border:"none",padding:"14px 16px",minHeight:44,
+                              cursor:"pointer",fontFamily:FONT.sans,textAlign:"left"}}>
+                      <span style={{...TYPE.rowContext,color:COLOR.ink,fontWeight:open?700:500}}>
+                        {s.label}{typeof s.count==="number"&&s.count>0?` (${s.count})`:""}
+                      </span>
+                      <span aria-hidden="true" style={{...TYPE.metadata,color:COLOR.inkFaint}}>{open?"Hide":"Show"}</span>
+                    </button>
+                    {open && (
+                      <div id={`case-section-${s.id}`} style={{padding:"4px 16px 20px",background:COLOR.paper}}>
+                        {SECTION_CONTENT[s.id]}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         </div>
       </div>
     </div>
