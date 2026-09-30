@@ -207,8 +207,11 @@ describe('OverviewTab — Delete case is HR-only (Destructive & Decision Authori
     expect(screen.queryByRole('button', { name: 'Delete case' })).not.toBeInTheDocument();
   });
 
-  it('renders "Delete case" for an HR user', () => {
+  it('no longer renders "Delete case" — it moved to the header menu', () => {
+    // Wave B.1: the one irreversible action on the screen sat at the bottom of these
+    // analysis panels. It now sits last in the header's More actions menu, with the
+    // SAME isHR gate, the SAME danger confirmation and the SAME handler.
     render(<OverviewTab {...baseProps} review={{ ...baseProps.review, isApprover: true }} />);
-    expect(screen.getByRole('button', { name: 'Delete case' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete case' })).not.toBeInTheDocument();
   });
 });

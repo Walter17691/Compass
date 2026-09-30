@@ -11675,6 +11675,7 @@ Please produce:
           }}
           shell={{
             cases, casesLoading, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate,
+            setActiveEmployeeId,
             getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers,
             setCaseInfo, saveCases, setReviewOutput, setMeetingType, showToast, currentUser,
             setLetterOutput, handleLetter, isHR, caseAccess, allegations, auditLog, caseTasks,

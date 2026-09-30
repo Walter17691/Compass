@@ -77,6 +77,9 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
 }) {
   const {
     cases, casesLoading, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate,
+    // Wave B.1 — lets the case header link its employee name back to the
+    // Employee File. Navigation only; no employee data is duplicated here.
+    setActiveEmployeeId,
     getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers,
     setCaseInfo, saveCases, setReviewOutput, setMeetingType, showToast, currentUser,
     setLetterOutput, handleLetter, isHR, caseAccess, allegations, auditLog, caseTasks,
@@ -270,13 +273,24 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
 
   // Overdue work only. Taken from the SAME deadline engine the Employee File
   // uses, matched on this case's id — never on the deadline's own display name.
+  // Wave B.1 — attention carries OTHER work, never a second copy of the primary
+  // action. If the top item is the thing the header button already does, repeating
+  // it immediately underneath is the repetition this wave exists to remove.
   const caseAttention = (overview.dueSoon || [])
     .filter(d => d && d.caseId === cs.id && d.overdue)
     .map(d => ({ key: d.key || d.caseId, label: d.label || "Overdue item",
-                 context: d.daysOverdue ? `${d.daysOverdue} day${d.daysOverdue === 1 ? "" : "s"} overdue` : "Overdue" }));
+                 context: d.daysOverdue ? `${d.daysOverdue} day${d.daysOverdue === 1 ? "" : "s"} overdue` : "Overdue" }))
+    .filter(a => !nextStep?.label || a.label.trim().toLowerCase() !== nextStep.label.trim().toLowerCase());
 
-  const openGuardrails = (caseSignals || []).filter(sig => sig && sig.caseId === cs.id
-    && sig.kind === "process_risk" && sig.status === "open");
+  // Wave B.1 — this filtered on `sig.kind`, which case_signals does not have: the
+  // field is `type`. So the gate never matched, and the guardrail block Wave B
+  // claimed was prominent never rendered at all. It now uses the same helper the
+  // Overview panel uses, so the two cannot disagree about what an open guardrail is.
+  //
+  // Conditional prominence is also the product decision: a safety-critical system
+  // does not need an empty guardrail panel permanently occupying the surface. No
+  // open guardrail, no block; a real one, and it is prominent.
+  const openGuardrails = openSignalsForCase(caseSignals, cs.id, "process_risk");
 
   // A section the user has EXPLICITLY asked for always renders, even when empty.
   // Deep links (openTimelineSource, initialTab, the reply-capture "Update Meeting"
@@ -647,7 +661,23 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
             <div style={{width:1,height:16,background:"#EDE5D8",flexShrink:0}}/>
             <div style={{minWidth:0}}>
               <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
-                <div style={{...TYPE.identity,fontSize:20,color:COLOR.ink}}>{cs.employeeName}</div>
+                {/* Wave B.1 — the employee name links back to their Employee File. A case
+                    is a formal process belonging to a person, and arriving from the
+                    cross-employee Cases view should make that ownership obvious and
+                    traversable. Navigation only: the case is not a second employee record,
+                    and nothing about the employee is duplicated here beyond their name.
+                    Falls back to plain text when there is no canonical employee to link to. */}
+                {cs.employeeId && setActiveEmployeeId ? (
+                  <button type="button"
+                    onClick={()=>{ setActiveEmployeeId(cs.employeeId); setScreen(SCREENS.EMPLOYEE_FILE); }}
+                    style={{...TYPE.identity,fontSize:20,color:COLOR.ink,background:"none",border:"none",padding:0,
+                            cursor:"pointer",fontFamily:FONT.sans,textAlign:"left",textDecoration:"underline",
+                            textDecorationColor:COLOR.border,textUnderlineOffset:3}}>
+                    {cs.employeeName}
+                  </button>
+                ) : (
+                  <div style={{...TYPE.identity,fontSize:20,color:COLOR.ink}}>{cs.employeeName}</div>
+                )}
                 <span style={{fontSize:11,fontWeight:600,color:getCaseStatus(cs).color,background:getCaseStatus(cs).bg,borderRadius:RADIUS.pill,padding:"3px 10px",whiteSpace:"nowrap"}}>{getCaseStatus(cs).label}</span>
                 {cs.confidential&&(
                   <span title="Visible only to authorised staff" style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11,fontWeight:600,color:"#B87520",background:"#FEF5E7",borderRadius:RADIUS.pill,padding:"3px 10px",whiteSpace:"nowrap"}}><LockIcon size={10} />Confidential</span>
@@ -693,6 +723,16 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
                 isHR && { label: cs.investigationPaused?"Paused (HR Intervention)":"HR Intervention", onClick: ()=>openHrInterventionModal(cs.id) },
                 !isHR && { label: "Ask HR", onClick: ()=>openEscalateModal(cs.id) },
                 (showNextStepPrimary || caseClosed) && { label: "+ New meeting", onClick: startMeetingFromHeader },
+                // Wave B.1 — a UI relocation only. It was buried inside the former
+                // Overview panels; it now sits last in the menu, with the SAME
+                // isHR gate, the SAME danger confirmation and the SAME handler.
+                // It must never be a primary action, and it is not one here.
+                isHR && { label: "Delete case", onClick: async()=>{
+                  const ok = await confirmDialog({title:"Delete case", message:"This will permanently delete this case and all its meeting records. This cannot be undone.", confirmLabel:"Delete", danger:true});
+                  if(!ok) return;
+                  saveCases(cases.filter(x=>x.id!==cs.id));
+                  setScreen(screens.CASES);
+                } },
               ];
               return (
                 <>
@@ -843,7 +883,12 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
               {/* UAT Product Hierarchy pass, Part 7 — "Next:" read as an
                   instruction Compass was enforcing rather than a
                   recommendation HR is free to act on differently. */}
-              <div style={{fontSize:13,color:"#5B3FD4",fontWeight:600}}>Suggested next step: {nextStep.label}</div>
+                {/* Wave B.1 — the duplicate next-step label is gone.
+                    The header already carries the authoritative primary action from
+                    getNextStep; repeating its label here, with a second copy of its
+                    button below, said the same instruction three times on one screen.
+                    What remains is CONTEXT: why, how ready the case is, and the
+                    genuinely different secondary option. */}
               {nextStep.reason&&<div style={{fontSize:11,color:"#6B6375",marginTop:2}}>{nextStep.reason}</div>}
               <CaseReadinessBadge readiness={readiness}/>
               {isHR&&currentInvestigator&&(
@@ -855,7 +900,6 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
             </div>
             <div style={{display:"flex",gap:8,flexShrink:0}}>
               {nextStep.secondary&&<button onClick={()=>{if(nextStep.secondary.action==="close_no_case"){requestCloseCase({allowNoCase:true, closeReasonLabel:"no case to answer", afterClose:()=>{setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));setShowDraft(true);setDraftedType("no-case-answer");handleLetter("no-case-answer",{inline:true,employeeName:cs.employeeName,manager:cs.manager||""});}});}}} disabled={closingCase} style={{fontSize:12,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"6px 14px",color:"#6B6375",cursor:closingCase?"not-allowed":"pointer",opacity:closingCase?0.6:1,fontFamily:FONT.sans}}>{nextStep.secondary.label}</button>}
-              <button onClick={handleNextStepAction} disabled={(nextStep.action==="inv_report"&&concludingInvestigation)||(nextStep.action==="close_case"&&closingCase)} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 18px",color:"#fff",fontWeight:600,cursor:((nextStep.action==="inv_report"&&concludingInvestigation)||(nextStep.action==="close_case"&&closingCase))?"not-allowed":"pointer",opacity:((nextStep.action==="inv_report"&&concludingInvestigation)||(nextStep.action==="close_case"&&closingCase))?0.6:1,fontFamily:FONT.sans}}>{nextStep.action==="inv_report"&&concludingInvestigation?"Generating report...":nextStep.label+" →"}</button>
             </div>
           </div>
 
@@ -1118,9 +1162,9 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
             <section style={{marginTop:20}}>
               <h2 style={{...TYPE.sectionHeading,color:COLOR.ink,margin:"0 0 6px"}}>What is happening</h2>
               <p style={{...TYPE.rowContext,color:COLOR.inkSoft,margin:0,lineHeight:1.6,maxWidth:640}}>{whatIsHappening}</p>
-              {nextStep?.reason && stage!=="closed" && (
-                <p style={{...TYPE.metadata,color:COLOR.inkQuiet,margin:"6px 0 0",lineHeight:1.6,maxWidth:640}}>{nextStep.reason}</p>
-              )}
+              {/* The explanation deliberately does NOT repeat here: it already sits
+                  with the readiness context above. One state sentence, one
+                  explanation, one action. */}
             </section>
           )}
 
@@ -1154,7 +1198,7 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
               cleanliness. */}
           {openGuardrails.length > 0 && (
             <section style={{marginTop:28}}>
-              <GuardrailsPanel cs={cs} signals={caseSignals} changeSignalStatus={changeSignalStatus}
+              <GuardrailsPanel cs={cs} signals={openGuardrails} changeSignalStatus={changeSignalStatus}
                 createCaseTask={createCaseTask} onAskWhy={setWhySignal}
                 requestOverrideReason={overview.requestOverrideReason}
                 requestPolicyDeviationReason={overview.requestPolicyDeviationReason}/>
@@ -1256,7 +1300,13 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
                       <span style={{...TYPE.rowContext,color:COLOR.ink,fontWeight:open?700:500}}>
                         {s.label}{typeof s.count==="number"&&s.count>0?` (${s.count})`:""}
                       </span>
-                      <span aria-hidden="true" style={{...TYPE.metadata,color:COLOR.inkFaint}}>{open?"Hide":"Show"}</span>
+                      {/* Wave B.1 — eleven repeated "Show" words were visual noise on a
+                          page about calm. A chevron carries the same meaning; the state
+                          stays explicit to assistive technology through aria-expanded on
+                          the button itself, which is where it belongs. */}
+                      <span aria-hidden="true" style={{...TYPE.metadata,color:COLOR.inkFaint,
+                            display:"inline-block",transition:"transform 120ms ease",
+                            transform:open?"rotate(90deg)":"none"}}>›</span>
                     </button>
                     {open && (
                       <div id={`case-section-${s.id}`} style={{padding:"4px 16px 20px",background:COLOR.paper}}>

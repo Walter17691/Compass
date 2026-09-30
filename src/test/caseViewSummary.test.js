@@ -290,9 +290,13 @@ describe('Wave B — the screen composes, it does not re-decide', () => {
     expect(screenSrc).not.toMatch(/d\.employeeName\s*===/);
   });
 
-  it('the primary action is not repeated as an attention item', () => {
-    // The screen must not say the same instruction three times.
+  it('the primary action is EXCLUDED from the attention list', () => {
+    // Wave B.1 — this used to assert that the attention derivation never mentions
+    // nextStep at all. It now must, in order to filter the primary action OUT: the
+    // header button and the first attention row were the same instruction twice.
     const attention = screenSrc.slice(screenSrc.indexOf('const caseAttention'), screenSrc.indexOf('const openGuardrails'));
-    expect(attention).not.toContain('nextStep');
+    expect(attention).toMatch(/\.filter\(a => !nextStep\?\.label \|\| a\.label\.trim\(\)\.toLowerCase\(\) !== nextStep\.label\.trim\(\)\.toLowerCase\(\)\)/);
+    // And the duplicate banner surface is gone entirely.
+    expect(screenSrc).not.toMatch(/>\s*Suggested next step:/);
   });
 });

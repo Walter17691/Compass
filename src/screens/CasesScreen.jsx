@@ -241,9 +241,12 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
     <div style={{minHeight:"100vh",background:COLOR.paper,fontFamily:FONT.sans}}>
       <div style={{background:COLOR.surface,borderBottom:`1px solid ${COLOR.borderFaint}`,padding:"16px 28px"}}>
         <div style={{maxWidth:CONTENT_MAX_WIDTH,margin:"0 auto"}}>
+          {/* Wave B.1 — the page says what it is: the cross-employee view of the
+              same formal processes that live on each Employee File, not a second
+              employee system. The sidebar keeps the shorter "Cases". */}
           <PageHeader
-            title="Cases"
-            subtitle={`${cases.filter(cs=>getCaseStage(cs)!=="closed").length} active · ${cases.filter(cs=>getCaseStage(cs)==="closed").length} closed`}
+            title="HR Processes"
+            subtitle={`Formal HR processes across your employees · ${cases.filter(cs=>getCaseStage(cs)!=="closed").length} active · ${cases.filter(cs=>getCaseStage(cs)==="closed").length} closed`}
             actions={<>
               {/* 10/10 pass — was the one screen in the product where
                   "+ New meeting" outranked "+ New case" (filled purple vs

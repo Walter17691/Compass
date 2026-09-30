@@ -349,14 +349,27 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
   // approximate with the total count in the meantime.
   const primaryItems = [
     {s:SCREENS.HOME, l:"Home", icon:HomeIcon},
-    {s:SCREENS.CASES, l:"Cases", icon:CasesIcon},
   ];
+  // ── Wave B.1 — People is the parent, not a peer ──────────────────────────
+  //
+  // Cases sat ABOVE People in the rail, which read as an alternative to it: two
+  // equal ways into the product, one of them a case system. The product hierarchy
+  // is People → Employee File → HR Processes → Case, and the global Cases view is
+  // the cross-employee view of those same processes — not a second employee
+  // system and not a second source of truth.
+  //
+  // Expressed with the `indent` treatment the collapsible groups already use —
+  // smaller icon, inset, shorter row — so the relationship reads immediately
+  // without a new group heading, a tree graphic, or any new component. No route,
+  // id or permission changes: this is which control sits where.
   const primaryItemsAfterAsk = [
     {s:SCREENS.TASKS, l:"Tasks", icon:TasksIcon},
     {s:SCREENS.PEOPLE, l:"People", icon:PeopleIcon},
+    // Subordinate VIEWS of the same people and their processes.
+    {s:SCREENS.CASES, l:"Cases", icon:CasesIcon, indent:true},
     // Phase E1.7 — Archive is a VIEW over the same canonical Employee Files whose
     // effective employment state is former, not a second employee store.
-    {s:SCREENS.ARCHIVE, l:"Archive", icon:PeopleIcon},
+    {s:SCREENS.ARCHIVE, l:"Archive", icon:PeopleIcon, indent:true},
   ];
 
   // Home + Sidebar Product Experience pass, Part 1 — same semantic

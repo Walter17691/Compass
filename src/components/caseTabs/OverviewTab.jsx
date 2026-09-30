@@ -18,7 +18,7 @@ import { AskHrPanel } from '../AskHrPanel';
 import { CaseRiskPanel } from '../CaseRiskPanel';
 import { ProcessChecklistPanel } from '../ProcessChecklistPanel';
 import { OccupationalHealthPanel } from '../OccupationalHealthPanel';
-import { COLOR, TYPE, RADIUS, SPACE, FONT } from '../../styles/tokens';
+import { COLOR, TYPE, RADIUS, SPACE } from '../../styles/tokens';
 
 const RISK_STYLE = {
   HIGH: { color:"#C84B2F", bg:"#FEF0EB" },
@@ -166,7 +166,6 @@ function Disclosure({ title, defaultOpen=false, children }) {
 export function OverviewTab({
   cs,
   caseCtx = {},
-  shell = {},
   caseData = {},
   caseActions = {},
   caseIntel = {},
@@ -513,16 +512,10 @@ export function OverviewTab({
           make the case visibly vanish and then need a reload to reappear.
           review.isApprover is this screen's existing isHR flag, already
           threaded through the same review prop bundle used just above. */}
-      {review.isApprover&&(
-        <div style={{textAlign:"right",marginTop:SPACE.lg}}>
-          <button onClick={async()=>{
-            const ok = await shell.confirmDialog({title:"Delete case", message:"This will permanently delete this case and all its meeting records. This cannot be undone.", confirmLabel:"Delete", danger:true});
-            if(!ok) return;
-            caseCtx.saveCases(caseCtx.cases.filter(x=>x.id!==cs.id));
-            shell.setScreen(shell.screens.CASES);
-          }} style={{fontSize:11,color:"#C84B2F",background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans}}>Delete case</button>
-        </div>
-      )}
+      {/* Wave B.1 — "Delete case" moved to the header's More actions menu.
+          It was buried at the bottom of these analysis panels, which is a strange
+          home for the one irreversible action on the screen. Same isHR gate, same
+          danger confirmation, same handler — only its placement changed. */}
     </>
   );
 }

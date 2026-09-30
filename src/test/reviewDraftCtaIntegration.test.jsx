@@ -127,7 +127,11 @@ describe('the two Review CTAs both actually open Review', () => {
   it('both are rendered for a review_draft meeting', () => {
     renderCase(makeCase(reviewDraftMeeting()));
     const found = ctas('Review meeting record');
-    expect(found.length).toBe(2);
+      // Wave B.1 — ONE dominant action. The duplicate "Suggested next step" button
+      // was a second copy of the header's own primary, so the screen said the same
+      // instruction three times. The route is unchanged: test A proves the surviving
+      // CTA still opens Review with the exact meeting.
+      expect(found.length).toBe(1);
   });
 
   it('A. the TOP-RIGHT primary CTA invokes the Review callback with the exact meeting', () => {
@@ -143,16 +147,10 @@ describe('the two Review CTAs both actually open Review', () => {
     expect(meetingArg.status).toBe(MEETING_STATUS.REVIEW_DRAFT);
   });
 
-  it('B. the SUGGESTED NEXT STEP CTA invokes the Review callback with the exact meeting', () => {
+  it('B. there is no SECOND next-step CTA to invoke', () => {
     const cs = makeCase(reviewDraftMeeting());
     renderCase(cs);
-    const suggested = ctas('Review meeting record').find(b => b.textContent.includes('→'));
-    expect(suggested).toBeDefined();
-    fireEvent.click(suggested);
-    expect(spies.onOpenReviewForMeeting).toHaveBeenCalledTimes(1);
-    const [caseArg, meetingArg] = spies.onOpenReviewForMeeting.mock.calls[0];
-    expect(caseArg.id).toBe(CASE_ID);
-    expect(meetingArg.id).toBe(MID);
+    expect(ctas('Review meeting record').filter(b => b.textContent.includes('\u2192'))).toHaveLength(0);
   });
 
   it('neither CTA opens signature, resumes, starts or writes', () => {

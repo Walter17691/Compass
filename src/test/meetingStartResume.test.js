@@ -491,8 +491,16 @@ describe('the Resume affordance is minimal and truthful', () => {
     expect(caseView).toContain('This meeting is saved to the case. Notes typed during it are held on the device it was started on until the record is saved.');
   });
 
-  it('does not change the suggested-next-step surface', () => {
-    expect(caseView).toContain('<div style={{fontSize:13,color:"#5B3FD4",fontWeight:600}}>Suggested next step: {nextStep.label}</div>');
+  it('leaves the next-step ENGINE alone (Wave B.1 changed only its presentation)', () => {
+    // This asserted the purple banner's exact markup. Wave B.1 removed that
+    // duplicate surface — the header already carried the same action — so the
+    // assertion moves to what actually matters: the engine and its routing.
+    expect(caseView).toContain('getNextStep(cs, {hasAppealManager: !!currentAppealManagerAccess, isHR})');
+    expect(caseView).toContain('onClick: handleNextStepAction');
+    // Targets the RENDERED form: a leading ">" means JSX text output, not prose.
+    // An unrelated historical comment still mentions the old banner wording, and a
+    // bare phrase match would fail on that rather than on anything a user sees.
+    expect(caseView).not.toMatch(/>\s*Suggested next step:/);
   });
 
   it('both PrepScreen routes persist before entering the live screen', () => {
