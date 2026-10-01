@@ -607,3 +607,41 @@ describe('B.2c — the nav MEASURES, not just splits (the component path)', () =
     }
   });
 });
+
+describe('B.2c — the nav is not one-way', () => {
+  it('widening restores the destinations that narrowing demoted', async () => {
+    // Found on production: it demoted correctly and then never came back, because
+    // it measured only the tabs still rendered — three of three always "fit".
+    let barWidth = 2000;
+    const origBar = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+    const origRect = Element.prototype.getBoundingClientRect;
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get() {
+      return this.getAttribute?.('role') === 'tablist' ? barWidth : 0;
+    }});
+    const byLabel = { Investigation: 79, Meetings: 81, Documents: 72, Record: 47, Compass: 111 };
+    Element.prototype.getBoundingClientRect = function () {
+      if (this.hasAttribute?.('data-dest')) {
+        const k = Object.keys(byLabel).find(x => (this.textContent || '').includes(x));
+        return { width: byLabel[k] ?? 80, height: 30, top: 0, left: 0, right: 0, bottom: 0 };
+      }
+      return origRect.call(this);
+    };
+    try {
+      renderCase({});
+      const bar = screen.getByRole('tablist', { name: 'Case workspace' });
+      expect(within(bar).getAllByRole('tab')).toHaveLength(5);
+
+      barWidth = 330;
+      await act(async () => { window.dispatchEvent(new Event('resize')); });
+      const narrowed = within(bar).getAllByRole('tab').length;
+      expect(narrowed).toBeLessThan(5);
+
+      barWidth = 2000;
+      await act(async () => { window.dispatchEvent(new Event('resize')); });
+      expect(within(bar).getAllByRole('tab')).toHaveLength(5);
+    } finally {
+      if (origBar) Object.defineProperty(HTMLElement.prototype, 'clientWidth', origBar);
+      Element.prototype.getBoundingClientRect = origRect;
+    }
+  });
+});

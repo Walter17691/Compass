@@ -30,6 +30,8 @@ export function CaseWorkspaceNav({ destinations, active, onSelect }) {
   const barRef = useRef(null);
   const [maxVisible, setMaxVisible] = useState(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  // Full-width measurements, kept so a narrowed bar can widen back out again.
+  const widthsRef = useRef([]);
   const moreRef = useRef(null);
 
   const primaryCount = destinations?.primary?.length || 0;
@@ -42,9 +44,18 @@ export function CaseWorkspaceNav({ destinations, active, onSelect }) {
     const measure = () => {
       const available = el.clientWidth - MORE_RESERVE;
       if (!available || available <= 0) return;
-      const widths = Array.from(el.querySelectorAll("[data-dest]"))
+      const rendered = Array.from(el.querySelectorAll("[data-dest]"))
         .map(n => n.getBoundingClientRect().width);
-      if (!widths.length || widths.every(w => w === 0)) return;   // not laid out yet
+      if (!rendered.length || rendered.every(w => w === 0)) return;   // not laid out yet
+
+      // Measure against EVERY destination's width, not just the ones currently
+      // rendered. Without this the bar is one-way: once narrowing has demoted
+      // two of five, only three remain to measure, three always "fit", and
+      // widening the window never brings them back. Caught on production — it
+      // demoted correctly and then would not restore.
+      if (rendered.length >= primaryCount) widthsRef.current = rendered;
+      const widths = widthsRef.current.length >= primaryCount ? widthsRef.current : rendered;
+
       let used = 0, fit = 0;
       for (const w of widths) {
         if (used + w > available) break;
@@ -52,6 +63,7 @@ export function CaseWorkspaceNav({ destinations, active, onSelect }) {
       }
       setMaxVisible(fit >= primaryCount ? null : fit);
     };
+    widthsRef.current = [];   // a different destination set means different widths
     measure();
     // Two signals, not one. ResizeObserver is the precise one — it catches the bar
     // changing width without the window changing at all — but it is not available
