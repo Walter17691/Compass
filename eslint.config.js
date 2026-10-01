@@ -69,6 +69,14 @@ export default defineConfig([
       // capability without pulling in its full recommended ruleset
       // (which would surface a wave of new, untriaged findings).
       'react/jsx-uses-vars': 'error',
+      // Wave B.2 corrective — its missing counterpart. jsx-uses-vars stops a
+      // JSX-only import reading as unused; jsx-no-undef stops a JSX component
+      // that was NEVER imported reading as fine. Core no-undef cannot see JSX
+      // element names at all, so without this an undefined component passes
+      // lint, passes the build, and throws at runtime — which is exactly how
+      // <GuardrailsPanel> shipped unimported from Wave B and crashed the Case
+      // View for every case with an open guardrail.
+      'react/jsx-no-undef': 'error',
     },
   },
   {
@@ -100,6 +108,14 @@ export default defineConfig([
     },
     rules: {
       'react/jsx-uses-vars': 'error',
+      // Wave B.2 corrective — its missing counterpart. jsx-uses-vars stops a
+      // JSX-only import reading as unused; jsx-no-undef stops a JSX component
+      // that was NEVER imported reading as fine. Core no-undef cannot see JSX
+      // element names at all, so without this an undefined component passes
+      // lint, passes the build, and throws at runtime — which is exactly how
+      // <GuardrailsPanel> shipped unimported from Wave B and crashed the Case
+      // View for every case with an open guardrail.
+      'react/jsx-no-undef': 'error',
     },
   },
 ])

@@ -576,3 +576,74 @@ describe('Wave B.2 §32 — the rendered surface, by case state', () => {
     expect(screen.getByText(/Closed\. The outcome was First written warning\./)).toBeInTheDocument();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// §8 — Guardrails, RENDERED.
+//
+// This suite exists because Wave B, B.1 and B.2 all asserted guardrail
+// behaviour against the SOURCE TEXT of CaseViewScreen and never once rendered a
+// case that had an open guardrail. GuardrailsPanel was used in JSX but never
+// imported, so the whole Case View threw "GuardrailsPanel is not defined" for
+// every case with an open process_risk signal — 252 production cases, 8.5%.
+//
+// Wave B.1 is what exposed it: before B.1 the gate filtered on `sig.kind`,
+// which case_signals does not have, so the block never rendered and the missing
+// import never ran. Fixing the gate turned a silently-dead block into a crash.
+// `no-undef` is not enabled in this repo's eslint config and Vite resolves JSX
+// identifiers at runtime, so neither lint nor build could catch it. Only
+// rendering could.
+const GUARDRAIL = {
+  id: 'sig-1', caseId: 'c1', type: 'process_risk', status: 'open',
+  title: 'No investigation meeting before the disciplinary hearing',
+  reasoning: 'ACAS expects fact-finding before a hearing is arranged.',
+  sourceRefs: [{ kind: 'policy', id: 'p1', label: 'Disciplinary Policy', clauseHeading: '4.2', clauseText: 'Investigate before any hearing.' }],
+};
+
+describe('Wave B.2 §8 — Guardrails render, exactly once, on the main surface', () => {
+  it('a case with an open guardrail RENDERS instead of throwing', () => {
+    renderCase({}, { extraShell: { caseSignals: [GUARDRAIL] } });
+    expect(screen.getByText('Procedural guardrails')).toBeInTheDocument();
+    expect(screen.getByText(GUARDRAIL.title)).toBeInTheDocument();
+  });
+
+  it('it appears exactly ONCE — not duplicated into Compass analysis', () => {
+    renderCase({}, { extraShell: { caseSignals: [GUARDRAIL] } });
+    expect(screen.getAllByText('Procedural guardrails')).toHaveLength(1);
+    expect(screen.getAllByText(GUARDRAIL.title)).toHaveLength(1);
+  });
+
+  it('its policy citation survives', () => {
+    renderCase({}, { extraShell: { caseSignals: [GUARDRAIL] } });
+    expect(screen.getByText(/Disciplinary Policy/)).toBeInTheDocument();
+  });
+
+  it('a case with NO open guardrail shows no empty panel', () => {
+    renderCase({}, { extraShell: { caseSignals: [] } });
+    expect(screen.queryByText('Procedural guardrails')).not.toBeInTheDocument();
+  });
+
+  it('a RESOLVED guardrail is not shown — status is honoured, not just type', () => {
+    renderCase({}, { extraShell: { caseSignals: [{ ...GUARDRAIL, status: 'resolved' }] } });
+    expect(screen.queryByText('Procedural guardrails')).not.toBeInTheDocument();
+  });
+
+  it('a signal of another type does not leak into guardrails', () => {
+    renderCase({}, { extraShell: { caseSignals: [{ ...GUARDRAIL, type: 'next_action' }] } });
+    expect(screen.queryByText('Procedural guardrails')).not.toBeInTheDocument();
+  });
+
+  it('every JSX component the screen renders is actually in scope', () => {
+    // The generalised form of the defect: a component used but never imported.
+    const src = read('src/screens/CaseViewScreen.jsx');
+    const used = new Set([...src.matchAll(/<([A-Z][A-Za-z0-9_]*)[\s/>]/g)].map(m => m[1]));
+    const imported = new Set();
+    for (const m of src.matchAll(/import\s+(?:(\w+)\s*,\s*)?\{([^}]*)\}\s*from/g)) {
+      if (m[1]) imported.add(m[1]);
+      m[2].split(',').forEach(p => { const n = p.trim().split(' as ').pop().trim(); if (n) imported.add(n); });
+    }
+    for (const m of src.matchAll(/import\s+([A-Z][A-Za-z0-9_]*)\s+from/g)) imported.add(m[1]);
+    const declared = new Set([...src.matchAll(/(?:function|const|let|var)\s+([A-Z][A-Za-z0-9_]*)/g)].map(m => m[1]));
+    const missing = [...used].filter(n => !imported.has(n) && !declared.has(n) && n !== 'Fragment' && n !== 'React');
+    expect(missing).toEqual([]);
+  });
+});

@@ -37,6 +37,7 @@ import { DocumentsTab } from '../components/caseTabs/DocumentsTab';
 import { CommunicationsTab } from '../components/caseTabs/CommunicationsTab';
 import { ThemesTab } from '../components/caseTabs/ThemesTab';
 import { OutcomeTab } from '../components/caseTabs/OutcomeTab';
+import { GuardrailsPanel } from '../components/GuardrailsPanel';
 import { allegationsForCase } from '../lib/allegations';
 import { tasksForCase, hrNoteTasks } from '../lib/caseTasks';
 import { openSignalsForCase } from '../lib/caseSignals';
