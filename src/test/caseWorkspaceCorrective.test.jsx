@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { screen, within, fireEvent } from '@testing-library/react';
+import { screen, within, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderCase } from './support/renderCaseView.jsx';
 import {
@@ -519,5 +519,91 @@ describe('B.2c — a next-action signal does not paint a band it no longer rende
     renderCase({}, { extraShell: { caseSignals: [signal] } });
     await user.click(screen.getByRole('tab', { name: /Compass analysis/ }));
     expect(screen.getByText('Interview the named witness')).toBeInTheDocument();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+describe('B.2c — the nav MEASURES, not just splits (the component path)', () => {
+  // splitForWidth was unit-tested from the start; the component that calls it was
+  // not, so nothing proved the measurement actually ran. Production verification
+  // could not settle it either — ResizeObserver callbacks are suppressed in the
+  // automation context, and my own probe observer fired zero times there.
+  const stubWidths = (widths, barWidth) => {
+    const origBar = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+    const origRect = Element.prototype.getBoundingClientRect;
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get() {
+      return this.getAttribute?.('role') === 'tablist' ? barWidth : 0;
+    }});
+    let i = 0;
+    Element.prototype.getBoundingClientRect = function () {
+      if (this.hasAttribute?.('data-dest')) return { width: widths[i++ % widths.length], height: 30, top: 0, left: 0, right: 0, bottom: 0 };
+      return origRect.call(this);
+    };
+    return () => {
+      if (origBar) Object.defineProperty(HTMLElement.prototype, 'clientWidth', origBar);
+      Element.prototype.getBoundingClientRect = origRect;
+    };
+  };
+
+  it('a narrow bar demotes the rightmost destinations into the overflow', async () => {
+    // 5 destinations at ~80px each in a 330px bar, minus 96px reserved for "More",
+    // leaves room for three. The real production measurement was exactly this.
+    const restore = stubWidths([79, 81, 72, 47, 111], 330);
+    try {
+      renderCase({});
+      // Drive the backstop signal the component now also listens to.
+      await act(async () => { window.dispatchEvent(new Event('resize')); });
+      const bar = screen.getByRole('tablist', { name: 'Case workspace' });
+      const visible = within(bar).getAllByRole('tab').map(t => t.textContent.trim());
+      expect(visible.length).toBeLessThan(5);
+      expect(visible[0]).toMatch(/^Investigation/);
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: 'More ▾' }));
+      const menu = screen.getByRole('menu', { name: 'More case destinations' });
+      const overflow = within(menu).getAllByRole('menuitem').map(i => i.textContent.trim());
+      // Everything displaced is still reachable, and nothing is lost.
+      expect(overflow).toEqual(expect.arrayContaining([expect.stringMatching(/Compass analysis/)]));
+      expect(overflow).toEqual(expect.arrayContaining([expect.stringMatching(/Themes/)]));
+    } finally { restore(); }
+  });
+
+  it('a wide bar keeps every destination visible', async () => {
+    const restore = stubWidths([79, 81, 72, 47, 111], 2000);
+    try {
+      renderCase({});
+      await act(async () => { window.dispatchEvent(new Event('resize')); });
+      const bar = screen.getByRole('tablist', { name: 'Case workspace' });
+      expect(within(bar).getAllByRole('tab').length).toBe(5);
+    } finally { restore(); }
+  });
+
+  it('RE-measures when the window changes, not only on mount', async () => {
+    // The behavioural version of the point. jsdom has no ResizeObserver, so if the
+    // component relied on that alone it would measure once at mount and never
+    // again — which is exactly how it behaved in the automation context where my
+    // probe observer fired zero times. Mount WIDE, then narrow and resize.
+    let barWidth = 2000;
+    const origBar = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+    const origRect = Element.prototype.getBoundingClientRect;
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get() {
+      return this.getAttribute?.('role') === 'tablist' ? barWidth : 0;
+    }});
+    let i = 0;
+    const widths = [79, 81, 72, 47, 111];
+    Element.prototype.getBoundingClientRect = function () {
+      if (this.hasAttribute?.('data-dest')) return { width: widths[i++ % widths.length], height: 30, top: 0, left: 0, right: 0, bottom: 0 };
+      return origRect.call(this);
+    };
+    try {
+      renderCase({});
+      const bar = screen.getByRole('tablist', { name: 'Case workspace' });
+      expect(within(bar).getAllByRole('tab').length).toBe(5);   // wide: all visible
+      barWidth = 330;                                            // the window narrows
+      await act(async () => { window.dispatchEvent(new Event('resize')); });
+      expect(within(bar).getAllByRole('tab').length).toBeLessThan(5);
+    } finally {
+      if (origBar) Object.defineProperty(HTMLElement.prototype, 'clientWidth', origBar);
+      Element.prototype.getBoundingClientRect = origRect;
+    }
   });
 });

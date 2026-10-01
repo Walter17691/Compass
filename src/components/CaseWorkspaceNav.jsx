@@ -38,7 +38,7 @@ export function CaseWorkspaceNav({ destinations, active, onSelect }) {
   // window changes without a re-render of this component.
   useLayoutEffect(() => {
     const el = barRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    if (!el) return undefined;
     const measure = () => {
       const available = el.clientWidth - MORE_RESERVE;
       if (!available || available <= 0) return;
@@ -53,9 +53,19 @@ export function CaseWorkspaceNav({ destinations, active, onSelect }) {
       setMaxVisible(fit >= primaryCount ? null : fit);
     };
     measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
+    // Two signals, not one. ResizeObserver is the precise one — it catches the bar
+    // changing width without the window changing at all — but it is not available
+    // or deliverable everywhere (it never fires under some automation contexts,
+    // which is how I nearly shipped this unverified). The window resize listener
+    // is the coarse backstop, so the navigation degrades to "measures on window
+    // resize" rather than to "never re-measures".
+    let ro = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(measure);
+      ro.observe(el);
+    }
+    window.addEventListener("resize", measure);
+    return () => { if (ro) ro.disconnect(); window.removeEventListener("resize", measure); };
   }, [primaryCount, destinations]);
 
   useEffect(() => {
