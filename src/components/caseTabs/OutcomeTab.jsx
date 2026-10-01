@@ -65,8 +65,8 @@ export function OutcomeTab({ cs, stage, fmtDate, setShowOutcomeModal, setOutcome
 
   if (!reached) {
     return (
-      <div style={{textAlign:"center",padding:"40px",background:"#FFFFFF",borderRadius:12,border:"1px solid #E8E0D0"}}>
-        <div style={{fontSize:14,color:"#9B9098"}}>No outcome yet — this case hasn't reached {grievance?"a grievance meeting":"a disciplinary hearing"}.</div>
+      <div style={{textAlign:"center",padding:"40px",background:"#FFFFFF",borderRadius:12,border:"1px solid #E8EAF2"}}>
+        <div style={{fontSize:14,color:"#8A8EA3"}}>No outcome yet — this case hasn't reached {grievance?"a grievance meeting":"a disciplinary hearing"}.</div>
       </div>
     );
   }
@@ -84,9 +84,9 @@ export function OutcomeTab({ cs, stage, fmtDate, setShowOutcomeModal, setOutcome
       <div style={{background:"#E8F5EE",border:"1px solid #A8D5B5",borderRadius:12,padding:"16px 20px"}}>
         <div style={{fontSize:11,fontWeight:700,color:"#1A7A4A",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Outcome issued</div>
         <div style={{fontSize:14,fontWeight:600,color:"#1C1820",marginBottom:4}}>{cs.outcome}</div>
-        <div style={{fontSize:12,color:"#6B6375"}}>Issued {cs.outcomeIssuedAt?fmtDate(cs.outcomeIssuedAt):"date not recorded"} · Appeal window: 5 working days from issue{appealDeadline?` · Deadline ${fmtDate(appealDeadline)}`:""}</div>
+        <div style={{fontSize:12,color:"#4A4E63"}}>Issued {cs.outcomeIssuedAt?fmtDate(cs.outcomeIssuedAt):"date not recorded"} · Appeal window: 5 working days from issue{appealDeadline?` · Deadline ${fmtDate(appealDeadline)}`:""}</div>
         {cs.warningDurationMonths&&(
-          <div style={{fontSize:12,color:"#6B6375",marginTop:2}}>Warning duration: {cs.warningDurationMonths} month{cs.warningDurationMonths===1?"":"s"}{cs.warningExpiresAt?` · Expires ${fmtDate(cs.warningExpiresAt)}`:""}</div>
+          <div style={{fontSize:12,color:"#4A4E63",marginTop:2}}>Warning duration: {cs.warningDurationMonths} month{cs.warningDurationMonths===1?"":"s"}{cs.warningExpiresAt?` · Expires ${fmtDate(cs.warningExpiresAt)}`:""}</div>
         )}
         {needsCompletion&&(
           canDecide ? (
@@ -95,7 +95,7 @@ export function OutcomeTab({ cs, stage, fmtDate, setShowOutcomeModal, setOutcome
               <button onClick={()=>{setOutcomeType(cs.outcome);setCompletingOutcomeDetails(true);setShowOutcomeModal(true);}} style={{fontSize:12,background:"none",border:"1px solid #1A7A4A",borderRadius:8,padding:"8px 16px",color:"#1A7A4A",fontWeight:600,cursor:"pointer",fontFamily:FONT.sans}}>Complete outcome details</button>
             </div>
           ) : (
-            <div style={{fontSize:12,color:"#6B6375",marginTop:10}}>This warning is missing its duration — only HR or this case's Hearing Manager can complete it.</div>
+            <div style={{fontSize:12,color:"#4A4E63",marginTop:10}}>This warning is missing its duration — only HR or this case's Hearing Manager can complete it.</div>
           )
         )}
         {onDraftOutcomeLetter&&(
@@ -108,13 +108,13 @@ export function OutcomeTab({ cs, stage, fmtDate, setShowOutcomeModal, setOutcome
   }
 
   return (
-    <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,padding:"16px 20px"}}>
+    <div style={{background:"#FFFFFF",border:"1px solid #E8EAF2",borderRadius:12,padding:"16px 20px"}}>
       <div style={{fontSize:13,color:"#1C1820",fontWeight:600,marginBottom:4}}>Issue {grievance?"grievance":"disciplinary"} outcome</div>
-      <div style={{fontSize:12,color:"#6B6375",marginBottom:14}}>Once the hearing is complete, issue the written outcome. ACAS recommends within 5 working days of the hearing. The outcome letter starts the employee's 5-day appeal window.</div>
+      <div style={{fontSize:12,color:"#4A4E63",marginBottom:14}}>Once the hearing is complete, issue the written outcome. ACAS recommends within 5 working days of the hearing. The outcome letter starts the employee's 5-day appeal window.</div>
       {canDecide ? (
         <button onClick={()=>setShowOutcomeModal(true)} style={{fontSize:13,background:"#1C1820",border:"none",borderRadius:8,padding:"10px 20px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:FONT.sans}}>Issue outcome →</button>
       ) : (
-        <div style={{fontSize:12,color:"#9B9098"}}>Only HR or this case's Hearing Manager can issue the outcome.</div>
+        <div style={{fontSize:12,color:"#8A8EA3"}}>Only HR or this case's Hearing Manager can issue the outcome.</div>
       )}
     </div>
   );

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { CaseReadinessBadge } from '../CaseReadinessBadge';
 import { UnansweredQuestionsPanel } from '../UnansweredQuestionsPanel';
 import { InconsistenciesPanel } from '../InconsistenciesPanel';
@@ -48,45 +49,46 @@ function Block({ title, hint, children }) {
   );
 }
 
+// ── Progressive disclosure ──────────────────────────────────────────────────
+//
+// Human UAT: every question, every inconsistency and every action button was
+// rendered at full weight at once, which turned the advisory home into a second
+// operational dashboard. The intelligence should be in the system, not all over
+// the screen — so each group states what it holds and reveals the detail on ask.
+// Nothing is removed: expanded, every existing action is exactly as it was.
+function Reveal({ title, summary, defaultOpen = false, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div style={{borderTop:`1px solid ${COLOR.borderFaint}`,paddingTop:14}}>
+      <button type="button" onClick={()=>setOpen(v=>!v)} aria-expanded={open}
+        style={{display:"flex",width:"100%",alignItems:"baseline",justifyContent:"space-between",gap:12,
+                background:"none",border:"none",padding:0,cursor:"pointer",textAlign:"left",
+                fontFamily:"DM Sans,system-ui,sans-serif"}}>
+        <span style={{...TYPE.rowContext,color:COLOR.ink,fontWeight:600}}>{title}</span>
+        <span style={{...TYPE.metadata,color:COLOR.inkQuiet,whiteSpace:"nowrap"}}>
+          {summary}{" "}
+          <span aria-hidden="true" style={{display:"inline-block",transition:"transform 120ms ease",
+                transform:open?"rotate(90deg)":"none"}}>›</span>
+        </span>
+      </button>
+      {open && <div style={{marginTop:14}}>{children}</div>}
+    </div>
+  );
+}
+
 export function CompassAnalysisPanel({
   cs, readiness, currentRisk,
   nextAction = {}, caseIntel = {}, caseActions = {},
   caseSignals = {}, automation = {}, riskItems = [], ai = {},
 }) {
+  const unanswered = caseSignals.unanswered || [];
+  const inconsistencies = caseSignals.inconsistencies || [];
+  const reviewCount = unanswered.length + inconsistencies.length;
+
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:20}}>
-      {/* Compass's read of how ready this case is. It was beside the next-step
-          action, where it looked like part of the instruction rather than an
-          assessment the manager is free to disagree with. */}
-      {readiness?.applicable&&(
-        <Block title="Case readiness"
-          hint="Compass's score for how well-covered this case looks. A quality indicator, not a legal compliance guarantee.">
-          <CaseReadinessBadge readiness={readiness}/>
-        </Block>
-      )}
-
-      {/* The risk rating is the most recent meeting's AI assessment — it is a
-          Compass opinion, not a field anyone set, so it belongs here rather than
-          on a line next to the case owner. "Not assessed" simply means no
-          meeting has been assessed yet, and is no longer shown as though it were
-          an unfilled administrative field. */}
-      {currentRisk&&(
-        <Block title="Risk rating"
-          hint="Compass's assessment of the most recent meeting. Nobody set this field by hand.">
-          <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-            <span style={{fontSize:11,fontWeight:700,color:RISK_STYLE[currentRisk]?.color||COLOR.ink,background:RISK_STYLE[currentRisk]?.bg||COLOR.surface,borderRadius:4,padding:"3px 9px"}}>{currentRisk} RISK</span>
-            <span style={{...TYPE.metadata,color:COLOR.inkQuiet}}>From Compass&apos;s assessment of the most recent meeting.</span>
-          </div>
-        </Block>
-      )}
-
-      {/* Wave B.2 corrective — ONE front door, not two.
-          "Compass's suggested next action" was a heading and "Ask Compass for its
-          take" was the button underneath it, and they are the same capability:
-          generateNextBestAction. Two names for one job reads as two features. The
-          block is named for the job and the button is named for the act, and each
-          capability below now says plainly what it is for — which is the whole
-          complaint about this area. */}
+    <div style={{display:"flex",flexDirection:"column",gap:18}}>
+      {/* ── A. The one thing Compass suggests doing next ────────────────────
+          First, because it is the only item here that proposes an action. */}
       <Block title="Suggested next step"
         hint="One procedural step, grounded in a named fact from this case. Never a sanction or an outcome — those are yours.">
         {nextAction.signal ? (
@@ -116,51 +118,91 @@ export function CompassAnalysisPanel({
         )}
       </Block>
 
-      <UnansweredQuestionsPanel
-        cs={cs}
-        covered={caseIntel.unansweredCovered?.[cs.id]||[]}
-        stillToExplore={caseSignals.unanswered||[]}
-        loading={caseIntel.unansweredLoading?.[cs.id]}
-        onGenerate={caseIntel.generateUnansweredQuestions}
-        createCaseTask={caseActions.createCaseTask}
-        changeSignalStatus={caseActions.changeSignalStatus}
-        onAskWhy={caseActions.onAskWhy}
-      />
+      {/* ── B. Things to review ─────────────────────────────────────────────
+          Unanswered questions and potential inconsistencies are the same job —
+          "what might this case be missing?" — so they are one area that states
+          its size and reveals the detail on ask, rather than two long lists of
+          fully-weighted cards. Every action inside is unchanged. */}
+      <Reveal
+        title="Things to review"
+        summary={reviewCount ? `${reviewCount} to look at` : "Nothing outstanding"}
+        defaultOpen={false}>
+        <div style={{display:"flex",flexDirection:"column",gap:18}}>
+          <UnansweredQuestionsPanel
+            cs={cs}
+            covered={caseIntel.unansweredCovered?.[cs.id]||[]}
+            stillToExplore={unanswered}
+            loading={caseIntel.unansweredLoading?.[cs.id]}
+            onGenerate={caseIntel.generateUnansweredQuestions}
+            createCaseTask={caseActions.createCaseTask}
+            changeSignalStatus={caseActions.changeSignalStatus}
+            onAskWhy={caseActions.onAskWhy}
+          />
+          <InconsistenciesPanel
+            cs={cs}
+            signals={inconsistencies}
+            loading={caseIntel.inconsistencyLoading}
+            onCheck={caseIntel.generateInconsistencies}
+            changeSignalStatus={caseActions.changeSignalStatus}
+            createCaseTask={caseActions.createCaseTask}
+            allegations={caseIntel.allegations||[]}
+            onLinkAllegation={caseActions.linkSignalToAllegation}
+            onAskWhy={caseActions.onAskWhy}
+          />
+          <CaseRiskPanel riskItems={riskItems} onAskWhy={caseActions.onAskWhy} />
+          <AutomationSuggestionsPanel
+            suggestions={automation.suggestions}
+            automationLevels={automation.automationLevels}
+            cs={cs}
+            onResendReminder={automation.onResendReminder}
+          />
+        </div>
+      </Reveal>
 
-      <InconsistenciesPanel
-        cs={cs}
-        signals={caseSignals.inconsistencies||[]}
-        loading={caseIntel.inconsistencyLoading}
-        onCheck={caseIntel.generateInconsistencies}
-        changeSignalStatus={caseActions.changeSignalStatus}
-        createCaseTask={caseActions.createCaseTask}
-        allegations={caseIntel.allegations||[]}
-        onLinkAllegation={caseActions.linkSignalToAllegation}
-        onAskWhy={caseActions.onAskWhy}
-      />
+      {/* ── C. The neutral summary ──────────────────────────────────────────
+          No large permanent branded card when nothing has been generated. */}
+      <Reveal title="Case overview" summary={ai.overview ? "Generated" : "Not generated"}>
+        <AIAssistantTab
+          cs={cs}
+          chatHistory={ai.chatHistory||[]}
+          chatInput={ai.chatInput}
+          setChatInput={ai.setChatInput}
+          chatProcessing={ai.chatProcessing}
+          sendChat={ai.sendChat}
+          overview={ai.overview}
+          overviewLoading={ai.overviewLoading}
+          generateOverview={ai.generateOverview}
+          overviewSources={ai.overviewSources}
+          onAskWhy={caseActions.onAskWhy}
+        />
+      </Reveal>
 
-      <CaseRiskPanel riskItems={riskItems} onAskWhy={caseActions.onAskWhy} />
-
-      <AutomationSuggestionsPanel
-        suggestions={automation.suggestions}
-        automationLevels={automation.automationLevels}
-        cs={cs}
-        onResendReminder={automation.onResendReminder}
-      />
-
-      <AIAssistantTab
-        cs={cs}
-        chatHistory={ai.chatHistory||[]}
-        chatInput={ai.chatInput}
-        setChatInput={ai.setChatInput}
-        chatProcessing={ai.chatProcessing}
-        sendChat={ai.sendChat}
-        overview={ai.overview}
-        overviewLoading={ai.overviewLoading}
-        generateOverview={ai.generateOverview}
-        overviewSources={ai.overviewSources}
-        onAskWhy={caseActions.onAskWhy}
-      />
+      {/* ── D/E. Compass's own read of the case ─────────────────────────────
+          Readiness and the meeting-derived risk rating are assessments, not case
+          state and not instructions. They sit LAST and quietly: an AI risk label
+          must never visually compete with a deterministic procedural Guardrail,
+          which is a different kind of claim entirely. */}
+      {(readiness?.applicable || currentRisk) && (
+        <Reveal
+          title="Compass's read of this case"
+          summary={currentRisk ? `Risk: ${currentRisk}` : "Readiness only"}>
+          <div style={{display:"flex",flexDirection:"column",gap:16}}>
+            {currentRisk&&(
+              <Block title="Risk rating"
+                hint="Compass's assessment of the most recent meeting. Nobody set this field by hand, and it is advisory only.">
+                <span style={{...TYPE.metadata,fontWeight:700,color:RISK_STYLE[currentRisk]?.color||COLOR.ink,
+                              background:RISK_STYLE[currentRisk]?.bg||COLOR.rail,borderRadius:4,padding:"3px 9px"}}>{currentRisk} RISK</span>
+              </Block>
+            )}
+            {readiness?.applicable&&(
+              <Block title="Case readiness"
+                hint="Compass's score for how well-covered this case looks. A quality indicator, not a legal compliance guarantee.">
+                <CaseReadinessBadge readiness={readiness}/>
+              </Block>
+            )}
+          </div>
+        </Reveal>
+      )}
     </div>
   );
 }

@@ -72,10 +72,10 @@ export function CaseInformationPanel({
           <div style={{display:"flex",gap:16,alignItems:"flex-end",flexWrap:"wrap"}}>
             {dateFields.map(field => (
               <div key={field}>
-                <label htmlFor={`case-info-${field}`} style={{fontSize:11,color:"#9B9098",display:"block",marginBottom:4}}>{DATE_LABEL[field]}</label>
+                <label htmlFor={`case-info-${field}`} style={{fontSize:11,color:"#8A8EA3",display:"block",marginBottom:4}}>{DATE_LABEL[field]}</label>
                 <input id={`case-info-${field}`} type="date" value={cs[field]||""}
                   onChange={e=>patch({[field]: e.target.value||null})}
-                  style={{fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 10px",color:"#1A1535"}}/>
+                  style={{fontSize:13,border:"1px solid #E8EAF2",borderRadius:6,padding:"6px 10px",color:"#0F1224"}}/>
               </div>
             ))}
           </div>

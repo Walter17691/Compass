@@ -448,11 +448,12 @@ describe('Wave B.2 — nothing approved was disturbed', () => {
     expect(sidebar).not.toMatch(/SCREENS\.PEOPLE[^}]*indent:true/);
   });
 
-  it('one primary action and the case record survive, RENDERED', () => {
+  it('one primary action survives, RENDERED', () => {
     const meeting = { id: 'm1', type: 'disciplinary', status: 'review_draft', record: 'x', endedAt: '2026-09-01T10:00:00Z' };
     renderCase({ meetings: [meeting] }, { nextStep: REVIEW_DRAFT_STEP });
     expect(screen.getAllByRole('button', { name: /Review meeting record/i })).toHaveLength(1);
-    expect(screen.getAllByText('Case record')).toHaveLength(1);
+    // The compact Case record summary is deliberately gone — Record owns it now.
+    expect(screen.queryByRole('heading', { name: 'Case record' })).not.toBeInTheDocument();
   });
 
   it('Wave A and Wave 0 are still intact', () => {
@@ -484,12 +485,12 @@ describe('Wave B.2 §32 — the rendered surface, by case state', () => {
     expect(screen.getByText(/awaiting review/i)).toBeInTheDocument();
   });
 
-  it('review_draft: the case record is reachable without opening anything', () => {
+  it('review_draft: the chronology is one click away, in Record', () => {
     const meeting = { id: 'm1', type: 'disciplinary', status: 'review_draft', record: 'x', endedAt: '2026-09-01T10:00:00Z' };
     renderCase({ meetings: [meeting] }, { nextStep: REVIEW_DRAFT_STEP });
-    expect(screen.getByText('Case record')).toBeInTheDocument();
-    // "Checks and analysis" is not among the sections.
-    expect(screen.queryByRole('button', { name: /Checks and analysis/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^Record/ })).toBeInTheDocument();
+    // "Checks and analysis" is not among the destinations.
+    expect(screen.queryByRole('tab', { name: /Checks and analysis/ })).not.toBeInTheDocument();
   });
 
   it('review_draft: no blank description, no weekly pay, no owner repeated', () => {

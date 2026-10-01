@@ -226,13 +226,16 @@ describe('Wave B.1 — guardrails are conditionally prominent', () => {
 
 // ═══════════════════════════════════════════════════════════════════════════
 describe('Wave B.1 — the rest of Wave B is preserved', () => {
-  it('the case record is still the spine', () => {
-    expect(caseViewCode).toContain('caseRecordEntries(cs, caseAllegations');
-    expect(caseViewSrc).toContain('Case record');
+  it('the chronology is still first-class — now as the Record destination', () => {
+    // Wave B.2 final cleanup — the compact summary that used to sit above the
+    // workspace is gone BECAUSE Record owns this job outright. The engine behind
+    // it is untouched; see caseWorkspaceCorrective.test.jsx for the rendered
+    // assertions that Record exists and renders the timeline.
+    expect(read('src/lib/caseViewSummary.js')).toContain('export function caseRecordEntries');
+    expect(read('src/lib/caseWorkspace.js')).toContain('id: "record"');
   });
 
-  it('progressive Case details, and no twelve-tab return', () => {
-    expect(caseViewSrc).toContain('Case details');
+  it('no twelve-tab return', () => {
     ['const TABS = [', 'PRIMARY_TAB_IDS', 'MORE_GROUPS']
       .forEach(t => expect(caseViewCode, t).not.toContain(t));
   });

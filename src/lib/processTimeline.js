@@ -70,7 +70,7 @@ function evidenceChecksFor(stages) {
   return {};
 }
 
-// { processType, stages, currentStageId, completed, current, upcoming, missingSteps }
+// { processType, stages, currentStageId, passed, completed, unevidenced, current, upcoming, missingSteps }
 // completed/current/upcoming are stage-definition objects ({id,label}),
 // not full timeline entries — TimelinePanel renders them as a simple
 // progress row, distinct from the chronological event list below it.
@@ -85,16 +85,32 @@ export function computeStageProgress(cs) {
   // from before a case's caseType was corrected) — rather than guess,
   // report "we don't know where this sits" instead of a wrong position.
   if(currentIndex === -1) {
-    return { processType, stages, currentStageId, completed: [], current: null, upcoming: [], missingSteps: [] };
+    return { processType, stages, currentStageId, passed: [], completed: [], unevidenced: [], current: null, upcoming: [], missingSteps: [] };
   }
 
-  const completed = stages.slice(0, currentIndex);
+  const passed = stages.slice(0, currentIndex);
   const current = stages[currentIndex];
   const upcoming = stages.slice(currentIndex + 1);
   const evidenceChecks = evidenceChecksFor(stages);
-  const missingSteps = completed
-    .filter(s => evidenceChecks[s.id] && !evidenceChecks[s.id](cs))
-    .map(s => s.label);
 
-  return { processType, stages, currentStageId, completed, current, upcoming, missingSteps };
+  // Wave B.2 final cleanup — human UAT found the stage strip showing
+  // "✓ Investigation review" while the line directly beneath it said "Potential
+  // missing step: Investigation review".
+  //
+  // That was not contradictory DATA. "Passed" and "evidenced" are two different
+  // claims: the case's recorded stage has moved beyond this point, AND there is
+  // no record that the step was actually carried out. Both were true. The defect
+  // was that the strip asserted the first with a green tick, which a reader
+  // correctly understands as "done" — so the UI appeared to contradict itself.
+  //
+  // `completed` now means passed AND evidenced (or having no evidence rule at
+  // all, where Compass has nothing to check). A stage that was passed without
+  // evidence is reported separately so it can be drawn as what it is, and the
+  // two statements agree. Stage ORDER and the case's stage are untouched.
+  const unevidenced = passed.filter(s => evidenceChecks[s.id] && !evidenceChecks[s.id](cs));
+  const unevidencedIds = new Set(unevidenced.map(s => s.id));
+  const completed = passed.filter(s => !unevidencedIds.has(s.id));
+  const missingSteps = unevidenced.map(s => s.label);
+
+  return { processType, stages, currentStageId, passed, completed, unevidenced, current, upcoming, missingSteps };
 }

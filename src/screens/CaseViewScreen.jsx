@@ -7,7 +7,7 @@ import { getCurrentRisk, isGrievanceCase } from '../lib/caseStage';
 // adding a callee inside App.jsx's component is what silently disabled lint
 // analysis in an earlier phase, and this file already imports from lib above.
 import { hasGuidedProcess } from '../lib/nextStep';
-import { caseStatusLabel, isClosedStage, describeWhatIsHappening, caseRecordEntries } from '../lib/caseViewSummary';
+import { caseStatusLabel, isClosedStage, describeWhatIsHappening } from '../lib/caseViewSummary';
 import { reasonForDefaultSurface, scheduledMeetingWhen, hasSubstantiveContext, hasCaseInformation } from '../lib/caseSurface';
 import { caseWorkspaceDestinations, destinationForLegacyTab, DEFAULT_DESTINATION } from '../lib/caseWorkspace';
 import { CaseWorkspaceNav } from '../components/CaseWorkspaceNav';
@@ -192,8 +192,8 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
     // retrieval itself is untouched — cs is still exactly
     // cases.find(x=>x.id===activeCaseId) above; this only changes what
     // renders while that result is still unreliable.
-    if (casesLoading) return <div style={{padding:80,textAlign:"center"}}><span className="pu" style={{color:"#7C5CFC",fontSize:24}}>●</span></div>;
-    return <div style={{padding:40,color:"#9B9098",fontFamily:FONT.sans}}>Case not found — <button onClick={()=>setScreen(SCREENS.CASES)} style={{color:"#7C5CFC",background:"none",border:"none",cursor:"pointer"}}>Back to cases</button></div>;
+    if (casesLoading) return <div style={{padding:80,textAlign:"center"}}><span className="pu" style={{color:"#7A2FD8",fontSize:24}}>●</span></div>;
+    return <div style={{padding:40,color:"#8A8EA3",fontFamily:FONT.sans}}>Case not found — <button onClick={()=>setScreen(SCREENS.CASES)} style={{color:"#7A2FD8",background:"none",border:"none",cursor:"pointer"}}>Back to cases</button></div>;
   }
   const meetings = cs.meetings||[];
   const stage = getCaseStage(cs);
@@ -337,7 +337,6 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   const scheduledWhen = scheduledMeetingWhen(nextStep);
   const exceptionReason = reasonForDefaultSurface(nextStep);
   const whatIsHappening = describeWhatIsHappening({ cs, stage, allegations: caseAllegations, meetings: cs.meetings || [], scheduledWhen });
-  const caseRecord = caseRecordEntries(cs, caseAllegations, { limit: 8 });
 
   // Overdue work only. Taken from the SAME deadline engine the Employee File
   // uses, matched on this case's id — never on the deadline's own display name.
@@ -740,7 +739,7 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
           next to the status badge (a LockIcon pill) so that state stays
           visible at a glance even though the toggle action itself moved
           into the menu. */}
-      <div style={{background:COLOR.surface,borderBottom:"1px solid #EDE5D8",padding:"16px 28px",flexShrink:0}}>
+      <div style={{background:COLOR.surface,borderBottom:"1px solid #E3E5EE",padding:"16px 28px",flexShrink:0}}>
         {/* Phase 2A follow-up — the header band's background/border stay
             full-bleed (a workspace band, not a content card), but its
             inner content now shares the same centred CONTENT_MAX_WIDTH
@@ -752,7 +751,7 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,marginBottom:14,flexWrap:"wrap"}}>
           <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
             <button onClick={()=>setScreen(SCREENS.CASES)} style={{background:"none",border:"none",color:COLOR.inkSoft,fontSize:13,cursor:"pointer",fontFamily:FONT.sans,padding:0,flexShrink:0}}>← Cases</button>
-            <div style={{width:1,height:16,background:"#EDE5D8",flexShrink:0}}/>
+            <div style={{width:1,height:16,background:"#E3E5EE",flexShrink:0}}/>
             <div style={{minWidth:0}}>
               <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
                 {/* Wave B.1 — the employee name links back to their Employee File. A case
@@ -864,11 +863,11 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
           viewing session only; reopening the case later recomputes a
           fresh diff against the just-updated last_viewed_at regardless. */}
       {changesSinceView?.length>0 && !changesBannerDismissed && (
-        <div style={{background:"#F5F3FF",borderBottom:"1px solid #DDD9F5",padding:"10px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexShrink:0}}>
-          <div style={{fontSize:12,color:"#5B3FD4",flex:1,minWidth:0}}>
+        <div style={{background:"#F3EDFD",borderBottom:"1px solid #E8EAF2",padding:"10px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexShrink:0}}>
+          <div style={{fontSize:12,color:"#7A2FD8",flex:1,minWidth:0}}>
             {changesSummaryLoading ? "Compass is summarising what's changed…" : (changesSummary || `${changesSinceView.length} update${changesSinceView.length!==1?"s":""} since you last viewed this case.`)}
           </div>
-          <button onClick={()=>setChangesBannerDismissed(true)} style={{fontSize:11,color:"#5B3FD4",background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,flexShrink:0}}>Dismiss</button>
+          <button onClick={()=>setChangesBannerDismissed(true)} style={{fontSize:11,color:"#7A2FD8",background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,flexShrink:0}}>Dismiss</button>
         </div>
       )}
 
@@ -885,7 +884,7 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
               <div style={{fontSize:13,color:"#8A5A17",fontWeight:600}}>
                 {liveMeeting.meeting.type||"Meeting"} in progress{liveMeeting.meeting.startedAt?` — started ${fmtMeetingTime(liveMeeting.meeting.startedAt)}`:""}
               </div>
-              <div style={{fontSize:11,color:"#6B6375",marginTop:2}}>
+              <div style={{fontSize:11,color:"#4A4E63",marginTop:2}}>
                 {/* Truthful about the Phase 2.2 boundary: the meeting itself
                     is saved, live notes are not yet. See the defect register
                     entry for the A/B split. */}
@@ -923,7 +922,7 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
                   <div style={{fontSize:13,color:"#2E4F86",fontWeight:600}}>
                     {m.type||"Meeting"} scheduled{when?` — ${when}`:""}
                   </div>
-                  <div style={{fontSize:11,color:"#6B6375",marginTop:2}}>
+                  <div style={{fontSize:11,color:"#4A4E63",marginTop:2}}>
                     {where&&<>{where} · </>}
                     {m.manager&&<>Chair: {m.manager} · </>}
                     Not yet held
@@ -946,11 +945,11 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
                     Start scheduled meeting
                   </button>
                   <button onClick={()=>onRescheduleMeeting?.(cs, m)}
-                    style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 12px",color:"#6B6375",cursor:"pointer",fontFamily:FONT.sans}}>
+                    style={{fontSize:12,background:"none",border:"1px solid #E8EAF2",borderRadius:6,padding:"6px 12px",color:"#4A4E63",cursor:"pointer",fontFamily:FONT.sans}}>
                     Reschedule
                   </button>
                   <button onClick={()=>onCancelScheduledMeeting?.(cs, m)}
-                    style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 12px",color:"#6B6375",cursor:"pointer",fontFamily:FONT.sans}}>
+                    style={{fontSize:12,background:"none",border:"1px solid #E8EAF2",borderRadius:6,padding:"6px 12px",color:"#4A4E63",cursor:"pointer",fontFamily:FONT.sans}}>
                     Cancel
                   </button>
                 </div>
@@ -971,7 +970,7 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
       {!nextStep&&stage!=="closed"&&!hasGuidedProcess(cs)&&(
         <div style={{background:"#FAFAFB",borderBottom:"1px solid #E8E6EF",padding:"12px 28px",flexShrink:0}}>
           <div style={{fontSize:13,color:"#3F3A4D"}}>No guided next step is available for this process type.</div>
-          <div style={{fontSize:11,color:"#6B6375",marginTop:2}}>
+          <div style={{fontSize:11,color:"#4A4E63",marginTop:2}}>
             You can continue to record meetings, notes and documents on this case as normal.
           </div>
         </div>
@@ -1005,8 +1004,8 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
           const onlyChecklist = !exceptionReason && !nextStep.secondary && !(isHR&&currentInvestigator)
             && !showAppealInviteLogistics && !showDraft;
           return onlyChecklist
-            ? {background:"transparent",borderBottom:"1px solid #EDE5D8",padding:"6px 28px",flexShrink:0}
-            : {background:"#F5F3FF",borderBottom:"1px solid #DDD9F5",padding:"12px 28px",flexShrink:0};
+            ? {background:"transparent",borderBottom:"1px solid #E3E5EE",padding:"6px 28px",flexShrink:0}
+            : {background:"#F3EDFD",borderBottom:"1px solid #E8EAF2",padding:"12px 28px",flexShrink:0};
         })()}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
             <div style={{minWidth:0}}>
@@ -1025,19 +1024,19 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
                   became a clause in "What is happening"; class C rationale — the
                   ACAS citations and the engine restating its own label — stays on
                   the nextStep object and off the default surface. Nothing deleted. */}
-              {exceptionReason&&<div style={{fontSize:11,color:"#6B6375",marginTop:2}}>{exceptionReason}</div>}
+              {exceptionReason&&<div style={{fontSize:11,color:"#4A4E63",marginTop:2}}>{exceptionReason}</div>}
               {/* Case readiness moved to Compass analysis — it is Compass's opinion
                   of the case, and beside the action it read as part of the
                   instruction rather than an assessment HR may disagree with. */}
               {isHR&&currentInvestigator&&(
-                <div style={{fontSize:11,color:"#5B3FD4",marginTop:6}}>
+                <div style={{fontSize:11,color:"#7A2FD8",marginTop:6}}>
                   Investigation by {currentInvestigator.name}: {checklistTasks.filter(t=>t.status==="done").length} of {INVESTIGATION_CHECKLIST_STEPS.length} steps complete
                   {currentInvestigatorAccess?.targetCompletionDate&&<> · Due {fmtDate(currentInvestigatorAccess.targetCompletionDate)}</>}
                 </div>
               )}
             </div>
             <div style={{display:"flex",gap:8,flexShrink:0}}>
-              {nextStep.secondary&&<button onClick={()=>{if(nextStep.secondary.action==="close_no_case"){requestCloseCase({allowNoCase:true, closeReasonLabel:"no case to answer", afterClose:()=>{setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));setShowDraft(true);setDraftedType("no-case-answer");handleLetter("no-case-answer",{inline:true,employeeName:cs.employeeName,manager:cs.manager||""});}});}}} disabled={closingCase} style={{fontSize:12,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"6px 14px",color:"#6B6375",cursor:closingCase?"not-allowed":"pointer",opacity:closingCase?0.6:1,fontFamily:FONT.sans}}>{nextStep.secondary.label}</button>}
+              {nextStep.secondary&&<button onClick={()=>{if(nextStep.secondary.action==="close_no_case"){requestCloseCase({allowNoCase:true, closeReasonLabel:"no case to answer", afterClose:()=>{setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));setShowDraft(true);setDraftedType("no-case-answer");handleLetter("no-case-answer",{inline:true,employeeName:cs.employeeName,manager:cs.manager||""});}});}}} disabled={closingCase} style={{fontSize:12,background:"none",border:"1px solid #E8EAF2",borderRadius:6,padding:"6px 14px",color:"#4A4E63",cursor:closingCase?"not-allowed":"pointer",opacity:closingCase?0.6:1,fontFamily:FONT.sans}}>{nextStep.secondary.label}</button>}
             </div>
           </div>
 
@@ -1048,12 +1047,12 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
               appointed appeal_manager, already shown as "Officer:" in the
               banner above, is authoritative and reused as-is). */}
           {showAppealInviteLogistics&&(
-            <div style={{marginTop:12,background:"#FFFFFF",border:"1px solid #DDD9F5",borderRadius:10,padding:14}}>
-              <div style={{fontSize:13,color:"#1A1535",fontWeight:600,marginBottom:2}}>Hearing arrangements</div>
-              <div style={{fontSize:11,color:"#9B9098",marginBottom:12}}>Compass needs these before it can draft the invitation — it will not guess a date, time, or venue.</div>
+            <div style={{marginTop:12,background:"#FFFFFF",border:"1px solid #E8EAF2",borderRadius:10,padding:14}}>
+              <div style={{fontSize:13,color:"#0F1224",fontWeight:600,marginBottom:2}}>Hearing arrangements</div>
+              <div style={{fontSize:11,color:"#8A8EA3",marginBottom:12}}>Compass needs these before it can draft the invitation — it will not guess a date, time, or venue.</div>
               <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:10}}>
                 <div style={{flex:"1 1 140px"}}>
-                  <label htmlFor="appeal-invite-date" style={{display:"block",fontSize:11,fontWeight:600,color:"#1A1535",marginBottom:4}}>Hearing date</label>
+                  <label htmlFor="appeal-invite-date" style={{display:"block",fontSize:11,fontWeight:600,color:"#0F1224",marginBottom:4}}>Hearing date</label>
                   {/* Date control consistency (Human UAT P2, 2026-09-20) —
                       was a raw <input type="date">, which the app-wide
                       indicator-hiding rule left with no visible calendar
@@ -1066,21 +1065,21 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
                     style={{background:"#FFFFFF",borderRadius:8}}/>
                 </div>
                 <div style={{flex:"1 1 100px"}}>
-                  <label htmlFor="appeal-invite-time" style={{display:"block",fontSize:11,fontWeight:600,color:"#1A1535",marginBottom:4}}>Hearing time</label>
+                  <label htmlFor="appeal-invite-time" style={{display:"block",fontSize:11,fontWeight:600,color:"#0F1224",marginBottom:4}}>Hearing time</label>
                   <input id="appeal-invite-time" type="time" value={appealInviteTime}
                     onChange={e=>setAppealInviteTime(e.target.value)}
-                    style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 10px",fontSize:13,color:"#1A1535",boxSizing:"border-box"}}/>
+                    style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8EAF2",borderRadius:8,padding:"8px 10px",fontSize:13,color:"#0F1224",boxSizing:"border-box"}}/>
                 </div>
                 <div style={{flex:"2 1 220px"}}>
-                  <label htmlFor="appeal-invite-location" style={{display:"block",fontSize:11,fontWeight:600,color:"#1A1535",marginBottom:4}}>Hearing method / location</label>
+                  <label htmlFor="appeal-invite-location" style={{display:"block",fontSize:11,fontWeight:600,color:"#0F1224",marginBottom:4}}>Hearing method / location</label>
                   <input id="appeal-invite-location" type="text" placeholder="e.g. Microsoft Teams, or Manchester Head Office" value={appealInviteLocation}
                     onChange={e=>setAppealInviteLocation(e.target.value)}
-                    style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"8px 10px",fontSize:13,color:"#1A1535",boxSizing:"border-box"}}/>
+                    style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8EAF2",borderRadius:8,padding:"8px 10px",fontSize:13,color:"#0F1224",boxSizing:"border-box"}}/>
                 </div>
               </div>
               <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                <button onClick={attemptGenerateAppealInvitation} disabled={appealInviteLogisticsErrors.length>0} style={{fontSize:12,background:appealInviteLogisticsErrors.length>0?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:6,padding:"6px 14px",color:appealInviteLogisticsErrors.length>0?"#9B9098":"#fff",fontWeight:600,cursor:appealInviteLogisticsErrors.length>0?"not-allowed":"pointer",fontFamily:FONT.sans}}>Continue →</button>
-                <button onClick={()=>setShowAppealInviteLogistics(false)} style={{fontSize:12,background:"none",border:"none",color:"#9B9098",cursor:"pointer",fontFamily:FONT.sans}}>Cancel</button>
+                <button onClick={attemptGenerateAppealInvitation} disabled={appealInviteLogisticsErrors.length>0} style={{fontSize:12,background:appealInviteLogisticsErrors.length>0?"#E8EAF2":"#7A2FD8",border:"none",borderRadius:6,padding:"6px 14px",color:appealInviteLogisticsErrors.length>0?"#8A8EA3":"#fff",fontWeight:600,cursor:appealInviteLogisticsErrors.length>0?"not-allowed":"pointer",fontFamily:FONT.sans}}>Continue →</button>
+                <button onClick={()=>setShowAppealInviteLogistics(false)} style={{fontSize:12,background:"none",border:"none",color:"#8A8EA3",cursor:"pointer",fontFamily:FONT.sans}}>Cancel</button>
                 {appealInviteLogisticsErrors.length>0&&<span style={{fontSize:11,color:"#B87520"}}>{appealInviteLogisticsErrors[0]}</span>}
               </div>
             </div>
@@ -1088,7 +1087,7 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
 
           {/* Inline draft preview — only for letter-generating actions */}
           {showDraft&&(
-            <div style={{marginTop:12,background:"#FFFFFF",border:"1px solid #DDD9F5",borderRadius:10,padding:14}}>
+            <div style={{marginTop:12,background:"#FFFFFF",border:"1px solid #E8EAF2",borderRadius:10,padding:14}}>
               {/* UAT Product Hierarchy pass, Part 6 — a bare "Drafting…"
                   gave no sense of what was being generated, for whom, or
                   that anything was still happening. This banner already
@@ -1098,14 +1097,14 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
                   rest of the case is still usable while this finishes. */}
               {aiProcessing?(
                 <div>
-                  <div style={{fontSize:13,color:"#1A1535",fontWeight:600}}>Drafting your {DRAFTED_TYPE_LABELS[draftedType]||"letter"}...</div>
-                  <div style={{fontSize:11,color:"#9B9098",marginTop:4}}>For {cs.employeeName}. Compass is still working — feel free to keep working elsewhere on this case meanwhile.</div>
+                  <div style={{fontSize:13,color:"#0F1224",fontWeight:600}}>Drafting your {DRAFTED_TYPE_LABELS[draftedType]||"letter"}...</div>
+                  <div style={{fontSize:11,color:"#8A8EA3",marginTop:4}}>For {cs.employeeName}. Compass is still working — feel free to keep working elsewhere on this case meanwhile.</div>
                 </div>
               ):aiError?(
                 <div style={{fontSize:13,color:"#C84B2F"}}>{aiError}</div>
               ):(
                 <>
-                  <div style={{maxHeight:180,overflowY:"auto",fontSize:12,color:"#1A1535",lineHeight:1.6,paddingRight:4}}>
+                  <div style={{maxHeight:180,overflowY:"auto",fontSize:12,color:"#0F1224",lineHeight:1.6,paddingRight:4}}>
                     <MDRenderer text={letterOutput}/>
                   </div>
                   {/* Human UAT hotfix (2026-09-19) — the same
@@ -1128,9 +1127,9 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
                     </div>
                   )}
                   <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
-                    <button onClick={()=>handleLetter(draftedType,{inline:true})} style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"6px 14px",color:"#6B6375",cursor:"pointer",fontFamily:FONT.sans}}>Regenerate</button>
-                    <button onClick={()=>setScreen(SCREENS.LETTER)} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"6px 14px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:FONT.sans}}>Open in Letter editor →</button>
-                    <button onClick={()=>setShowDraft(false)} style={{fontSize:12,background:"none",border:"none",color:"#9B9098",cursor:"pointer",fontFamily:FONT.sans}}>Discard</button>
+                    <button onClick={()=>handleLetter(draftedType,{inline:true})} style={{fontSize:12,background:"none",border:"1px solid #E8EAF2",borderRadius:6,padding:"6px 14px",color:"#4A4E63",cursor:"pointer",fontFamily:FONT.sans}}>Regenerate</button>
+                    <button onClick={()=>setScreen(SCREENS.LETTER)} style={{fontSize:12,background:"#7A2FD8",border:"none",borderRadius:6,padding:"6px 14px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:FONT.sans}}>Open in Letter editor →</button>
+                    <button onClick={()=>setShowDraft(false)} style={{fontSize:12,background:"none",border:"none",color:"#8A8EA3",cursor:"pointer",fontFamily:FONT.sans}}>Discard</button>
                   </div>
                 </>
               )}
@@ -1142,21 +1141,21 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
               nextSteps data (App.jsx NEXT_STEPS_MAP) somewhere to live. */}
           {(openChecklist.length>0||repeatCount>1)&&(
             <>
-              <button onClick={()=>setShowDetails(v=>!v)} style={{fontSize:11,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",padding:0,marginTop:10,fontFamily:FONT.sans}}>{showDetails?"Hide details ▴":"Details ▾"}</button>
+              <button onClick={()=>setShowDetails(v=>!v)} style={{fontSize:11,color:"#7A2FD8",background:"none",border:"none",cursor:"pointer",padding:0,marginTop:10,fontFamily:FONT.sans}}>{showDetails?"Hide details ▴":"Details ▾"}</button>
               {showDetails&&(
                 <div style={{marginTop:8}}>
                   {openChecklist.length>0&&(
                     <div style={{marginBottom:repeatCount>1?10:0}}>
                       {openChecklist.map((item,i)=>(
-                        <label key={i} style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#1A1535",padding:"3px 0",cursor:"pointer"}}>
+                        <label key={i} style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#0F1224",padding:"3px 0",cursor:"pointer"}}>
                           <input type="checkbox" checked={false} onChange={()=>toggleNextStepDone(cs.id, item.meetingId, item.idx)} style={{cursor:"pointer"}}/>
                           <span style={{flex:1}}>{item.step}</span>
-                          {item.deadline&&<span style={{color:"#9B9098",fontSize:11}}>{item.deadline}</span>}
+                          {item.deadline&&<span style={{color:"#8A8EA3",fontSize:11}}>{item.deadline}</span>}
                         </label>
                       ))}
                     </div>
                   )}
-                  {repeatCount>1&&<div style={{fontSize:12,color:"#9B9098"}}>{ORDINAL[repeatCount]||repeatCount+"th"} case for {cs.employeeName}.</div>}
+                  {repeatCount>1&&<div style={{fontSize:12,color:"#8A8EA3"}}>{ORDINAL[repeatCount]||repeatCount+"th"} case for {cs.employeeName}.</div>}
                 </div>
               )}
             </>
@@ -1187,8 +1186,8 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
       )}
       {showAppealInput[cs.id]&&(
         <div style={{background:"#FEF5E7",borderBottom:"1px solid #F5E6C4",padding:"14px 28px",flexShrink:0}}>
-          <div style={{fontSize:13,color:"#5B3FD4",fontWeight:500,marginBottom:8}}>Record the employee's appeal grounds:</div>
-          <textarea aria-label="Employee appeal text" value={appealText[cs.id]||""} onChange={e=>setAppealText(p=>({...p,[cs.id]:e.target.value}))} rows={3} style={{width:"100%",background:"#FFFFFF",border:"1px solid #DDD9F5",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#1A1535",outline:"none",resize:"vertical",fontFamily:FONT.sans,boxSizing:"border-box",marginBottom:8}}/>
+          <div style={{fontSize:13,color:"#7A2FD8",fontWeight:500,marginBottom:8}}>Record the employee's appeal grounds:</div>
+          <textarea aria-label="Employee appeal text" value={appealText[cs.id]||""} onChange={e=>setAppealText(p=>({...p,[cs.id]:e.target.value}))} rows={3} style={{width:"100%",background:"#FFFFFF",border:"1px solid #E8EAF2",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#0F1224",outline:"none",resize:"vertical",fontFamily:FONT.sans,boxSizing:"border-box",marginBottom:8}}/>
           <div style={{display:"flex",gap:8}}>
             {/* Appeal UAT remediation (2026-09-18) — this used to be
                 "Start appeal and send invitation", which recorded the
@@ -1212,24 +1211,24 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
               const ok = await recordAppealReceived(cs.id, { appealText: appealText[cs.id] || "" });
               if(!ok) return;
               setShowAppealInput(p=>({...p,[cs.id]:false}));
-            }} style={{fontSize:12,background:"#7C5CFC",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:FONT.sans}}>Save appeal</button>
-            <button onClick={()=>setShowAppealInput(p=>({...p,[cs.id]:false}))} style={{fontSize:12,background:"none",border:"1px solid #E8E0D0",borderRadius:6,padding:"7px 14px",color:"#6B6375",cursor:"pointer",fontFamily:FONT.sans}}>Cancel</button>
+            }} style={{fontSize:12,background:"#7A2FD8",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",cursor:"pointer",fontWeight:600,fontFamily:FONT.sans}}>Save appeal</button>
+            <button onClick={()=>setShowAppealInput(p=>({...p,[cs.id]:false}))} style={{fontSize:12,background:"none",border:"1px solid #E8EAF2",borderRadius:6,padding:"7px 14px",color:"#4A4E63",cursor:"pointer",fontFamily:FONT.sans}}>Cancel</button>
           </div>
         </div>
       )}
       {/* Appeal — option to proceed to new disciplinary if appeal upheld/dismissed */}
       {stage==="appeal"&&(
-        <div style={{background:"#FDFAF5",borderBottom:"1px solid #E8E0D0",padding:"10px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+        <div style={{background:"#FFFFFF",borderBottom:"1px solid #E8EAF2",padding:"10px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
           {/* Independent appeal officer workflow (2026-09-16) — reads the
               real, authoritative appeal_manager case_access relationship,
               not cs.disciplinaryOfficer (that field belongs to the
               original disciplinary hand-off and is a different person by
               design — see AppealOfficerModal.jsx's own header comment for
               why this used to be wrongly conflated). */}
-          <div style={{fontSize:12,color:"#9B9098"}}>Appeal in progress · {appealManagerName?"Officer: "+appealManagerName:"No officer assigned"}</div>
+          <div style={{fontSize:12,color:"#8A8EA3"}}>Appeal in progress · {appealManagerName?"Officer: "+appealManagerName:"No officer assigned"}</div>
           <div style={{display:"flex",gap:8}}>
             {isHR&&(
-              <button onClick={()=>setShowAppealOfficerModal(true)} style={{fontSize:12,color:"#7C5CFC",background:"#EDE8FF",border:"none",borderRadius:7,padding:"6px 14px",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500}}>
+              <button onClick={()=>setShowAppealOfficerModal(true)} style={{fontSize:12,color:"#7A2FD8",background:"#EDE8FF",border:"none",borderRadius:7,padding:"6px 14px",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500}}>
                 {appealManagerName?"Reassign officer":"Appoint appeal officer"}
               </button>
             )}
@@ -1246,8 +1245,8 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
               own header for why an audited edit model wasn't built for
               Release 1.0. */}
           {cs.appealText&&(
-            <div style={{fontSize:12,color:"#6B6375",width:"100%"}}>
-              <span style={{fontWeight:600,color:"#9B9098"}}>Appeal grounds: </span>
+            <div style={{fontSize:12,color:"#4A4E63",width:"100%"}}>
+              <span style={{fontWeight:600,color:"#8A8EA3"}}>Appeal grounds: </span>
               {cs.appealText.length>200?cs.appealText.slice(0,200)+"…":cs.appealText}
             </div>
           )}
@@ -1289,11 +1288,21 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
           {caseAttentionDeduped.length > 0 && (
             <section style={{marginTop:28}}>
               <h2 style={{...TYPE.sectionHeading,color:COLOR.ink,margin:"0 0 10px"}}>Needs your attention</h2>
-              <ul style={{listStyle:"none",margin:0,padding:0,display:"grid",gap:8}}>
-                {caseAttentionDeduped.slice(0,3).map(a=>(
-                  <li key={a.key} style={{background:COLOR.amberTint,border:"1px solid #EADFC4",borderLeft:`3px solid ${COLOR.amber}`,borderRadius:RADIUS.card,padding:"12px 16px"}}>
-                    <div style={{...TYPE.rowContext,color:COLOR.ink}}>{a.label}</div>
-                    {a.context && <div style={{...TYPE.metadata,color:COLOR.inkFaint,marginTop:2}}>{a.context}</div>}
+              {/* Wave B.2 final cleanup — three full-width tinted cards consumed most
+                  of a viewport before the user reached any work. The amber is
+                  SEMANTIC here (these are overdue) so it stays, but as a left rule on
+                  one compact row rather than a filled card each: same meaning, same
+                  urgency, roughly a third of the height. Nothing is hidden — the
+                  overflow link still reaches every item. */}
+              <ul style={{listStyle:"none",margin:0,padding:0,border:`1px solid ${COLOR.border}`,
+                          borderRadius:RADIUS.card,overflow:"hidden"}}>
+                {caseAttentionDeduped.slice(0,3).map((a,i)=>(
+                  <li key={a.key} style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",
+                        gap:12,flexWrap:"wrap",padding:"9px 14px",background:COLOR.surface,
+                        borderLeft:`3px solid ${COLOR.amber}`,
+                        borderTop:i===0?"none":`1px solid ${COLOR.borderFaint}`}}>
+                    <span style={{...TYPE.rowContext,color:COLOR.ink,minWidth:0}}>{a.label}</span>
+                    {a.context && <span style={{...TYPE.metadata,color:COLOR.amber,flexShrink:0}}>{a.context}</span>}
                   </li>
                 ))}
               </ul>
@@ -1333,35 +1342,12 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
             </section>
           )}
 
-          {/* THE CASE RECORD — the spine. Previously this lived behind a Timeline tab,
-              so the manager had to navigate to find out what had happened. Meaningful
-              process milestones only: buildCaseTimeline is called without the audit
-              log, so "case viewed" and field-level edits do not bury the hearing. */}
-          <section style={{marginTop:32}}>
-            <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:12,marginBottom:10}}>
-              <h2 style={{...TYPE.sectionHeading,color:COLOR.ink,margin:0}}>Case record</h2>
-              <button type="button" onClick={()=>goToDestination("record")}
-                style={{...TYPE.metadata,background:"none",border:"none",padding:0,color:COLOR.purple,cursor:"pointer",fontFamily:FONT.sans}}>
-                View full record
-              </button>
-            </div>
-            {caseRecord.length === 0 ? (
-              <p style={{...TYPE.rowContext,color:COLOR.inkFaint,margin:0}}>Nothing has been recorded on this case yet.</p>
-            ) : (
-              <ul style={{listStyle:"none",margin:0,padding:0,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.card,overflow:"hidden"}}>
-                {caseRecord.map((e,i)=>(
-                  <li key={e.key} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:12,padding:"12px 16px",background:COLOR.surface,borderTop:i===0?"none":`1px solid ${COLOR.borderFaint}`,flexWrap:"wrap"}}>
-                    <span style={{...TYPE.rowContext,color:COLOR.ink,minWidth:0}}>
-                      {e.description}
-                      {e.actor && <span style={{...TYPE.metadata,color:COLOR.inkFaint}}> · {e.actor}</span>}
-                    </span>
-                    <span style={{...TYPE.metadata,color:COLOR.inkQuiet,flexShrink:0}}>{fmtDate(e.date)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
+          {/* THE CASE RECORD summary and its "View full record" link used to sit here.
+              Both are gone: the workspace now has a first-class Record destination that
+              owns the chronology outright, so a compact copy above it was the same
+              concept twice, occupying the most valuable space on the screen. Nothing
+              underneath was removed — TimelinePanel, buildCaseTimeline, the process
+              stage strip, filters, export and the audit history all live in Record. */}
           {/* THE CASE WORKSPACE — horizontal, and derived from what each thing
               actually IS rather than from the old row list. A procedural stage, the
               meetings that run across every stage, what was issued, the chronology

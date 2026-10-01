@@ -1,7 +1,7 @@
 import { buildCommunicationsView } from '../../lib/communications';
 
 const TYPE_STYLE = {
-  meeting: { color: "#7C5CFC", label: "Meeting" },
+  meeting: { color: "#7A2FD8", label: "Meeting" },
   letter: { color: "#B87520", label: "Letter" },
   email: { color: "#5E627A", label: "Email" },
 };
@@ -12,7 +12,7 @@ const SIGNATURE_BADGE_STYLE = {
   signed: { color: "#1A7A4A", bg: "#E8F5EE" },
   acknowledged: { color: "#1A7A4A", bg: "#E8F5EE" },
   declined: { color: "#C84B2F", bg: "#FEF0EB" },
-  expired: { color: "#6B6375", bg: "#F5F1EA" },
+  expired: { color: "#4A4E63", bg: "#F0F1F7" },
 };
 
 // Integrations & Workflow Automation (Phase 5, IP31, §28) — a unified
@@ -27,27 +27,27 @@ export function CommunicationsTab({ cs, allegations, auditLog, fmtDate, onOpenSo
   const entries = buildCommunicationsView(cs, allegations, auditLog);
 
   return (
-    <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
-      <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8"}}>
-        <div style={{fontSize:14,fontWeight:700,color:"#7C5CFC"}}>Communications ({entries.length})</div>
+    <div style={{background:"#FFFFFF",border:"1px solid #E8EAF2",borderRadius:12,overflow:"hidden"}}>
+      <div style={{padding:"12px 16px",background:"#FFFFFF",borderBottom:"1px solid #E3E5EE"}}>
+        <div style={{fontSize:14,fontWeight:700,color:"#7A2FD8"}}>Communications ({entries.length})</div>
       </div>
       <div style={{padding:"16px"}}>
-        {entries.length===0 && <div style={{fontSize:13,color:"#9B9098"}}>No emails, letters or meeting invitations recorded on this case yet.</div>}
+        {entries.length===0 && <div style={{fontSize:13,color:"#8A8EA3"}}>No emails, letters or meeting invitations recorded on this case yet.</div>}
         {entries.map((e, i) => {
           const meta = TYPE_STYLE[e.type] || TYPE_STYLE.email;
           const sigStyle = e.signatureStatus && SIGNATURE_BADGE_STYLE[e.signatureStatus];
           return (
-            <div key={e.key} style={{display:"flex",gap:12,paddingBottom:i<entries.length-1?14:0,marginBottom:i<entries.length-1?14:0,borderBottom:i<entries.length-1?"1px solid #F5F1EA":"none"}}>
+            <div key={e.key} style={{display:"flex",gap:12,paddingBottom:i<entries.length-1?14:0,marginBottom:i<entries.length-1?14:0,borderBottom:i<entries.length-1?"1px solid #F0F1F7":"none"}}>
               <div style={{flexShrink:0,width:8,height:8,borderRadius:"50%",background:meta.color,marginTop:5}}/>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                   <span style={{fontSize:11,fontWeight:700,color:meta.color}}>{meta.label}</span>
-                  <span style={{fontSize:11,color:"#9B9098"}}>{fmtDate(e.date)}</span>
+                  <span style={{fontSize:11,color:"#8A8EA3"}}>{fmtDate(e.date)}</span>
                   {sigStyle&&<span style={{fontSize:10,fontWeight:600,color:sigStyle.color,background:sigStyle.bg,borderRadius:4,padding:"1px 7px"}}>{e.signatureStatusLabel}</span>}
-                  {e.linkTo && onOpenSource && <button onClick={()=>onOpenSource(e.linkTo)} style={{fontSize:11,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}>Open source</button>}
+                  {e.linkTo && onOpenSource && <button onClick={()=>onOpenSource(e.linkTo)} style={{fontSize:11,color:"#7A2FD8",background:"none",border:"none",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",padding:0}}>Open source</button>}
                 </div>
-                <div style={{fontSize:13,color:"#1A1535",marginTop:2}}>{e.description}</div>
-                {e.actor && <div style={{fontSize:11,color:"#9B9098",marginTop:1}}>{e.actor}</div>}
+                <div style={{fontSize:13,color:"#0F1224",marginTop:2}}>{e.description}</div>
+                {e.actor && <div style={{fontSize:11,color:"#8A8EA3",marginTop:1}}>{e.actor}</div>}
               </div>
             </div>
           );

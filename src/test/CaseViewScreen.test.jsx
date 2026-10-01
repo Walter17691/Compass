@@ -84,7 +84,10 @@ const tabs = [
   ['communications', 'No emails, letters or meeting invitations recorded on this case yet.'],
   ['themes', 'No themes applied to this case yet.'],
   ['outcome', /No outcome yet/],
-  ['ai', /Generates a structured, neutral summary/],
+  // Wave B.2 final cleanup — Compass analysis is progressive now: the overview
+  // generator sits behind "Case overview" rather than rendering a large permanent
+  // branded card. The destination's own first-class content is the next step.
+  ['ai', 'Suggested next step'],
 ];
 
 describe('CaseViewScreen — tab smoke test (Phase 6.5, task #205)', () => {
@@ -163,10 +166,15 @@ describe('CaseViewScreen — tab smoke test (Phase 6.5, task #205)', () => {
       expect(screen.queryByRole('button', { name: 'Timeline' })).not.toBeInTheDocument();
     });
 
-    it('the case record is visible WITHOUT selecting anything', () => {
+    // Wave B.2 final cleanup — the compact Case record summary and its "View full
+    // record" link are deliberately removed. Record is a first-class destination
+    // and owns the chronology; a shorter copy above it was the same concept twice,
+    // in the space the manager reaches first.
+    it('no compact Case record and no View full record compete with the Record destination', () => {
       render(<CaseViewScreen {...baseProps} />);
-      expect(screen.getByRole('heading', { name: 'Case record' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'View full record' })).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Case record' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'View full record' })).not.toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /^Record/ })).toBeInTheDocument();
     });
 
     // Wave B.2 corrective — the vertical accordion is replaced by a horizontal

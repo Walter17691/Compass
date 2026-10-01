@@ -42,7 +42,11 @@ export function CaseWorkspaceNav({ destinations, active, onSelect }) {
     const el = barRef.current;
     if (!el) return undefined;
     const measure = () => {
-      const available = el.clientWidth - MORE_RESERVE;
+      // The More control now lives OUTSIDE the measured strip, so once it is on
+      // screen its width is already excluded from el.clientWidth. Reserving for it
+      // again would subtract it twice and could cascade demotions on every pass.
+      const reserve = moreRef.current ? 0 : MORE_RESERVE;
+      const available = el.clientWidth - reserve;
       if (!available || available <= 0) return;
       const rendered = Array.from(el.querySelectorAll("[data-dest]"))
         .map(n => n.getBoundingClientRect().width);
@@ -108,17 +112,31 @@ export function CaseWorkspaceNav({ destinations, active, onSelect }) {
   });
 
   return (
-    <div ref={barRef} role="tablist" aria-label="Case workspace"
-      style={{display:"flex",alignItems:"center",gap:0,borderBottom:`1px solid ${COLOR.borderFaint}`,
-              overflow:"hidden",position:"relative"}}>
-      {visible.map(d => (
-        <button key={d.id} data-dest={d.id} type="button" role="tab"
-          aria-selected={active === d.id}
-          onClick={() => onSelect(d.id)}
-          style={tabStyle(active === d.id)}>
-          {d.label}{typeof d.count === "number" && d.count > 0 ? ` (${d.count})` : ""}
-        </button>
-      ))}
+    // ┌─ WHY THIS IS TWO ELEMENTS AND NOT ONE ─────────────────────────────────┐
+    // │ The tab strip needs overflow:hidden so a tab that no longer fits is    │
+    // │ clipped rather than spilling. The dropdown is absolutely positioned at │
+    // │ top:100% — i.e. OUTSIDE that box — so when both lived on the same      │
+    // │ element the menu was clipped away entirely: present in the DOM,        │
+    // │ invisible on screen, and not hit-testable. Human UAT found it; my own  │
+    // │ verification missed it because jsdom does not implement clipping and   │
+    // │ because I asserted the menu's presence rather than its visibility.     │
+    // │                                                                        │
+    // │ So: the outer row is NOT clipped and owns the dropdown; only the inner │
+    // │ strip clips.                                                           │
+    // └────────────────────────────────────────────────────────────────────────┘
+    <div style={{display:"flex",alignItems:"center",gap:0,
+                 borderBottom:`1px solid ${COLOR.borderFaint}`,position:"relative"}}>
+      <div ref={barRef} role="tablist" aria-label="Case workspace"
+        style={{display:"flex",alignItems:"center",gap:0,overflow:"hidden",flex:"1 1 auto",minWidth:0}}>
+        {visible.map(d => (
+          <button key={d.id} data-dest={d.id} type="button" role="tab"
+            aria-selected={active === d.id}
+            onClick={() => onSelect(d.id)}
+            style={tabStyle(active === d.id)}>
+            {d.label}{typeof d.count === "number" && d.count > 0 ? ` (${d.count})` : ""}
+          </button>
+        ))}
+      </div>
 
       {overflow.length > 0 && (
         <div ref={moreRef} style={{marginLeft:"auto",position:"relative",flexShrink:0}}>

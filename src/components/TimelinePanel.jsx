@@ -5,18 +5,18 @@ import { Btn } from './Primitives';
 import { FONT } from '../styles/tokens';
 
 const TYPE_STYLE = {
-  case: { color: "#6B6375", label: "Case" },
-  meeting: { color: "#7C5CFC", label: "Meeting" },
+  case: { color: "#4A4E63", label: "Case" },
+  meeting: { color: "#7A2FD8", label: "Meeting" },
   letter: { color: "#B87520", label: "Letter" },
-  report: { color: "#7C5CFC", label: "Report" },
+  report: { color: "#7A2FD8", label: "Report" },
   outcome: { color: "#C84B2F", label: "Outcome" },
   allegation: { color: "#C84B2F", label: "Allegation" },
   email: { color: "#5E627A", label: "Email" },
-  document: { color: "#7C5CFC", label: "Document" },
-  audit: { color: "#9B9098", label: "Activity" },
+  document: { color: "#7A2FD8", label: "Document" },
+  audit: { color: "#8A8EA3", label: "Activity" },
 };
 
-const selectStyle = { fontSize:12, border:"1px solid #E8E0D0", borderRadius:6, padding:"5px 8px", color:"#6B6375", fontFamily:FONT.sans };
+const selectStyle = { fontSize:12, border:"1px solid #E8EAF2", borderRadius:6, padding:"5px 8px", color:"#4A4E63", fontFamily:FONT.sans };
 
 // Phase 8 of the reasoning-layer build-out (5 of 5 in the ER Intelligence
 // MVP) — still purely a read view over buildCaseTimeline()'s merge, no
@@ -68,9 +68,9 @@ export function TimelinePanel({ cs, allegations, auditLog, fmtDate, onOpenSource
   };
 
   return (
-    <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:12,overflow:"hidden"}}>
-      <div style={{padding:"12px 16px",background:"#FDFAF5",borderBottom:"1px solid #EDE5D8",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
-        <div style={{fontSize:14,fontWeight:700,color:"#7C5CFC"}}>Timeline ({entries.length})</div>
+    <div style={{background:"#FFFFFF",border:"1px solid #E8EAF2",borderRadius:12,overflow:"hidden"}}>
+      <div style={{padding:"12px 16px",background:"#FFFFFF",borderBottom:"1px solid #E3E5EE",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+        <div style={{fontSize:14,fontWeight:700,color:"#7A2FD8"}}>Timeline ({entries.length})</div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           {people.length>1 && (
             <select aria-label="Filter by person" value={personFilter} onChange={e=>setPersonFilter(e.target.value)} style={selectStyle}>
@@ -95,8 +95,8 @@ export function TimelinePanel({ cs, allegations, auditLog, fmtDate, onOpenSource
           see processTimeline.js) any stage the case has moved past
           without its own expected evidence on file. Purely derived, no
           new source of truth. */}
-      <div style={{padding:"14px 16px",borderBottom:"1px solid #EDE5D8",background:"#FDFAF5"}}>
-        <div style={{fontSize:13,fontWeight:700,color:"#7C5CFC",marginBottom:10}}>
+      <div style={{padding:"14px 16px",borderBottom:"1px solid #E3E5EE",background:"#FFFFFF"}}>
+        <div style={{fontSize:13,fontWeight:700,color:"#7A2FD8",marginBottom:10}}>
           {stageProgress.processType.label} process
         </div>
         {/* Phase E1.4A — a process Compass owns no stage sequence for. Without
@@ -105,7 +105,7 @@ export function TimelinePanel({ cs, allegations, auditLog, fmtDate, onOpenSource
             still named, because that part is true and useful; what follows is
             simply the admission that Compass has no sequence to draw for it. */}
         {stageProgress.stages.length===0?(
-          <div style={{fontSize:12,color:"#6B6375",lineHeight:1.6}}>
+          <div style={{fontSize:12,color:"#4A4E63",lineHeight:1.6}}>
             No stage sequence is available for this process type.
           </div>
         ):(
@@ -113,11 +113,18 @@ export function TimelinePanel({ cs, allegations, auditLog, fmtDate, onOpenSource
           {stageProgress.completed.map(s=>(
             <span key={s.id} style={{fontSize:11,padding:"4px 10px",borderRadius:20,background:"#E8F5EE",color:"#1A7A4A",fontWeight:500}}>✓ {s.label}</span>
           ))}
+          {/* Passed, but with nothing on the case to show it happened. Drawn as the
+              open question it is rather than a green tick, so the strip and the
+              "potential missing step" line below cannot contradict each other. */}
+          {(stageProgress.unevidenced||[]).map(s=>(
+            <span key={s.id} title="The case has moved past this stage, but nothing recorded shows it was carried out"
+              style={{fontSize:11,padding:"4px 10px",borderRadius:20,background:"#FEF5E7",color:"#8A5A17",fontWeight:500}}>! {s.label}</span>
+          ))}
           {stageProgress.current&&(
-            <span style={{fontSize:11,padding:"4px 10px",borderRadius:20,background:"#7C5CFC",color:"#FFFFFF",fontWeight:700}}>{stageProgress.current.label}</span>
+            <span style={{fontSize:11,padding:"4px 10px",borderRadius:20,background:"#7A2FD8",color:"#FFFFFF",fontWeight:700}}>{stageProgress.current.label}</span>
           )}
           {stageProgress.upcoming.map(s=>(
-            <span key={s.id} style={{fontSize:11,padding:"4px 10px",borderRadius:20,background:"#F5F1EA",color:"#9B9098"}}>{s.label}</span>
+            <span key={s.id} style={{fontSize:11,padding:"4px 10px",borderRadius:20,background:"#F0F1F7",color:"#8A8EA3"}}>{s.label}</span>
           ))}
         </div>
         )}
@@ -129,40 +136,40 @@ export function TimelinePanel({ cs, allegations, auditLog, fmtDate, onOpenSource
       </div>
 
       {mayHaveIncompleteAuditHistory(cs) && (
-        <div style={{padding:"10px 16px",background:"#FEF5E7",borderBottom:"1px solid #EDE5D8",fontSize:12,color:"#6B5218",lineHeight:1.6}}>
+        <div style={{padding:"10px 16px",background:"#FEF5E7",borderBottom:"1px solid #E3E5EE",fontSize:12,color:"#6B5218",lineHeight:1.6}}>
           This case was opened before Compass reliably linked every activity record to its case — some historic entries from that period may not appear below.
         </div>
       )}
 
       <div style={{padding:"16px"}}>
-        {entries.length===0 && <div style={{fontSize:13,color:"#9B9098"}}>Nothing recorded on this case yet.</div>}
+        {entries.length===0 && <div style={{fontSize:13,color:"#8A8EA3"}}>Nothing recorded on this case yet.</div>}
         {entries.map((e, i) => {
           const meta = TYPE_STYLE[e.type] || TYPE_STYLE.audit;
           const isEditing = editingKey===e.key;
           return (
-            <div key={e.key} style={{display:"flex",gap:12,paddingBottom:i<entries.length-1?14:0,marginBottom:i<entries.length-1?14:0,borderBottom:i<entries.length-1?"1px solid #F5F1EA":"none"}}>
+            <div key={e.key} style={{display:"flex",gap:12,paddingBottom:i<entries.length-1?14:0,marginBottom:i<entries.length-1?14:0,borderBottom:i<entries.length-1?"1px solid #F0F1F7":"none"}}>
               <div style={{flexShrink:0,width:8,height:8,borderRadius:"50%",background:meta.color,marginTop:5}}/>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                   <span style={{fontSize:11,fontWeight:700,color:meta.color}}>{meta.label}</span>
-                  <span style={{fontSize:11,color:"#9B9098"}}>{fmtDate(e.date)}</span>
-                  {e.linkTo && onOpenSource && <button onClick={()=>onOpenSource(e.linkTo)} style={{fontSize:11,color:"#7C5CFC",background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,padding:0}}>Open source</button>}
+                  <span style={{fontSize:11,color:"#8A8EA3"}}>{fmtDate(e.date)}</span>
+                  {e.linkTo && onOpenSource && <button onClick={()=>onOpenSource(e.linkTo)} style={{fontSize:11,color:"#7A2FD8",background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,padding:0}}>Open source</button>}
                 </div>
                 {isEditing ? (
                   <div style={{marginTop:4,display:"flex",gap:6}}>
-                    <input aria-label={`Edit description for ${meta.label} entry`} value={editText} onChange={ev=>setEditText(ev.target.value)} style={{flex:1,fontSize:13,border:"1px solid #E8E0D0",borderRadius:6,padding:"4px 8px"}}/>
+                    <input aria-label={`Edit description for ${meta.label} entry`} value={editText} onChange={ev=>setEditText(ev.target.value)} style={{flex:1,fontSize:13,border:"1px solid #E8EAF2",borderRadius:6,padding:"4px 8px"}}/>
                     <Btn variant="secondary" style={{padding:"4px 10px",fontSize:11}} onClick={()=>{onEditDescription(cs,e.key,editText);setEditingKey(null);}}>Save</Btn>
                     <Btn variant="ghost" style={{padding:"4px 10px",fontSize:11}} onClick={()=>setEditingKey(null)}>Cancel</Btn>
                   </div>
                 ) : (
-                  <div style={{fontSize:13,color:"#1A1535",marginTop:2}}>{e.description}</div>
+                  <div style={{fontSize:13,color:"#0F1224",marginTop:2}}>{e.description}</div>
                 )}
-                {e.relevance && <div style={{fontSize:11,color:"#6B6375",marginTop:2,fontStyle:"italic"}}>{e.relevance}</div>}
-                {e.actor && <div style={{fontSize:11,color:"#9B9098",marginTop:1}}>{e.actor}</div>}
+                {e.relevance && <div style={{fontSize:11,color:"#4A4E63",marginTop:2,fontStyle:"italic"}}>{e.relevance}</div>}
+                {e.actor && <div style={{fontSize:11,color:"#8A8EA3",marginTop:1}}>{e.actor}</div>}
                 {!isEditing && (onEditDescription || onToggleExclude) && (
                   <div style={{display:"flex",gap:10,marginTop:4}}>
-                    {onEditDescription && <button onClick={()=>{setEditingKey(e.key);setEditText(e.description);}} style={{fontSize:11,color:"#9B9098",background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,padding:0}}>Edit</button>}
-                    {onToggleExclude && <button onClick={()=>onToggleExclude(cs,e.key)} style={{fontSize:11,color:"#9B9098",background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,padding:0}}>Exclude</button>}
+                    {onEditDescription && <button onClick={()=>{setEditingKey(e.key);setEditText(e.description);}} style={{fontSize:11,color:"#8A8EA3",background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,padding:0}}>Edit</button>}
+                    {onToggleExclude && <button onClick={()=>onToggleExclude(cs,e.key)} style={{fontSize:11,color:"#8A8EA3",background:"none",border:"none",cursor:"pointer",fontFamily:FONT.sans,padding:0}}>Exclude</button>}
                   </div>
                 )}
               </div>

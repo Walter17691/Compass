@@ -13,9 +13,25 @@ describe('computeStageProgress', () => {
   it('a case with only a disciplinary meeting (no investigation) reaching "disciplinary" stage flags the missing investigation step', () => {
     const cs = { caseType: 'misconduct', stage: 'disciplinary', meetings: [{ type: 'Disciplinary', record: 'x' }] };
     const progress = computeStageProgress(cs);
-    expect(progress.completed.map(s=>s.id)).toEqual(['intake','investigation','inv_report']);
+    // PASSED is positional: the case's recorded stage is beyond these.
+    expect(progress.passed.map(s=>s.id)).toEqual(['intake','investigation','inv_report']);
     expect(progress.missingSteps).toContain('Investigation');
     expect(progress.missingSteps).toContain('Investigation review');
+  });
+
+  it('a stage cannot be both completed and a potential missing step', () => {
+    // Human UAT found the strip showing "✓ Investigation review" directly above
+    // "Potential missing step: Investigation review". Both statements were true of
+    // different things — passed vs evidenced — but a green tick reads as "done",
+    // so the screen contradicted itself. completed now means passed AND evidenced.
+    const cs = { caseType: 'misconduct', stage: 'disciplinary', meetings: [{ type: 'Disciplinary', record: 'x' }] };
+    const progress = computeStageProgress(cs);
+    const completedLabels = progress.completed.map(s => s.label);
+    progress.missingSteps.forEach(label => expect(completedLabels).not.toContain(label));
+    // And the unevidenced ones are reported, not silently dropped.
+    expect(progress.unevidenced.map(s=>s.label)).toEqual(progress.missingSteps);
+    // Nothing is lost: passed === completed + unevidenced.
+    expect(progress.passed).toHaveLength(progress.completed.length + progress.unevidenced.length);
   });
 
   it('no missing steps once real evidence exists for every completed stage', () => {
@@ -55,7 +71,7 @@ describe('computeStageProgress', () => {
   it('grievance-shaped case flags a missing hearing when it reached outcome without a grievance meeting', () => {
     const cs = { caseType: 'grievance', stage: 'outcome', outcome: 'Not upheld', meetings: [] };
     const progress = computeStageProgress(cs);
-    expect(progress.completed.map(s=>s.id)).toEqual(['intake','hearing']);
+    expect(progress.passed.map(s=>s.id)).toEqual(['intake','hearing']);
     expect(progress.missingSteps).toEqual(['Grievance meeting']);
   });
 

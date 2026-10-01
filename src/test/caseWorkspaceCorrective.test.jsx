@@ -289,36 +289,41 @@ describe('B.2c — horizontal navigation', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-describe('B.2c — View full record actually goes somewhere', () => {
-  it('clicking it selects the Record destination', async () => {
+describe('B.2c — Record owns the chronology, and nothing above duplicates it', () => {
+  // Human UAT: with Record a first-class destination, the compact "Case record"
+  // summary above the workspace plus its "View full record" link were the same
+  // concept twice, in the most valuable space on the screen. Both are gone.
+  it('there is no compact Case record above the workspace', () => {
+    renderCase({ meetings: [INVESTIGATION] });
+    expect(screen.queryByRole('heading', { name: 'Case record' })).not.toBeInTheDocument();
+  });
+
+  it('there is no "View full record" control', () => {
+    renderCase({ meetings: [INVESTIGATION] });
+    expect(screen.queryByRole('button', { name: 'View full record' })).not.toBeInTheDocument();
+  });
+
+  it('Record is still a destination and still renders the chronology', async () => {
     const user = userEvent.setup();
     renderCase({ meetings: [INVESTIGATION] });
-    expect(screen.getByRole('tab', { name: /^Record/ })).toHaveAttribute('aria-selected', 'false');
-    await user.click(screen.getByRole('button', { name: 'View full record' }));
+    await user.click(screen.getByRole('tab', { name: /^Record/ }));
     expect(screen.getByRole('tab', { name: /^Record/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText(/Timeline/)).toBeInTheDocument();
   });
 
-  it('and brings the workspace into view rather than opening it below the fold', async () => {
-    const user = userEvent.setup();
-    const calls = [];
-    const orig = Element.prototype.scrollIntoView;
-    Element.prototype.scrollIntoView = function (...a) { calls.push(this.id); return orig?.apply(this, a); };
-    try {
-      renderCase({ meetings: [INVESTIGATION] });
-      await user.click(screen.getByRole('button', { name: 'View full record' }));
-      await new Promise(r => requestAnimationFrame(() => r()));
-      expect(calls).toContain('case-workspace');
-    } finally {
-      Element.prototype.scrollIntoView = orig;
-    }
+  it('the chronology engine is untouched — only the duplicate surface went', () => {
+    // caseRecordEntries stays exported and tested; the screen simply no longer
+    // renders a second, shorter copy of what Record already shows.
+    expect(readFileSync('src/lib/caseViewSummary.js', 'utf8')).toContain('export function caseRecordEntries');
+    expect(readFileSync('src/screens/CaseViewScreen.jsx', 'utf8')).not.toContain('caseRecordEntries(');
   });
 
-  it('the full record is a destination, not a competing primary tab', () => {
-    renderCase({});
-    // It is in the bar as "Record", and the case record summary above is still
-    // the thing you read first.
-    expect(screen.getByRole('tab', { name: /^Record/ })).toBeInTheDocument();
-    expect(screen.getAllByText('Case record')).toHaveLength(1);
+  it('the workspace now begins higher — nothing sits between attention and it', () => {
+    renderCase({ meetings: [INVESTIGATION] });
+    const bar = screen.getByRole('tablist', { name: 'Case workspace' });
+    const headings = [...document.querySelectorAll('h2')].map(h => h.textContent.trim());
+    expect(headings).not.toContain('Case record');
+    expect(bar).toBeInTheDocument();
   });
 });
 
@@ -427,7 +432,7 @@ describe('B.2c — the band never becomes an orphan again, even in miniature', (
     const { container } = renderCase(stepsOnly, { nextStep: { label: 'Draft outcome letter', action: 'outcome_letter', primary: true } });
     const band = container.querySelector('#case-workspace') && screen.getByRole('button', { name: /Details/ }).closest('div[style*="border-bottom"]');
     expect(band).toBeTruthy();
-    expect(band.style.background).not.toBe('rgb(245, 243, 255)');
+    expect(band.style.background).not.toBe('rgb(243, 237, 253)');
   });
 
   it('but a genuine warning still gets the full treatment', () => {
@@ -436,7 +441,8 @@ describe('B.2c — the band never becomes an orphan again, even in miniature', (
       reason: 'This meeting is already under way. 2 meetings on this case are marked in progress — resuming opens the most recently started.',
     }});
     const warn = screen.getByText(/2 meetings on this case are marked in progress/);
-    expect(warn.closest('div[style*="rgb(245, 243, 255)"]')).toBeTruthy();
+    // The band keeps the Compass purple tint token when it has real content.
+    expect(warn.closest('div[style*="rgb(243, 237, 253)"]')).toBeTruthy();
   });
 });
 
@@ -504,7 +510,7 @@ describe('B.2c — a next-action signal does not paint a band it no longer rende
         extraShell: { caseSignals: [signal] } },
     );
     const band = screen.getByRole('button', { name: /Details/ }).parentElement;
-    expect(band.style.background).not.toBe('rgb(245, 243, 255)');
+    expect(band.style.background).not.toBe('rgb(243, 237, 253)');
     expect(container).toBeTruthy();
   });
 
@@ -643,5 +649,182 @@ describe('B.2c — the nav is not one-way', () => {
       if (origBar) Object.defineProperty(HTMLElement.prototype, 'clientWidth', origBar);
       Element.prototype.getBoundingClientRect = origRect;
     }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+describe('B.2c — "More" actually opens (human UAT defect)', () => {
+  const openMore = async () => {
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'More ▾' }));
+    return user;
+  };
+
+  it('the menu is NOT inside a clipping container', () => {
+    // THE defect. The menu was rendered at top:100% of a tablist with
+    // overflow:hidden, so it existed in the DOM, was invisible on screen and was
+    // not hit-testable. jsdom does not implement clipping, so only this
+    // structural assertion can catch it here — verified on production by
+    // hit-testing the menu's centre, which returned the tabpanel underneath.
+    renderCase({});
+    fireEvent.click(screen.getByRole('button', { name: 'More ▾' }));
+    const menu = screen.getByRole('menu', { name: 'More case destinations' });
+    const clipping = [];
+    for (let el = menu.parentElement; el && el !== document.body; el = el.parentElement) {
+      const o = (el.getAttribute('style') || '');
+      if (/overflow\s*:\s*hidden/.test(o)) clipping.push((el.getAttribute('role') || el.tagName));
+    }
+    expect(clipping).toEqual([]);
+  });
+
+  it('clicking More reveals its destinations', async () => {
+    renderCase({});
+    expect(screen.queryByRole('menu', { name: 'More case destinations' })).not.toBeInTheDocument();
+    await openMore();
+    const menu = screen.getByRole('menu', { name: 'More case destinations' });
+    expect(within(menu).getAllByRole('menuitem').length).toBeGreaterThan(0);
+    expect(within(menu).getByRole('menuitem', { name: /Participants & roles/ })).toBeVisible();
+  });
+
+  it('it can be opened from the keyboard', async () => {
+    const user = userEvent.setup();
+    renderCase({});
+    const more = screen.getByRole('button', { name: 'More ▾' });
+    more.focus();
+    expect(more).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('menu', { name: 'More case destinations' })).toBeInTheDocument();
+  });
+
+  it('Escape closes it', async () => {
+    await (async () => { renderCase({}); })();
+    await openMore();
+    expect(screen.getByRole('menu', { name: 'More case destinations' })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('menu', { name: 'More case destinations' })).not.toBeInTheDocument();
+  });
+
+  it('an outside click closes it', async () => {
+    renderCase({});
+    await openMore();
+    expect(screen.getByRole('menu', { name: 'More case destinations' })).toBeInTheDocument();
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole('menu', { name: 'More case destinations' })).not.toBeInTheDocument();
+  });
+
+  it('a click INSIDE the menu does not close it before the item handles it', async () => {
+    renderCase({});
+    await openMore();
+    const menu = screen.getByRole('menu', { name: 'More case destinations' });
+    fireEvent.mouseDown(within(menu).getByRole('menuitem', { name: /Tasks/ }));
+    expect(screen.getByRole('menu', { name: 'More case destinations' })).toBeInTheDocument();
+  });
+
+  it('selecting an item opens that destination and closes the menu', async () => {
+    const user = await (async () => { renderCase({}); return openMore(); })();
+    await user.click(screen.getByRole('menuitem', { name: /Participants & roles/ }));
+    expect(screen.queryByRole('menu', { name: 'More case destinations' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Participants \(/)).toBeInTheDocument();
+    expect(screen.getByText('Case roles')).toBeInTheDocument();
+  });
+
+  it('the More control reports its own state to assistive technology', async () => {
+    renderCase({});
+    const more = screen.getByRole('button', { name: 'More ▾' });
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    expect(more).toHaveAttribute('aria-haspopup', 'menu');
+    await openMore();
+    expect(screen.getByRole('button', { name: 'More ▾' })).toHaveAttribute('aria-expanded', 'true');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+describe('B.2c — Compass analysis is calmer without losing capability', () => {
+  const openCompass = async () => {
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('tab', { name: /Compass analysis/ }));
+    return user;
+  };
+
+  it('the default view is the suggested step plus collapsed groups, not a dashboard', async () => {
+    renderCase({});
+    await openCompass();
+    expect(screen.getByText('Suggested next step')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Things to review/ })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: /Case overview/ })).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('"Things to review" states its size before showing anything', async () => {
+    renderCase({}, { extraShell: { caseSignals: [
+      { id: 'q1', caseId: 'c1', type: 'unanswered_question', status: 'open', title: 'Who else was present?' },
+      { id: 'q2', caseId: 'c1', type: 'unanswered_question', status: 'open', title: 'Was the policy shared?' },
+      { id: 'i1', caseId: 'c1', type: 'inconsistency', status: 'open', title: 'Times differ' },
+    ] } });
+    await openCompass();
+    expect(screen.getByRole('button', { name: /Things to review.*3 to look at/s })).toBeInTheDocument();
+  });
+
+  it('expanding it preserves every existing capability', async () => {
+    const user = await (async () => { renderCase({}); return openCompass(); })();
+    await user.click(screen.getByRole('button', { name: /Things to review/ }));
+    expect(screen.getByRole('button', { name: /Things to review/ })).toHaveAttribute('aria-expanded', 'true');
+    // The real panels, not a summary of them.
+    expect(screen.getByText(/Unanswered questions/i)).toBeInTheDocument();
+  });
+
+  it('the AI risk rating does not compete with a procedural Guardrail', async () => {
+    const guardrail = { id: 'g1', caseId: 'c1', type: 'process_risk', status: 'open',
+      title: 'Same person chaired both', reasoning: 'ACAS expects separation.' };
+    renderCase({ meetings: [mtg({ riskScore: { rating: 'HIGH' } })] }, { extraShell: { caseSignals: [guardrail] } });
+    // Guardrail is prominent on the main surface, unasked.
+    expect(screen.getByText('Procedural guardrails')).toBeInTheDocument();
+    // The risk rating is advisory, inside Compass analysis, behind a disclosure.
+    expect(screen.queryByText('HIGH RISK')).not.toBeInTheDocument();
+    await openCompass();
+    expect(screen.queryByText('HIGH RISK')).not.toBeInTheDocument();  // still collapsed
+    const read = screen.queryByRole('button', { name: /Compass's read of this case/ });
+    if (read) { fireEvent.click(read); expect(screen.getByText('HIGH RISK')).toBeInTheDocument(); }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+describe('B.2c — brand: decoration is neutral, meaning keeps its colour', () => {
+  const CASE_SURFACES = [
+    'src/components/AllegationsPanel.jsx', 'src/components/caseTabs/EvidenceTab.jsx',
+    'src/components/caseTabs/MeetingsTab.jsx', 'src/components/caseTabs/DocumentsTab.jsx',
+    'src/components/caseTabs/ThemesTab.jsx', 'src/components/caseTabs/AIAssistantTab.jsx',
+    'src/components/TimelinePanel.jsx', 'src/components/CaseTasksPanel.jsx',
+    'src/screens/CaseViewScreen.jsx',
+  ];
+
+  it('no cream/beige decoration survives anywhere in the case workspace', () => {
+    // #FDFAF5 cream fills, #E8E0D0 / #EDE5D8 beige borders, #F5F1EA cream dividers.
+    CASE_SURFACES.forEach(f => {
+      const found = (readFileSync(f, 'utf8').match(/#(FDFAF5|E8E0D0|EDE5D8|F5F1EA)/gi) || []);
+      expect(found, `${f}: ${found.join(', ')}`).toEqual([]);
+    });
+  });
+
+  it('the legacy purples were unified onto the one brand purple', () => {
+    CASE_SURFACES.forEach(f => {
+      expect(readFileSync(f, 'utf8'), f).not.toMatch(/#(7C5CFC|5B3FD4)/i);
+    });
+  });
+
+  it('semantic colour is NOT stripped — a warning still looks like a warning', () => {
+    // Amber for overdue, red for error, green for complete. These carry meaning
+    // and must survive a brand sweep aimed at decoration.
+    const mt = readFileSync('src/components/caseTabs/MeetingsTab.jsx', 'utf8');
+    expect(mt).toMatch(/#(FEF5E7|E8F5EE|FEF0EB)/i);
+    const cv = readFileSync('src/screens/CaseViewScreen.jsx', 'utf8');
+    expect(cv).toMatch(/COLOR\.amber/);
+  });
+
+  it('an overdue item keeps its amber, RENDERED', () => {
+    renderCase({}, { overviewOverrides: { dueSoon: [
+      { caseId: 'c1', overdue: true, label: 'Allow employee to review evidence', daysOverdue: 16 },
+    ] } });
+    const row = screen.getByText('Allow employee to review evidence').closest('li');
+    expect(row.style.borderLeft).toContain('rgb(138, 90, 0)');   // COLOR.amber
   });
 });
