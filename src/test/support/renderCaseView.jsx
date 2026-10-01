@@ -14,7 +14,7 @@ import { CaseViewScreen } from '../../screens/CaseViewScreen.jsx';
 
 const noop = () => {};
 
-export const renderCase = (caseOverrides = {}, { nextStep = null, stage = 'disciplinary', extraShell = {} } = {}) => {
+export const renderCase = (caseOverrides = {}, { nextStep = null, stage = 'disciplinary', extraShell = {}, meetingsTabOverrides = {}, overviewOverrides = {} } = {}) => {
   const theCase = {
     id: 'c1', employeeName: 'Sam Employee', manager: 'Alex Manager',
     meetings: [], evidence: [], confidential: false, caseType: 'misconduct', ...caseOverrides,
@@ -47,6 +47,7 @@ export const renderCase = (caseOverrides = {}, { nextStep = null, stage = 'disci
     generateUnansweredQuestions: noop, generateInconsistencies: noop, inconsistencyLoading: {},
     ohReportFindings: [], ohReportAnalysisLoading: false, onAnalyseOhReport: noop, onAcceptOhFinding: noop,
     onDismissOhFinding: noop, onSendForSignature: noop, automationLevels: {}, onResendReminder: noop,
+    ...overviewOverrides,
   };
   return render(<CaseViewScreen
     shell={shell} header={header} overview={overview} initialTab={null} clearInitialTab={noop} deleteCaseTask={noop}
@@ -55,7 +56,7 @@ export const renderCase = (caseOverrides = {}, { nextStep = null, stage = 'disci
       evidenceSuggestions: {}, evidenceSuggestionsLoading: {}, generateEvidenceSuggestions: noop, acceptEvidenceSuggestion: noop,
       rejectEvidenceSuggestion: noop, generateAppealReview: noop, appealReviewLoading: false, recordAppealOutcome: noop,
       policies: [], consistencyReview: {}, consistencyReviewLoading: false, generateConsistencyReview: noop }}
-    meetingsTab={{ activeCaseStage: null, setActiveCaseStage: noop, onAcceptSavedSuggestion: noop, onDismissSavedSuggestion: noop }}
+    meetingsTab={{ activeCaseStage: null, setActiveCaseStage: noop, onAcceptSavedSuggestion: noop, onDismissSavedSuggestion: noop, ...meetingsTabOverrides }}
     evidenceTab={{ documentFindings: {}, documentAnalysisLoading: {}, analyseEvidenceDocument: noop, acceptDocumentFinding: noop, dismissDocumentFinding: noop, removeEvidence: noop }}
     documentsTab={{ onGenerateHearingPack: noop, hearingPackGenerating: {}, onDraftCorrespondence: noop }}
     themesTab={{ organisationThemes: [], caseThemes: [], themeSuggestions: {}, themeSuggestionLoading: {}, onSuggestThemes: noop,

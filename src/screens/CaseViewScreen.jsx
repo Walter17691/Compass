@@ -349,6 +349,18 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
     .map(d => ({ key: d.key || d.caseId, label: d.label || "Overdue item",
                  context: d.daysOverdue ? `${d.daysOverdue} day${d.daysOverdue === 1 ? "" : "s"} overdue` : "Overdue" }))
     .filter(a => !nextStep?.label || a.label.trim().toLowerCase() !== nextStep.label.trim().toLowerCase());
+  // Wave B.2 corrective — found in production UAT: "Note warning on HR record"
+  // listed twice, identically, 20 days overdue both times. Two deadlines on the
+  // same case with no `key` of their own both fall back to d.caseId, so they
+  // collide as React keys AND read as one item said twice. Deduplicated on what
+  // the user actually sees; the underlying deadline engine is untouched.
+  const seenAttention = new Set();
+  const caseAttentionDeduped = caseAttention.filter(a => {
+    const sig = `${a.label}|${a.context}`;
+    if (seenAttention.has(sig)) return false;
+    seenAttention.add(sig);
+    return true;
+  });
 
   // Wave B.1 — this filtered on `sig.kind`, which case_signals does not have: the
   // field is `type`. So the gate never matched, and the guardrail block Wave B
@@ -985,7 +997,18 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
         showInlineDraft: showDraft,
         hasOpenChecklist: openChecklist.length > 0,
       })&&(
-        <div style={{background:"#F5F3FF",borderBottom:"1px solid #DDD9F5",padding:"12px 28px",flexShrink:0}}>
+        <div style={(()=>{
+          // Wave B.2 corrective — the band is a container for substantive content.
+          // When the ONLY thing left in it is the outstanding-steps disclosure, a
+          // full-width pale-purple banner around a single link is the orphaned
+          // strip again in miniature, so it loses the banner treatment and keeps
+          // the content.
+          const onlyChecklist = !exceptionReason && !nextStep.secondary && !(isHR&&currentInvestigator)
+            && !nextActionSignal && !showAppealInviteLogistics && !showDraft;
+          return onlyChecklist
+            ? {background:"transparent",borderBottom:"1px solid #EDE5D8",padding:"6px 28px",flexShrink:0}
+            : {background:"#F5F3FF",borderBottom:"1px solid #DDD9F5",padding:"12px 28px",flexShrink:0};
+        })()}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
             <div style={{minWidth:0}}>
               {/* UAT Product Hierarchy pass, Part 7 — "Next:" read as an
@@ -1264,21 +1287,21 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
               own it. The primary action lives in the header and is deliberately NOT
               repeated here: the screen should not say the same instruction three
               times. */}
-          {caseAttention.length > 0 && (
+          {caseAttentionDeduped.length > 0 && (
             <section style={{marginTop:28}}>
               <h2 style={{...TYPE.sectionHeading,color:COLOR.ink,margin:"0 0 10px"}}>Needs your attention</h2>
               <ul style={{listStyle:"none",margin:0,padding:0,display:"grid",gap:8}}>
-                {caseAttention.slice(0,3).map(a=>(
+                {caseAttentionDeduped.slice(0,3).map(a=>(
                   <li key={a.key} style={{background:COLOR.amberTint,border:"1px solid #EADFC4",borderLeft:`3px solid ${COLOR.amber}`,borderRadius:RADIUS.card,padding:"12px 16px"}}>
                     <div style={{...TYPE.rowContext,color:COLOR.ink}}>{a.label}</div>
                     {a.context && <div style={{...TYPE.metadata,color:COLOR.inkFaint,marginTop:2}}>{a.context}</div>}
                   </li>
                 ))}
               </ul>
-              {caseAttention.length > 3 && (
+              {caseAttentionDeduped.length > 3 && (
                 <button type="button" onClick={()=>goToDestination("tasks")}
                   style={{...TYPE.metadata,background:"none",border:"none",padding:0,marginTop:8,color:COLOR.purple,cursor:"pointer",fontFamily:FONT.sans}}>
-                  View all {caseAttention.length}
+                  View all {caseAttentionDeduped.length}
                 </button>
               )}
             </section>

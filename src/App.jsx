@@ -1509,7 +1509,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen, activeCaseId]);
 
-  const [activeCaseStage, setActiveCaseStage] = useState("investigation");
+  // Wave B.2 corrective — null, not "investigation". Hard-defaulting the meeting
+  // stage filter here meant a case whose only meeting was a disciplinary hearing
+  // opened Meetings on an empty Investigation stage, with the meeting the user
+  // came for one unexplained click away. MeetingsTab knows which stages actually
+  // have meetings; App does not. An explicit user choice still wins.
+  const [activeCaseStage, setActiveCaseStage] = useState(null);
   const [showAppealInput, setShowAppealInput] = useState({});
   const [showEvidencePanel, setShowEvidencePanel] = useState({});
   const [evidenceNote, setEvidenceNote] = useState({});

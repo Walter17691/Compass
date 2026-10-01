@@ -416,3 +416,76 @@ describe('B.2c — specialist and organisational concepts are not process peers'
     expect(screen.getByRole('button', { name: /Suggest themes/ })).toBeInTheDocument();
   });
 });
+
+describe('B.2c — the band never becomes an orphan again, even in miniature', () => {
+  const stepsOnly = {
+    meetings: [mtg({ status: 'completed', record: 'x',
+      nextSteps: [{ step: 'Issue outcome letter', done: false }] })],
+  };
+
+  it('with only outstanding steps it is not painted as a banner', () => {
+    const { container } = renderCase(stepsOnly, { nextStep: { label: 'Draft outcome letter', action: 'outcome_letter', primary: true } });
+    const band = container.querySelector('#case-workspace') && screen.getByRole('button', { name: /Details/ }).closest('div[style*="border-bottom"]');
+    expect(band).toBeTruthy();
+    expect(band.style.background).not.toBe('rgb(245, 243, 255)');
+  });
+
+  it('but a genuine warning still gets the full treatment', () => {
+    renderCase({ meetings: [mtg({ status: 'in_progress' })] }, { nextStep: {
+      label: 'Resume meeting', action: 'resume_meeting', primary: true,
+      reason: 'This meeting is already under way. 2 meetings on this case are marked in progress — resuming opens the most recently started.',
+    }});
+    const warn = screen.getByText(/2 meetings on this case are marked in progress/);
+    expect(warn.closest('div[style*="rgb(245, 243, 255)"]')).toBeTruthy();
+  });
+});
+
+describe('B.2c — Meetings opens on a stage that has meetings', () => {
+  it('a disciplinary-only case does not open on an empty Investigation stage', async () => {
+    const user = userEvent.setup();
+    renderCase({ meetings: [mtg({ type: 'Disciplinary', status: 'completed', record: 'x', date: '2026-09-25' })] });
+    await user.click(screen.getByRole('tab', { name: /^Meetings/ }));
+    // The meeting the user came for is visible, not one unexplained click away.
+    expect(screen.queryByText('No investigation meetings yet')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'View notes' }).length).toBeGreaterThan(0);
+  });
+
+  it('an explicit stage choice still wins', async () => {
+    const user = userEvent.setup();
+    renderCase(
+      { meetings: [mtg({ type: 'Disciplinary', status: 'completed', record: 'x' })] },
+      { meetingsTabOverrides: { activeCaseStage: 'investigation' } },
+    );
+    await user.click(screen.getByRole('tab', { name: /^Meetings/ }));
+    expect(screen.getByText('No investigation meetings yet')).toBeInTheDocument();
+  });
+
+  it('App no longer hard-defaults the filter to a stage that may be empty', () => {
+    expect(readFileSync('src/App.jsx', 'utf8'))
+      .not.toContain('const [activeCaseStage, setActiveCaseStage] = useState("investigation")');
+  });
+});
+
+describe('B.2c — the attention list does not say the same thing twice', () => {
+  // Found in production UAT on UAT - Fresh Golden Path 2: "Note warning on HR
+  // record · 20 days overdue" listed twice, identically.
+  const dup = [
+    { caseId: 'c1', overdue: true, label: 'Note warning on HR record', daysOverdue: 20 },
+    { caseId: 'c1', overdue: true, label: 'Note warning on HR record', daysOverdue: 20 },
+    { caseId: 'c1', overdue: true, label: 'Allow employee to review evidence', daysOverdue: 16 },
+  ];
+
+  it('identical overdue items collapse to one', () => {
+    renderCase({}, { extraShell: {}, overviewOverrides: { dueSoon: dup } });
+    expect(screen.getAllByText('Note warning on HR record')).toHaveLength(1);
+    expect(screen.getAllByText('Allow employee to review evidence')).toHaveLength(1);
+  });
+
+  it('genuinely different items are both kept', () => {
+    renderCase({}, { overviewOverrides: { dueSoon: [
+      { caseId: 'c1', overdue: true, label: 'Note warning on HR record', daysOverdue: 20 },
+      { caseId: 'c1', overdue: true, label: 'Note warning on HR record', daysOverdue: 3 },
+    ] } });
+    expect(screen.getAllByText('Note warning on HR record')).toHaveLength(2);
+  });
+});
