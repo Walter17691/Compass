@@ -70,11 +70,10 @@ const baseProps = {
 };
 
 const tabs = [
-  // UAT Product Hierarchy pass, Part 2 — Weekly pay/Risk & tribunal
-  // exposure no longer renders by default for an ordinary misconduct
-  // investigation (it's contextual now, not unconditional), so the
-  // marker for this tab is "Description", which always renders.
-  ['overview', 'Description'],
+  // Wave B.2 — "overview" ("Checks and analysis") no longer exists. Case
+  // information replaces it for the basic case facts; a deep link to it still
+  // lands even on a case with none, via withRequestedSection.
+  ['information', 'Description'],
   ['timeline', undefined], // TimelinePanel has no reliable empty-state string; presence of the tab switch itself (no crash) is the assertion
   ['allegations', 'No allegations recorded yet — add the specific issues under investigation so evidence and the AI overview can be tied to each one.'],
   ['meetings', /No .* meetings yet/],

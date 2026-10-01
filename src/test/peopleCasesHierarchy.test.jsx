@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { AppSidebar } from '../components/AppSidebar';
 import { SCREENS } from '../constants';
@@ -166,15 +166,18 @@ describe('Wave B.1 — the same instruction is not given three times', () => {
     // Removing a surface must not remove the authority behind it.
     expect(caseViewCode).toContain('getNextStep(cs, {hasAppealManager: !!currentAppealManagerAccess, isHR})');
     expect(caseViewCode).toContain('handleNextStepAction');
-    expect(caseViewCode).toContain('nextStep.reason');
+    // Wave B.2 — the screen no longer renders the reason on sight, so this asserts
+    // the INVARIANT rather than the old call shape: the engine still produces the
+    // explanation data, and it is still read, now through the classifier.
+    expect(read('src/lib/nextStep.js')).toMatch(/reason:/);
+    expect(caseViewCode).toContain('reasonForDefaultSurface(nextStep)');
   });
 
   it('the explanation appears ONCE, not under both surfaces', () => {
-    // It sits with the readiness context; "What is happening" deliberately does not
-    // repeat it.
-    // Counts RENDER SITES, not occurrences: the surviving line mentions it twice
-    // (the guard and the output) on one line.
-    expect((caseViewCode.match(/>\{nextStep\.reason\}</g) || []).length).toBe(1);
+    // Wave B.2 — it now appears ZERO times unrestricted: only a classified class B
+    // reason reaches the surface, and then once.
+    expect((caseViewCode.match(/>\{nextStep\.reason\}</g) || []).length).toBe(0);
+    expect((caseViewCode.match(/>\{exceptionReason\}</g) || []).length).toBe(1);
   });
 
   it('the genuinely different SECONDARY action survives', () => {
@@ -244,9 +247,9 @@ describe('Wave B.1 — the rest of Wave B is preserved', () => {
     expect(caseViewCode).toContain('danger:true');
     // Not the primary action, and gone from the analysis panels.
     expect(caseViewCode).not.toMatch(/primary[^\n]*Delete case/);
-    // The rendered button, not the word: a JSX block comment explaining the move
-    // still contains the phrase, and prose is not what matters here.
-    expect(read('src/components/caseTabs/OverviewTab.jsx')).not.toMatch(/>Delete case</);
+    // Wave B.2 — the analysis bucket that used to host it does not exist any more,
+    // which is a stronger guarantee than it not containing the button.
+    expect(existsSync('src/components/caseTabs/OverviewTab.jsx')).toBe(false);
   });
 
   it('sections still only appear when they apply', () => {

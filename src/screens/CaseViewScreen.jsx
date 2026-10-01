@@ -8,6 +8,20 @@ import { getCurrentRisk, isGrievanceCase } from '../lib/caseStage';
 // analysis in an earlier phase, and this file already imports from lib above.
 import { hasGuidedProcess } from '../lib/nextStep';
 import { caseStatusLabel, isClosedStage, describeWhatIsHappening, caseRecordEntries, caseDetailSections, withRequestedSection } from '../lib/caseViewSummary';
+import { reasonForDefaultSurface, scheduledMeetingWhen, hasSubstantiveContext, hasCaseInformation } from '../lib/caseSurface';
+import { isRiskExposureRelevant } from '../lib/tribunalExposureRelevance';
+import { keyDateRelevance } from '../lib/caseKeyDates';
+import { getProcessType } from '../lib/processStages';
+import { getTemplateForType } from '../lib/processTemplates';
+import { computeCaseRisk } from '../lib/caseRisk';
+import { evaluateAutomationRules } from '../lib/automationRules';
+import { CaseInformationPanel } from '../components/caseTabs/CaseInformationPanel';
+import { TribunalExposurePanel } from '../components/caseTabs/TribunalExposurePanel';
+import { CompassAnalysisPanel } from '../components/caseTabs/CompassAnalysisPanel';
+import { ApprovalsPanel } from '../components/ApprovalsPanel';
+import { HrReviewGatePanel } from '../components/HrReviewGatePanel';
+import { AskHrPanel } from '../components/AskHrPanel';
+import { CaseRolesPanel } from '../components/CaseRolesPanel';
 import { resumableMeetingFor, scheduledMeetingsFor } from '../lib/meetingLifecycle';
 import { fmtMeetingTime } from '../lib/meetingTiming';
 import { MDRenderer } from '../components/MDRenderer';
@@ -16,7 +30,6 @@ import { LockIcon } from '../components/Icons';
 import { AllegationsPanel } from '../components/AllegationsPanel';
 import { TimelinePanel } from '../components/TimelinePanel';
 import { CaseTasksPanel } from '../components/CaseTasksPanel';
-import { OverviewTab } from '../components/caseTabs/OverviewTab';
 import { MeetingsTab } from '../components/caseTabs/MeetingsTab';
 import { EvidenceTab } from '../components/caseTabs/EvidenceTab';
 import { PeopleTab } from '../components/caseTabs/PeopleTab';
@@ -24,7 +37,6 @@ import { DocumentsTab } from '../components/caseTabs/DocumentsTab';
 import { CommunicationsTab } from '../components/caseTabs/CommunicationsTab';
 import { ThemesTab } from '../components/caseTabs/ThemesTab';
 import { OutcomeTab } from '../components/caseTabs/OutcomeTab';
-import { AIAssistantTab } from '../components/caseTabs/AIAssistantTab';
 import { allegationsForCase } from '../lib/allegations';
 import { tasksForCase, hrNoteTasks } from '../lib/caseTasks';
 import { openSignalsForCase } from '../lib/caseSignals';
@@ -33,10 +45,7 @@ import { computeCaseReadiness } from '../lib/caseReadiness';
 import { computeDueSoon } from '../lib/deadlines';
 import { investigationChecklistTasks, INVESTIGATION_CHECKLIST_STEPS } from '../lib/investigationChecklist';
 import { investigationPlanTasks } from '../lib/investigationPlan';
-import { SignalCard } from '../components/SignalCard';
 import { WhySourcesModal } from '../components/WhySourcesModal';
-import { PolicyCitation } from '../components/PolicyCitation';
-import { CaseReadinessBadge } from '../components/CaseReadinessBadge';
 import { InvestigatorChecklistView } from '../components/InvestigatorChecklistView';
 import { NotetakerView } from '../components/NotetakerView';
 import { ActionMenu } from '../components/design/ActionMenu';
@@ -111,8 +120,14 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   const [appealInviteTime, setAppealInviteTime] = useState("");
   const [appealInviteLocation, setAppealInviteLocation] = useState("");
   const [showDetails, setShowDetails] = useState(false);
-  const [activeTab, setActiveTab] = useState("overview");
+  // Wave B.2 — nothing is expanded by default. This used to default to
+  // "overview" ("Checks and analysis"), so the legacy bucket opened itself.
+  const [activeTab, setActiveTab] = useState(null);
   const [whySignal, setWhySignal] = useState(null);
+  // Wave B.2 — suspension has no authoritative trigger anywhere in the data
+  // model (see caseKeyDates.js), so it keeps the same single narrow reveal it
+  // always had. Only its entry point moved, into More actions.
+  const [suspensionRevealed, setSuspensionRevealed] = useState(false);
   const [changesBannerDismissed, setChangesBannerDismissed] = useState(false);
   // IA & User Journey pass, §11 — More tab popover; same open/outside-
   // click/Escape shape as AppSidebar's own More menu.
@@ -188,6 +203,33 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   // requires X" anonymously into its reasoning prose.
   const nextActionPolicyRef = nextActionSignal?.sourceRefs?.find(r=>r.kind==="policy");
   const readiness = computeCaseReadiness(cs, allegations, caseSignals, caseTasks);
+
+  // ── Wave B.2 — the pieces "Checks and analysis" used to compute for itself ──
+  //
+  // These are the SAME derivations OverviewTab made, lifted to the screen so
+  // each one can be routed to a coherent section instead of a shared bucket.
+  // Not one predicate changed: isRiskExposureRelevant and keyDateRelevance are
+  // the original functions, moved to lib/ verbatim.
+  const processTypeId = getProcessType(cs.caseType).id;
+  const processTemplate = getTemplateForType(overview.processTemplates, processTypeId);
+  const exposureCtx = { stage, currentRisk };
+  const showRiskExposure = stage !== "closed" && isRiskExposureRelevant(cs, exposureCtx, processTypeId);
+  const rawDateRelevance = keyDateRelevance(cs, exposureCtx, overview.wellbeingNotes, processTypeId);
+  const dateRelevance = { ...rawDateRelevance, suspensionReviewDate: rawDateRelevance.suspensionReviewDate || suspensionRevealed };
+  const hasKeyDates = Object.values(dateRelevance).some(Boolean);
+  const compassRiskItems = computeCaseRisk(cs, { allegations, caseSignals, cases, auditLog, wellbeingNotes: overview.wellbeingNotes, dueSoon: overview.dueSoon });
+  // caseTaskList, not caseTasks: the old call site narrowed tasks to THIS case
+  // before handing them over, and widening that would change which automation
+  // suggestions fire.
+  const automationSuggestions = evaluateAutomationRules(cs, { caseTasks: caseTaskList, caseSignals });
+  // Years of service feeds the basic-award multiplier. Fractional years by
+  // design — see tribunalEstimate.js. Unchanged from OverviewTab.
+  const yearsService = (() => {
+    if(!empRecord?.startDate) return null;
+    const start = new Date(empRecord.startDate.includes("/") ? empRecord.startDate.split("/").reverse().join("-") : empRecord.startDate);
+    if(isNaN(start)) return null;
+    return (Date.now()-start.getTime())/(1000*60*60*24*365.25);
+  })();
   const screens = SCREENS;
 
   // Phase 15 — Manager Investigation Mode. caseAccess is org-wide (RLS
@@ -268,7 +310,13 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   // second engine; it is presentation over those three.
   const statusLabel = caseStatusLabel(stage);
   const caseClosed = isClosedStage(stage);
-  const whatIsHappening = describeWhatIsHappening({ cs, stage, allegations: caseAllegations, meetings: cs.meetings || [] });
+  // Wave B.2 — the next-step reason is classified rather than rendered on
+  // sight. Class A (a scheduled meeting's date) becomes one clause here;
+  // class B (a genuine ambiguity) sits beside the action; class C stays in
+  // the data and off the default surface.
+  const scheduledWhen = scheduledMeetingWhen(nextStep);
+  const exceptionReason = reasonForDefaultSurface(nextStep);
+  const whatIsHappening = describeWhatIsHappening({ cs, stage, allegations: caseAllegations, meetings: cs.meetings || [], scheduledWhen });
   const caseRecord = caseRecordEntries(cs, caseAllegations, { limit: 8 });
 
   // Overdue work only. Taken from the SAME deadline engine the Employee File
@@ -307,6 +355,11 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
     hasOutcome: !!cs.outcome || stage === "outcome" || caseClosed,
     canSeeAnalysis: true,
     canSeeThemes: isHR,
+    // Case information exists when the case actually HAS information: a
+    // description, a referrer, prior cases, or a key date that applies. A case
+    // with none of those gets no section rather than an empty one.
+    hasInformation: hasCaseInformation(cs, { repeatCount }) || hasKeyDates || !!processTemplate,
+    showExposure: showRiskExposure,
   }));
 
   const handleNextStepAction = () => {
@@ -727,6 +780,15 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
                 // Overview panels; it now sits last in the menu, with the SAME
                 // isHR gate, the SAME danger confirmation and the SAME handler.
                 // It must never be a primary action, and it is not one here.
+                // Wave B.2 — "Record a suspension" is an ACTION. It was a bare link
+                // under a tribunal-exposure calculator, which is nowhere a manager
+                // would look for it. Same single reveal, same ungated visibility as
+                // before (no role gate added or removed) — it simply opens Case
+                // information with the suspension review date revealed.
+                !dateRelevance.suspensionReviewDate && stage!=="closed" && {
+                  label: "Record a suspension",
+                  onClick: ()=>{ setSuspensionRevealed(true); setActiveTab("information"); },
+                },
                 isHR && { label: "Delete case", onClick: async()=>{
                   const ok = await confirmDialog({title:"Delete case", message:"This will permanently delete this case and all its meeting records. This cannot be undone.", confirmLabel:"Delete", danger:true});
                   if(!ok) return;
@@ -875,8 +937,25 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
       )}
 
       {/* Case Copilot — recommended next action, upgraded in place from the
-          old "Next action" banner rather than adding a new element */}
-      {nextStep&&stage!=="closed"&&(
+          old "Next action" banner rather than adding a new element.
+
+          Wave B.2 — this strip is no longer permanent. After B.1 removed the
+          duplicate label and button, a full-width pale-purple band was left
+          holding nothing but an explanation of the button above it, pushing the
+          case record below the fold. It now renders ONLY when it has something
+          substantive to carry: a genuine ambiguity, a secondary choice, a live
+          investigation's progress, a persisted next-action signal, the appeal
+          hearing-arrangements form, or an inline draft. On the screenshot's
+          review_draft case it has none of those, so there is no strip at all. */}
+      {nextStep&&stage!=="closed"&&hasSubstantiveContext({
+        exceptionReason,
+        hasSecondaryAction: !!nextStep.secondary,
+        hasInvestigatorProgress: !!(isHR&&currentInvestigator),
+        hasNextActionSignal: !!nextActionSignal,
+        showAppealInviteLogistics,
+        showInlineDraft: showDraft,
+        hasOpenChecklist: openChecklist.length > 0,
+      })&&(
         <div style={{background:"#F5F3FF",borderBottom:"1px solid #DDD9F5",padding:"12px 28px",flexShrink:0}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
             <div style={{minWidth:0}}>
@@ -889,8 +968,16 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
                     button below, said the same instruction three times on one screen.
                     What remains is CONTEXT: why, how ready the case is, and the
                     genuinely different secondary option. */}
-              {nextStep.reason&&<div style={{fontSize:11,color:"#6B6375",marginTop:2}}>{nextStep.reason}</div>}
-              <CaseReadinessBadge readiness={readiness}/>
+              {/* Wave B.2 — only a CLASS B reason reaches this surface: one that
+                  resolves a real ambiguity (more than one meeting in progress, so
+                  "Resume meeting" is genuinely unclear about which). Class A state
+                  became a clause in "What is happening"; class C rationale — the
+                  ACAS citations and the engine restating its own label — stays on
+                  the nextStep object and off the default surface. Nothing deleted. */}
+              {exceptionReason&&<div style={{fontSize:11,color:"#6B6375",marginTop:2}}>{exceptionReason}</div>}
+              {/* Case readiness moved to Compass analysis — it is Compass's opinion
+                  of the case, and beside the action it read as part of the
+                  instruction rather than an assessment HR may disagree with. */}
               {isHR&&currentInvestigator&&(
                 <div style={{fontSize:11,color:"#5B3FD4",marginTop:6}}>
                   Investigation by {currentInvestigator.name}: {checklistTasks.filter(t=>t.status==="done").length} of {INVESTIGATION_CHECKLIST_STEPS.length} steps complete
@@ -1028,35 +1115,11 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
               step above it. Persisted as a next_action case_signal so it
               can be accepted/dismissed/marked-not-relevant rather than
               only living as a re-generated string on every visit. */}
-          <div style={{marginTop:12}}>
-            {nextActionSignal ? (
-              <SignalCard
-                signal={nextActionSignal}
-                onDismiss={()=>changeSignalStatus(nextActionSignal.id, "dismissed")}
-                onMarkNotRelevant={()=>changeSignalStatus(nextActionSignal.id, "not_relevant")}
-                onAskWhy={()=>setWhySignal(nextActionSignal)}
-                extraActions={[
-                  {label:"Accept", onClick:()=>changeSignalStatus(nextActionSignal.id, "accepted")},
-                  {label:"Create task", onClick:()=>{createCaseTask(cs.id, {name:nextActionSignal.title}); changeSignalStatus(nextActionSignal.id, "accepted");}},
-                ]}
-              />
-            ) : null}
-            {nextActionPolicyRef&&(
-              <div style={{marginTop:8}}>
-                <PolicyCitation
-                  policyName={nextActionPolicyRef.label}
-                  clauseHeading={nextActionPolicyRef.clauseHeading}
-                  clauseText={nextActionPolicyRef.clauseText}
-                />
-              </div>
-            )}
-            {!nextActionSignal&&(
-              <button onClick={()=>generateNextBestAction(cs)} disabled={nextActionLoading?.[cs.id]}
-                style={{fontSize:12,background:"none",border:"1px solid #DDD9F5",borderRadius:6,padding:"6px 14px",color:"#7C5CFC",cursor:nextActionLoading?.[cs.id]?"not-allowed":"pointer",fontFamily:FONT.sans}}>
-                {nextActionLoading?.[cs.id] ? "Compass is thinking…" : "Ask Compass for its take"}
-              </button>
-            )}
-          </div>
+          {/* Wave B.2 — the persisted next-action signal and the control that
+              requests one both moved to Compass analysis. A shortcut to an opinion
+              did not warrant a full-width band under the case header, and Compass
+              analysis is now the one home for advisory intelligence rather than a
+              competing surface. */}
         </div>
       )}
 
@@ -1192,10 +1255,24 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
             </section>
           )}
 
+          {/* Wave B.2 — approvals, the HR review gate and an open Ask HR request are
+              process BLOCKERS, not analysis. They sat inside "Case readiness" in the
+              legacy bucket, where work that stops the case needed two clicks to find.
+              Each panel already returns null when it has nothing to show, so this is
+              conditional by construction — no empty container ever appears. */}
+          <section>
+            <ApprovalsPanel cs={cs} hrReviewRequests={overview.hrReviewRequests}
+              respondToReview={overview.respondToReview} isApprover={isHR}/>
+            <HrReviewGatePanel cs={cs} hrReviewRequests={overview.hrReviewRequests}
+              resolveInvestigationReview={overview.resolveInvestigationReview} isHR={isHR}/>
+            <AskHrPanel cs={cs} hrReviewRequests={overview.hrReviewRequests}
+              respondToReview={overview.respondToReview} isHR={isHR}/>
+          </section>
+
           {/* GUARDRAILS stay on the main surface. They are deterministic process-risk
               signals carrying policy citations, and proceeding past one is a recorded
               policy deviation — safety-critical information is not hidden for visual
-              cleanliness. */}
+              cleanliness. Wave B.2 did not touch this. */}
           {openGuardrails.length > 0 && (
             <section style={{marginTop:28}}>
               <GuardrailsPanel cs={cs} signals={openGuardrails} changeSignalStatus={changeSignalStatus}
@@ -1243,17 +1320,17 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
               {detailSections.map((s,i)=>{
                 const open = activeTab===s.id;
                 const SECTION_CONTENT = {
-                      overview: (
-            <OverviewTab cs={cs}
-              caseCtx={{ cases, saveCases, stage, currentRisk, empRecord, repeatCount }}
-              shell={{ setScreen, screens, confirmDialog }}
-              caseData={{ caseSignals, caseTasks: caseTaskList, allegations, auditLog, wellbeingNotes: overview.wellbeingNotes, dueSoon: overview.dueSoon, processTemplates: overview.processTemplates, caseAccess, orgMembers, hrReviewRequests: overview.hrReviewRequests }}
-              caseActions={{ changeSignalStatus, createCaseTask, onAskWhy: setWhySignal, linkSignalToAllegation: overview.linkSignalToAllegation, requestOverrideReason: overview.requestOverrideReason, requestPolicyDeviationReason: overview.requestPolicyDeviationReason }}
-              caseIntel={{ unansweredCovered: overview.unansweredCovered, unansweredLoading: overview.unansweredLoading, generateUnansweredQuestions: overview.generateUnansweredQuestions, generateInconsistencies: overview.generateInconsistencies, inconsistencyLoading: overview.inconsistencyLoading?.[cs.id] }}
-              oh={{ ohReportFindings: overview.ohReportFindings, ohReportAnalysisLoading: overview.ohReportAnalysisLoading, onAnalyseOhReport: overview.onAnalyseOhReport, onAcceptOhFinding: overview.onAcceptOhFinding, onDismissOhFinding: overview.onDismissOhFinding, onSendForSignature: overview.onSendForSignature }}
-              review={{ isApprover: isHR, respondToReview: overview.respondToReview, resolveInvestigationReview: overview.resolveInvestigationReview, assignCaseRole: overview.assignCaseRole }}
-              automation={{ automationLevels: overview.automationLevels, onResendReminder: overview.onResendReminder }}
-            />
+                      // Wave B.2 — "Checks and analysis" is gone. OverviewTab, the legacy
+                      // bucket it rendered, is deleted: its contents were routed to the
+                      // sections below, to Compass analysis, to Participants, to the main
+                      // surface, or to More actions. Each by audited classification.
+                      information: (
+            <CaseInformationPanel cs={cs} cases={cases} saveCases={saveCases} repeatCount={repeatCount}
+              dateRelevance={dateRelevance} processTemplate={processTemplate}/>
+            ),
+                      exposure: (
+            <TribunalExposurePanel cs={cs} cases={cases} saveCases={saveCases}
+              currentRisk={currentRisk} yearsService={yearsService}/>
             ),
                       timeline: (
             <TimelinePanel cs={cs} allegations={allegations} auditLog={auditLog} fmtDate={fmtDate} onOpenSource={openTimelineSource} onToggleExclude={timeline.toggleTimelineExclude} onEditDescription={timeline.editTimelineDescription} onGenerateRelevance={timeline.generateTimelineRelevance} relevanceLoading={timeline.timelineRelevanceLoading?.[cs.id]} loadJsPDF={timeline.loadJsPDF}/>
@@ -1268,7 +1345,18 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
             <EvidenceTab cs={cs} cases={cases} saveCases={saveCases} currentUser={currentUser} showToast={showToast} setReviewOutput={setReviewOutput} setScreen={setScreen} screens={screens} fmtDate={fmtDate} setMeetingSetup={setMeetingSetup} setCaseInfo={setCaseInfo} orgMembers={orgMembers} allegations={caseAllegations} documentFindings={evidenceTab.documentFindings} documentAnalysisLoading={evidenceTab.documentAnalysisLoading} onAnalyseEvidence={(evidenceId)=>evidenceTab.analyseEvidenceDocument(cs, evidenceId)} onAcceptFinding={(evidenceId, finding)=>evidenceTab.acceptDocumentFinding(cs, evidenceId, finding)} onDismissFinding={(evidenceId, finding)=>evidenceTab.dismissDocumentFinding(cs, evidenceId, finding)} onRemoveEvidence={(evidenceId)=>evidenceTab.removeEvidence(cs.id, evidenceId)} promptDialog={promptDialog} audit={audit}/>
             ),
                       people: (
-            <PeopleTab cs={cs}/>
+            <>
+              <PeopleTab cs={cs}/>
+              {/* Wave B.2 — Case roles is case ADMINISTRATION, not analysis. It sits with
+                  the people it is about. Not a duplicate of Participants: Participants is
+                  derived from the case (employee, chair, witnesses), while this assigns
+                  formal roles backed by case_access. Same panel, same handler, same
+                  server-side can_grant_case_access authority — placement only. */}
+              <div style={{marginTop:16}}>
+                <div style={{...TYPE.metadata,color:COLOR.inkFaint,marginBottom:10}}>Case roles</div>
+                <CaseRolesPanel cs={cs} caseAccess={caseAccess} orgMembers={orgMembers} assignCaseRole={overview.assignCaseRole}/>
+              </div>
+            </>
             ),
                       tasks: (
             <CaseTasksPanel cs={cs} tasks={caseTaskList} createCaseTask={createCaseTask} toggleCaseTaskDone={toggleCaseTaskDone} deleteCaseTask={deleteCaseTask} fmtDate={fmtDate} isHR={isHR} onGeneratePlan={()=>generateInvestigationPlan(cs)} planLoading={!!investigationPlanLoading[cs.id]}/>
@@ -1286,7 +1374,33 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
             <OutcomeTab cs={cs} stage={stage} fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} setOutcomeType={setOutcomeType} setCompletingOutcomeDetails={setCompletingOutcomeDetails} canDecide={canDecide} onDraftOutcomeLetter={draftOutcomeLetter}/>
             ),
                       ai: (
-            <AIAssistantTab cs={cs} chatHistory={aiTab.caseChatHistory[cs.id]||[]} chatInput={aiTab.caseChatInput} setChatInput={aiTab.setCaseChatInput} chatProcessing={aiTab.caseChatProcessing} sendChat={()=>aiTab.sendCaseChat(cs)} overview={aiTab.caseOverview[cs.id]} overviewLoading={!!aiTab.caseOverviewLoading[cs.id]} generateOverview={()=>aiTab.generateCaseOverview(cs)} overviewSources={aiTab.caseOverviewSources?.[cs.id]} onAskWhy={setWhySignal}/>
+            <CompassAnalysisPanel cs={cs} readiness={readiness} currentRisk={currentRisk}
+              nextAction={{
+                signal: nextActionSignal,
+                policyRef: nextActionPolicyRef,
+                loading: nextActionLoading?.[cs.id],
+                onGenerate: ()=>generateNextBestAction(cs),
+                onDismiss: ()=>changeSignalStatus(nextActionSignal.id, "dismissed"),
+                onMarkNotRelevant: ()=>changeSignalStatus(nextActionSignal.id, "not_relevant"),
+                onAskWhy: ()=>setWhySignal(nextActionSignal),
+                extraActions: nextActionSignal ? [
+                  {label:"Accept", onClick:()=>changeSignalStatus(nextActionSignal.id, "accepted")},
+                  {label:"Create task", onClick:()=>{createCaseTask(cs.id, {name:nextActionSignal.title}); changeSignalStatus(nextActionSignal.id, "accepted");}},
+                ] : [],
+              }}
+              caseIntel={{ unansweredCovered: overview.unansweredCovered, unansweredLoading: overview.unansweredLoading,
+                           generateUnansweredQuestions: overview.generateUnansweredQuestions,
+                           generateInconsistencies: overview.generateInconsistencies,
+                           inconsistencyLoading: overview.inconsistencyLoading?.[cs.id],
+                           allegations: caseAllegations }}
+              caseActions={{ changeSignalStatus, createCaseTask, onAskWhy: setWhySignal, linkSignalToAllegation: overview.linkSignalToAllegation }}
+              caseSignals={{ unanswered: openSignalsForCase(caseSignals, cs.id, "unanswered_question"), inconsistencies: openSignalsForCase(caseSignals, cs.id, "inconsistency") }}
+              automation={{ suggestions: automationSuggestions, automationLevels: overview.automationLevels, onResendReminder: overview.onResendReminder }}
+              riskItems={compassRiskItems}
+              ai={{ chatHistory: aiTab.caseChatHistory[cs.id]||[], chatInput: aiTab.caseChatInput, setChatInput: aiTab.setCaseChatInput,
+                    chatProcessing: aiTab.caseChatProcessing, sendChat: ()=>aiTab.sendCaseChat(cs), overview: aiTab.caseOverview[cs.id],
+                    overviewLoading: !!aiTab.caseOverviewLoading[cs.id], generateOverview: ()=>aiTab.generateCaseOverview(cs),
+                    overviewSources: aiTab.caseOverviewSources?.[cs.id] }}/>
             ),
     };
 

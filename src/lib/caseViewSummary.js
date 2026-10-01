@@ -57,7 +57,7 @@ export function isClosedStage(stage) {
 //
 // Returns null when there is genuinely nothing factual to say, rather than
 // padding the screen with a sentence that means "this case exists".
-export function describeWhatIsHappening({ cs, stage, allegations = [], meetings = [] } = {}) {
+export function describeWhatIsHappening({ cs, stage, allegations = [], meetings = [], scheduledWhen = null } = {}) {
   if (!cs) return null;
 
   const genuine = meetings.filter(isGenuineMeeting);
@@ -91,9 +91,21 @@ export function describeWhatIsHappening({ cs, stage, allegations = [], meetings 
   if (detail.length) parts.push(`${detail.join(" and ")}.`);
 
   // The single most immediate fact about a meeting, if there is one.
+  //
+  // Wave B.2 — the meeting clause absorbs the one piece of CLASS A state the
+  // next-step reason used to carry in its own strip: when a scheduled meeting is
+  // actually arranged for. That date appears nowhere else, so it is a fact worth
+  // a clause; "it does not need starting or resuming again" is not, because the
+  // single action and the status chip already say so.
   if (live) parts.push("A meeting is in progress.");
-  else if (inReview) parts.push("A meeting record is awaiting review.");
-  else if (scheduled.length) parts.push(`${scheduled.length === 1 ? "A meeting is" : `${scheduled.length} meetings are`} scheduled.`);
+  else if (inReview) parts.push("The meeting has been held and its record is awaiting review.");
+  else if (scheduled.length) {
+    parts.push(
+      scheduled.length === 1
+        ? `A meeting is scheduled${scheduledWhen ? ` for ${scheduledWhen}` : ""}.`
+        : `${scheduled.length} meetings are scheduled.`
+    );
+  }
 
   return parts.length ? parts.join(" ") : null;
 }
@@ -129,9 +141,14 @@ export function caseDetailSections({
   allegations = [], evidence = [], meetings = [], tasks = [],
   participants = [], documents = [], communications = [],
   hasOutcome = false, canSeeAnalysis = false, canSeeThemes = false,
+  hasInformation = false, showExposure = false,
 } = {}) {
   const openTasks = tasks.filter(t => t && !t.done);
   return [
+    // Wave B.2 — basic case facts stop hiding inside a section called "Checks
+    // and analysis", which was neither. Absent entirely when the case has none,
+    // so a blank description is never the first thing on the list.
+    { id: "information", label: "Case information", count: null, always: hasInformation },
     { id: "allegations", label: "Allegations", count: allegations.length, always: true },
     { id: "evidence", label: "Evidence", count: evidence.length, always: true },
     { id: "meetings", label: "Meetings", count: meetings.filter(isGenuineMeeting).length, always: true },
@@ -144,17 +161,27 @@ export function caseDetailSections({
     // "AI Assistant" named the mechanism. This names what it is: Compass's own
     // reading of the case, available to whoever may already see the case.
     { id: "ai", label: "Compass analysis", count: null, always: canSeeAnalysis },
-    { id: "overview", label: "Checks and analysis", count: null, always: true },
+    // Wave B.2 — a specialist estimator, not case management. It appears only
+    // for a case where it is already in use or where risk has genuinely been
+    // assessed above LOW (isRiskExposureRelevant, unchanged), and it sits last
+    // so it never competes with the manager's process journey.
+    { id: "exposure", label: "Tribunal exposure estimate", count: null, always: showExposure },
+    // "Checks and analysis" is gone. It was a bucket, not a category: basic case
+    // facts, an AI readiness score, a tribunal calculator, an action to record a
+    // suspension and a role-assignment form shared one accordion because they
+    // were all once on the same legacy tab. Each now has a coherent home.
   ].filter(s => s.always || (typeof s.count === "number" && s.count > 0));
 }
 
 // Every section id the screen can render, so an explicitly requested one can be
 // restored even when it would otherwise be filtered out as empty.
 const ALL_SECTIONS = Object.freeze({
-  overview: "Checks and analysis", timeline: "Full record", allegations: "Allegations",
+  // Wave B.2 — "overview" ("Checks and analysis") is gone from the vocabulary
+  // too, so a stale deep link cannot resurrect the bucket as an empty section.
+  information: "Case information", timeline: "Full record", allegations: "Allegations",
   evidence: "Evidence", meetings: "Meetings", people: "Participants", tasks: "Tasks",
   documents: "Documents", communications: "Communications", themes: "Themes",
-  outcome: "Outcome", ai: "Compass analysis",
+  outcome: "Outcome", ai: "Compass analysis", exposure: "Tribunal exposure estimate",
 });
 
 // A section the user has EXPLICITLY asked for is always available.
