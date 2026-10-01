@@ -106,11 +106,16 @@ export function reasonForDefaultSurface(nextStep) {
 //
 // It is NOT a home for an explanation of the button above it. With none of the
 // below present it does not render — which is the whole of finding one.
+// NOTE on what is deliberately NOT in this list: a persisted next-action signal.
+// It used to render inside this strip, so an early version of this predicate
+// counted it — but Wave B.2 moved that signal's card to Compass analysis. Left in,
+// it made the band paint itself for content that is no longer there: found in
+// production UAT as a pale-purple banner whose entire text was "Details ▾". A
+// thing only earns the container if the container is where it renders.
 export function hasSubstantiveContext({
   exceptionReason = null,
   hasSecondaryAction = false,
   hasInvestigatorProgress = false,
-  hasNextActionSignal = false,
   showAppealInviteLogistics = false,
   showInlineDraft = false,
   hasOpenChecklist = false,
@@ -119,7 +124,6 @@ export function hasSubstantiveContext({
     exceptionReason ||
     hasSecondaryAction ||
     hasInvestigatorProgress ||
-    hasNextActionSignal ||
     showAppealInviteLogistics ||
     showInlineDraft ||
     // Undone per-meeting next steps live behind this strip's "Details" toggle,

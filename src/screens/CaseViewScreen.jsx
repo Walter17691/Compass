@@ -992,7 +992,6 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
         exceptionReason,
         hasSecondaryAction: !!nextStep.secondary,
         hasInvestigatorProgress: !!(isHR&&currentInvestigator),
-        hasNextActionSignal: !!nextActionSignal,
         showAppealInviteLogistics,
         showInlineDraft: showDraft,
         hasOpenChecklist: openChecklist.length > 0,
@@ -1004,7 +1003,7 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
           // strip again in miniature, so it loses the banner treatment and keeps
           // the content.
           const onlyChecklist = !exceptionReason && !nextStep.secondary && !(isHR&&currentInvestigator)
-            && !nextActionSignal && !showAppealInviteLogistics && !showDraft;
+            && !showAppealInviteLogistics && !showDraft;
           return onlyChecklist
             ? {background:"transparent",borderBottom:"1px solid #EDE5D8",padding:"6px 28px",flexShrink:0}
             : {background:"#F5F3FF",borderBottom:"1px solid #DDD9F5",padding:"12px 28px",flexShrink:0};

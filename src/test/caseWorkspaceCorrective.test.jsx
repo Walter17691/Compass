@@ -489,3 +489,35 @@ describe('B.2c — the attention list does not say the same thing twice', () => 
     expect(screen.getAllByText('Note warning on HR record')).toHaveLength(2);
   });
 });
+
+describe('B.2c — a next-action signal does not paint a band it no longer renders in', () => {
+  // Found in production UAT on UAT - Fresh Golden Path 2: a pale-purple banner
+  // whose entire text content was "Details ▾". The signal's card moved to Compass
+  // analysis in B.2; the predicate still counted it as strip content.
+  const signal = { id: 'na1', caseId: 'c1', type: 'next_action', status: 'open',
+    title: 'Interview the named witness', reasoning: 'Grounded in the record.' };
+
+  it('the band is not painted when the signal is the only reason given', () => {
+    const { container } = renderCase(
+      { meetings: [mtg({ status: 'completed', record: 'x', nextSteps: [{ step: 'Issue outcome letter', done: false }] })] },
+      { nextStep: { label: 'Draft outcome letter', action: 'outcome_letter', primary: true },
+        extraShell: { caseSignals: [signal] } },
+    );
+    const band = screen.getByRole('button', { name: /Details/ }).parentElement;
+    expect(band.style.background).not.toBe('rgb(245, 243, 255)');
+    expect(container).toBeTruthy();
+  });
+
+  it('and with NOTHING else at all, there is no band of any kind', () => {
+    renderCase({}, { nextStep: { label: 'Draft outcome letter', action: 'outcome_letter', primary: true },
+      extraShell: { caseSignals: [signal] } });
+    expect(screen.queryByRole('button', { name: /Details/ })).not.toBeInTheDocument();
+  });
+
+  it('the signal itself still renders — in Compass analysis, where it lives', async () => {
+    const user = userEvent.setup();
+    renderCase({}, { extraShell: { caseSignals: [signal] } });
+    await user.click(screen.getByRole('tab', { name: /Compass analysis/ }));
+    expect(screen.getByText('Interview the named witness')).toBeInTheDocument();
+  });
+});

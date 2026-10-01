@@ -119,7 +119,6 @@ describe('Wave B.2 — the strip appears only when it carries something', () => 
       { exceptionReason: 'two meetings in progress' },
       { hasSecondaryAction: true },
       { hasInvestigatorProgress: true },
-      { hasNextActionSignal: true },
       { showAppealInviteLogistics: true },
       { showInlineDraft: true },
       { hasOpenChecklist: true },
@@ -129,6 +128,12 @@ describe('Wave B.2 — the strip appears only when it carries something', () => 
 
   it('defaults to closed rather than open', () => {
     expect(hasSubstantiveContext()).toBe(false);
+  });
+
+  it('a next-action signal does NOT open it — its card lives in Compass analysis', () => {
+    // Corrective: counting content that renders somewhere else painted a banner
+    // around nothing. Found in production UAT, not by a test.
+    expect(hasSubstantiveContext({ hasNextActionSignal: true })).toBe(false);
   });
 
   it('the screen actually gates the strip on it', () => {
