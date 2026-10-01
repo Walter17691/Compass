@@ -1,15 +1,26 @@
 import { useState, useRef, useEffect } from 'react';
 import { isGrievanceCase } from '../../lib/caseStage';
 import { isTerminalStatus, signatureStatusLabel } from '../../lib/eSignature';
+import { meetingRecordState, meetingsSummary } from '../../lib/meetingRecordState';
 import { requestManualSignatureConfirmation } from '../../lib/humanOverride';
 import { SignedRecordModal } from '../SignedRecordModal';
-import { COLOR, FONT } from '../../styles/tokens';
+import { COLOR, FONT, TYPE } from '../../styles/tokens';
 
 // Integrations & Workflow Automation (Phase 5, IP27, §21) — badge colour
 // per widened signing_requests status. sent/opened are both "still
 // waiting" (amber); signed/acknowledged are both a real completion
 // (green); declined/expired are their own distinct, honest states —
 // neither one gets folded into "pending" or silently hidden.
+// Wave B.2 corrective — the record-state palette, matching the signature badges
+// already beside it so the two read as one row of state rather than two systems.
+const RECORD_TONE = {
+  pending:   { color:"#6B6375", bg:"#F5F1EA" },
+  live:      { color:"#8A5A17", bg:"#FEF5E7" },
+  attention: { color:"#B87520", bg:"#FEF5E7" },
+  done:      { color:"#1A7A4A", bg:"#E8F5EE" },
+  muted:     { color:"#9B9098", bg:"#F5F1EA" },
+};
+
 const SIGN_STATUS_STYLE = {
   sent: { color: "#B87520", bg: "#FEF5E7" },
   opened: { color: "#B87520", bg: "#FEF5E7" },
@@ -77,7 +88,13 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
     {id:"appeal",label:"Appeal",meetings:appealMeetings,color:"#B87520"},
     ...(otherMeetings.length>0?[{id:"other",label:"Other",meetings:otherMeetings,color:"#6B6375"}]:[]),
   ].filter(s=>s.meetings.length>0||s.id==="investigation");
-  const activeStage = allStages.find(s=>s.id===activeCaseStage)||allStages[0];
+  // Wave B.2 corrective — the default stage is the first one that actually HAS
+  // meetings, not always "Investigation". A case whose only meeting is a
+  // disciplinary hearing used to open on an empty Investigation stage, so the
+  // meeting the user came to find was one unexplained click away. An explicit
+  // choice still wins; this only changes where the eye lands first.
+  const firstPopulatedStage = allStages.find(s=>s.meetings.length>0);
+  const activeStage = allStages.find(s=>s.id===activeCaseStage) || firstPopulatedStage || allStages[0];
 
   const startMeeting = (type) => {
     setMeetingSetup(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type}));
@@ -128,7 +145,17 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
           <div style={{fontSize:13,fontWeight:500,color:"#1A1535"}}>{m.type}</div>
           <div style={{fontSize:11,color:"#9B9098",marginTop:2}}>{fmtDate(m.date)} · {m.savedBy||m.manager||"HR Manager"}</div>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end"}}>
+          {/* Wave B.2 corrective — the RECORD's own state. Human testing: "the Case
+              View does not tell me the lifecycle/status of that meeting record."
+              The signature badge beside this was already here; what was missing was
+              whether the write-up is a draft awaiting review, finished, or the
+              meeting has not happened yet. Both are stored; only one was shown.
+              meetingRecordState reads meetings[].status and invents nothing. */}
+          {(()=>{ const rs = meetingRecordState(m); return rs ? (
+            <span style={{fontSize:10,fontWeight:600,borderRadius:4,padding:"2px 7px",
+                          color: RECORD_TONE[rs.tone].color, background: RECORD_TONE[rs.tone].bg}}>{rs.label}</span>
+          ) : null; })()}
           {m.riskScore?.rating&&m.riskScore.rating!=="UNKNOWN"&&<span style={{fontSize:10,fontWeight:600,color:m.riskScore.rating==="HIGH"?"#C84B2F":"#B87520",background:m.riskScore.rating==="HIGH"?"#FEF0EB":"#FEF5E7",borderRadius:4,padding:"2px 7px"}}>{m.riskScore.rating}</span>}
           {m.signStatus&&SIGN_STATUS_STYLE[m.signStatus]&&<span style={{fontSize:10,color:SIGN_STATUS_STYLE[m.signStatus].color,background:SIGN_STATUS_STYLE[m.signStatus].bg,borderRadius:4,padding:"2px 7px",fontWeight:600}}>{signatureStatusLabel(m.signStatus)}{(m.signStatus==="sent"||m.signStatus==="opened")?" — awaiting signature":""}</span>}
           {m.signStatus&&!isTerminalStatus(m.signStatus)&&<button onClick={()=>markMeetingSigned(m)} style={{fontSize:10,background:"#E8F5EE",border:"none",borderRadius:4,padding:"2px 8px",color:"#1A7A4A",cursor:"pointer",fontFamily:FONT.sans}}>Mark signed</button>}
@@ -187,10 +214,17 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
 
   return (
     <>
+      {/* Wave B.2 corrective — the whole case's meeting state, above the stage
+          filter. The filter shows one stage at a time, so a case with an
+          investigation record awaiting review and a disciplinary in progress
+          showed neither fact until you clicked through. This says it once. */}
+      {meetingsSummary(meetings)&&(
+        <div style={{...TYPE.metadata,color:COLOR.inkQuiet,marginBottom:12}}>{meetingsSummary(meetings)}</div>
+      )}
       <div style={{display:"flex",gap:2,marginBottom:16}}>
         {allStages.map(s=>(
           <button key={s.id} onClick={()=>setActiveCaseStage(s.id)}
-            style={{padding:"6px 14px",borderRadius:6,border:"none",background:activeCaseStage===s.id||(!activeCaseStage&&s.id===allStages[0].id)?COLOR.purpleTint:"none",color:activeStage.id===s.id?s.color:"#6B6375",fontWeight:activeStage.id===s.id?600:400,fontSize:13,cursor:"pointer",fontFamily:FONT.sans,display:"flex",alignItems:"center",gap:5}}>
+            style={{padding:"6px 14px",borderRadius:6,border:"none",background:activeStage.id===s.id?COLOR.purpleTint:"none",color:activeStage.id===s.id?s.color:"#6B6375",fontWeight:activeStage.id===s.id?600:400,fontSize:13,cursor:"pointer",fontFamily:FONT.sans,display:"flex",alignItems:"center",gap:5}}>
             {s.label}
             {s.meetings.length>0&&<span style={{fontSize:10,background:activeStage.id===s.id?s.color:"#E8E0D0",color:activeStage.id===s.id?"#fff":"#6B6375",borderRadius:10,padding:"1px 6px",fontWeight:600}}>{s.meetings.length}</span>}
           </button>

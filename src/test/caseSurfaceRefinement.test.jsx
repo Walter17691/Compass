@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import {
   REASON_CLASS, classifyNextStepReason, reasonForDefaultSurface,
   scheduledMeetingWhen, hasSubstantiveContext, caseInformationItems, hasCaseInformation,
@@ -11,6 +11,7 @@ import { caseDetailSections, describeWhatIsHappening } from '../lib/caseViewSumm
 import { estimateExposure } from '../lib/tribunalEstimate.js';
 import { CaseInformationPanel } from '../components/caseTabs/CaseInformationPanel.jsx';
 import { TribunalExposurePanel } from '../components/caseTabs/TribunalExposurePanel.jsx';
+import { renderCase } from './support/renderCaseView.jsx';
 
 // ─────────────────────────────────────────────────────────────────────────
 // WAVE B.2 — the orphaned strip, and the bucket called "Checks and analysis".
@@ -136,13 +137,28 @@ describe('Wave B.2 — the strip appears only when it carries something', () => 
     expect((caseViewSrc.match(/>\{exceptionReason\}</g) || []).length).toBe(1);
   });
 
-  it('"Ask Compass for its take" no longer has a band under the header', () => {
-    // It exists exactly once, inside Compass analysis.
+  it('the AI shortcut no longer has a band under the header', () => {
     expect(caseViewSrc).not.toContain('Ask Compass for its take');
-    // The RENDERED literal, not the phrase: the panel's own header comment
-    // explains the move and mentions it, which is prose, not a surface.
+  });
+
+  it('ONE front door for the suggested next step, not a heading plus a differently-named button', () => {
+    // Wave B.2 corrective — "Compass's suggested next action" (heading) and
+    // "Ask Compass for its take" (button) were two names for generateNextBestAction.
     const panel = read('src/components/caseTabs/CompassAnalysisPanel.jsx');
-    expect((panel.match(/: "Ask Compass for its take"\}/g) || []).length).toBe(1);
+    expect((panel.match(/: "Ask Compass for its take"\}/g) || []).length).toBe(0);
+    renderCase({});
+    fireEvent.click(screen.getByRole('tab', { name: /Compass analysis/ }));
+    expect(screen.getByText('Suggested next step')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Suggest a next step' })).toBeInTheDocument();
+    expect(screen.queryByText("Compass's suggested next action")).not.toBeInTheDocument();
+  });
+
+  it('every Compass capability says what it is for', () => {
+    renderCase({});
+    fireEvent.click(screen.getByRole('tab', { name: /Compass analysis/ }));
+    // The complaint was that these controls were unexplained.
+    expect(screen.getByText(/One procedural step, grounded in a named fact/)).toBeInTheDocument();
+    expect(screen.getByText(/Never a sanction or an outcome/)).toBeInTheDocument();
   });
 
   it('there is exactly ONE primary action, and the strip holds no copy of it', () => {
@@ -242,10 +258,11 @@ describe('Wave B.2 — each child got a coherent home', () => {
     expect(ids).not.toContain('information');
     // The main surface says nothing about a missing description.
     expect(caseViewSrc).not.toContain('No description recorded');
-    // And the screen derives the flag rather than hard-coding it open — a literal
-    // `hasInformation: true` would put an all-but-empty section on every case.
-    expect(caseViewSrc).toContain('hasInformation: hasCaseInformation(cs, { repeatCount })');
-    expect(caseViewSrc).not.toMatch(/hasInformation:\s*true/);
+    // RENDERED: a case with no information has no Case information destination,
+    // in the bar or behind the overflow.
+    renderCase({});
+    expect(screen.queryByRole('tab', { name: /Case information/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /Case information/ })).not.toBeInTheDocument();
   });
 
   it('but a restrained empty state IS allowed where case information is being read', () => {
@@ -265,7 +282,7 @@ describe('Wave B.2 — each child got a coherent home', () => {
     expect(caseViewSrc).not.toMatch(/primary[^\n]*Record a suspension/);
     // It opens Case information with the field revealed, rather than living
     // under a tribunal calculator.
-    expect(caseViewSrc).toContain('setSuspensionRevealed(true); setActiveTab("information")');
+    expect(caseViewSrc).toContain('setSuspensionRevealed(true); goToDestination("information")');
     // Asserts the GATE, not the label: `false && { label: "Record a suspension" }`
     // still contains the label while removing the action entirely.
     expect(caseViewSrc).toContain('!dateRelevance.suspensionReviewDate && stage!=="closed" && {');
@@ -426,11 +443,11 @@ describe('Wave B.2 — nothing approved was disturbed', () => {
     expect(sidebar).not.toMatch(/SCREENS\.PEOPLE[^}]*indent:true/);
   });
 
-  it('one primary action, the case record, and progressive details all survive', () => {
-    expect((caseViewSrc.match(/>Case record</g) || []).length).toBe(1);
-    expect(caseViewSrc).toContain('caseRecordEntries(cs, caseAllegations');
-    expect(caseViewSrc).toContain('aria-expanded={open}');
-    expect(caseViewSrc).toContain('transform:open?"rotate(90deg)":"none"');
+  it('one primary action and the case record survive, RENDERED', () => {
+    const meeting = { id: 'm1', type: 'disciplinary', status: 'review_draft', record: 'x', endedAt: '2026-09-01T10:00:00Z' };
+    renderCase({ meetings: [meeting] }, { nextStep: REVIEW_DRAFT_STEP });
+    expect(screen.getAllByRole('button', { name: /Review meeting record/i })).toHaveLength(1);
+    expect(screen.getAllByText('Case record')).toHaveLength(1);
   });
 
   it('Wave A and Wave 0 are still intact', () => {
@@ -442,58 +459,6 @@ describe('Wave B.2 — nothing approved was disturbed', () => {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // §32 — the rendered surface, across the case states the brief named.
-import { CaseViewScreen } from '../screens/CaseViewScreen.jsx';
-
-const renderCase = (caseOverrides = {}, { nextStep = null, stage = 'disciplinary', extraShell = {} } = {}) => {
-  const theCase = {
-    id: 'c1', employeeName: 'Sam Employee', manager: 'Alex Manager',
-    meetings: [], evidence: [], confidential: false, caseType: 'misconduct', ...caseOverrides,
-  };
-  const shell = {
-    cases: [theCase], activeCaseId: 'c1', setScreen: noop, confirmDialog: noop,
-    getCaseStage: () => stage, getNextStep: () => nextStep, fmtDate: d => d || '',
-    getProceedingTitle: () => 'Disciplinary Investigation',
-    getCaseStatus: () => ({ label: 'Disciplinary record in review', color: '#000', bg: '#fff' }),
-    setMeetingSetup: noop, getEmployeeRecord: () => null, orgMembers: [], setCaseInfo: noop,
-    saveCases: noop, setReviewOutput: noop, setMeetingType: noop, showToast: noop,
-    currentUser: { user_id: 'u1', name: 'Test User' }, setLetterOutput: noop, handleLetter: noop,
-    isHR: true, caseAccess: [], allegations: [], auditLog: [], caseTasks: [], createCaseTask: noop,
-    caseSignals: [], changeSignalStatus: noop, toggleCaseTaskDone: noop, setShowHandoffModal: noop,
-    setShowAppealOfficerModal: noop, generateInvestigationPlan: noop, investigationPlanLoading: {},
-    ...extraShell,
-  };
-  const header = {
-    showAppealInput: {}, setShowAppealInput: noop, appealText: {}, setAppealText: noop,
-    recordAppealReceived: async () => true, setShowReassignModal: noop, setShowAssignInvestigatorModal: noop,
-    setShowOutcomeModal: noop, setShowSignModal: noop, letterOutput: '', aiProcessing: false, aiError: null,
-    toggleNextStepDone: noop, concludingInvestigation: false, attemptSubmitInvestigation: noop,
-    openEscalateModal: noop, openHrInterventionModal: noop, generateNextBestAction: noop,
-    nextActionLoading: {}, changesSinceView: [], changesSummary: '', changesSummaryLoading: false,
-  };
-  const overview = {
-    linkSignalToAllegation: noop, requestOverrideReason: noop, requestPolicyDeviationReason: noop,
-    assignCaseRole: noop, hrReviewRequests: [], respondToReview: noop, resolveInvestigationReview: noop,
-    wellbeingNotes: [], dueSoon: [], processTemplates: [], unansweredCovered: [], unansweredLoading: false,
-    generateUnansweredQuestions: noop, generateInconsistencies: noop, inconsistencyLoading: {},
-    ohReportFindings: [], ohReportAnalysisLoading: false, onAnalyseOhReport: noop, onAcceptOhFinding: noop,
-    onDismissOhFinding: noop, onSendForSignature: noop, automationLevels: {}, onResendReminder: noop,
-  };
-  return render(<CaseViewScreen
-    shell={shell} header={header} overview={overview} initialTab={null} clearInitialTab={noop} deleteCaseTask={noop}
-    timeline={{ toggleTimelineExclude: noop, editTimelineDescription: noop, generateTimelineRelevance: noop, timelineRelevanceLoading: {}, loadJsPDF: noop }}
-    allegationsTab={{ createAllegation: noop, patchAllegation: noop, changeAllegationStatus: noop, deleteAllegation: noop,
-      evidenceSuggestions: {}, evidenceSuggestionsLoading: {}, generateEvidenceSuggestions: noop, acceptEvidenceSuggestion: noop,
-      rejectEvidenceSuggestion: noop, generateAppealReview: noop, appealReviewLoading: false, recordAppealOutcome: noop,
-      policies: [], consistencyReview: {}, consistencyReviewLoading: false, generateConsistencyReview: noop }}
-    meetingsTab={{ activeCaseStage: null, setActiveCaseStage: noop, onAcceptSavedSuggestion: noop, onDismissSavedSuggestion: noop }}
-    evidenceTab={{ documentFindings: {}, documentAnalysisLoading: {}, analyseEvidenceDocument: noop, acceptDocumentFinding: noop, dismissDocumentFinding: noop, removeEvidence: noop }}
-    documentsTab={{ onGenerateHearingPack: noop, hearingPackGenerating: {}, onDraftCorrespondence: noop }}
-    themesTab={{ organisationThemes: [], caseThemes: [], themeSuggestions: {}, themeSuggestionLoading: {}, onSuggestThemes: noop,
-      onConfirmThemeSuggestion: noop, onDismissThemeSuggestion: noop, onAssignExistingTheme: noop, onRemoveTheme: noop }}
-    aiTab={{ caseChatHistory: {}, caseChatInput: '', setCaseChatInput: noop, caseChatProcessing: false, sendCaseChat: noop,
-      caseOverview: {}, caseOverviewLoading: {}, generateCaseOverview: noop, caseOverviewSources: {} }}
-  />);
-};
 
 const REVIEW_DRAFT_STEP = {
   label: 'Review meeting record', action: 'review_meeting_record', primary: true, reviewMeetingId: 'm1',

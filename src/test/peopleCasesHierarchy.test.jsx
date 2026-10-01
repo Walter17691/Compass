@@ -237,9 +237,12 @@ describe('Wave B.1 — the rest of Wave B is preserved', () => {
       .forEach(t => expect(caseViewCode, t).not.toContain(t));
   });
 
-  it('Show/Hide words are replaced by a chevron, with state still explicit', () => {
+  it('the repeated Show/Hide words never came back', () => {
+    // Wave B.2 corrective — the accordion they belonged to is gone entirely,
+    // replaced by a horizontal workspace. The accessible-state guarantee moved
+    // with it and is asserted on the RENDERED tablist in
+    // caseSurfaceRefinement.test.jsx, not on source text here.
     expect(caseViewCode).not.toMatch(/\{open\?"Hide":"Show"\}/);
-    expect(caseViewCode).toContain('aria-expanded={open}');
   });
 
   it('Delete case moved to the header menu and is never primary', () => {

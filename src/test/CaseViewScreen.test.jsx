@@ -169,32 +169,50 @@ describe('CaseViewScreen — tab smoke test (Phase 6.5, task #205)', () => {
       expect(screen.getByRole('button', { name: 'View full record' })).toBeInTheDocument();
     });
 
-    it('supporting material is reachable as collapsed sections that expose their state', () => {
+    // Wave B.2 corrective — the vertical accordion is replaced by a horizontal
+    // workspace. These assert the SAME guarantees Wave B cared about (reachable,
+    // one surface at a time, deep links land) against the navigation that
+    // actually ships, and by interaction rather than by attribute inspection.
+    it('the workspace is a horizontal tablist, not a stack of collapsed rows', () => {
       render(<CaseViewScreen {...baseProps} />);
-      expect(screen.getByRole('heading', { name: 'Case details' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /^Allegations/ })).toHaveAttribute('aria-expanded', 'false');
+      const bar = screen.getByRole('tablist', { name: 'Case workspace' });
+      expect(bar).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Case details' })).not.toBeInTheDocument();
+      // A destination is open on arrival — there is no "everything closed" state.
+      expect(within(bar).getByRole('tab', { selected: true })).toBeInTheDocument();
     });
 
-    it('expanding a section shows its existing panel, unchanged', async () => {
+    it('selecting a destination shows its existing panel, unchanged', async () => {
       const user = userEvent.setup();
       render(<CaseViewScreen {...baseProps} />);
-      await user.click(screen.getByRole('button', { name: /^Allegations/ }));
+      // Allegations are now content of the Investigation, not a peer of it.
       expect(screen.getByText(/No allegations recorded yet/)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /^Allegations/ })).toHaveAttribute('aria-expanded', 'true');
+      await user.click(screen.getByRole('tab', { name: /^Meetings/ }));
+      expect(screen.getByRole('tab', { name: /^Meetings/ })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.queryByText(/No allegations recorded yet/)).not.toBeInTheDocument();
     });
 
-    it('only one section is open at a time, so the page cannot become the old wall', async () => {
+    it('exactly one destination is selected at a time', async () => {
       const user = userEvent.setup();
       render(<CaseViewScreen {...baseProps} />);
-      await user.click(screen.getByRole('button', { name: /^Allegations/ }));
-      await user.click(screen.getByRole('button', { name: /^Evidence/ }));
-      expect(screen.getByRole('button', { name: /^Allegations/ })).toHaveAttribute('aria-expanded', 'false');
-      expect(screen.getByRole('button', { name: /^Evidence/ })).toHaveAttribute('aria-expanded', 'true');
+      const bar = screen.getByRole('tablist', { name: 'Case workspace' });
+      await user.click(screen.getByRole('tab', { name: /^Meetings/ }));
+      expect(within(bar).getAllByRole('tab').filter(t => t.getAttribute('aria-selected') === 'true')).toHaveLength(1);
+      await user.click(screen.getByRole('tab', { name: /^Documents/ }));
+      expect(within(bar).getAllByRole('tab').filter(t => t.getAttribute('aria-selected') === 'true')).toHaveLength(1);
+      expect(screen.getByRole('tab', { name: /^Documents/ })).toHaveAttribute('aria-selected', 'true');
     });
 
-    it('a deep link still lands, even on a section that would be empty', () => {
+    it('a deep link in the OLD vocabulary still lands on the right destination', () => {
+      // "people" was a section id; Participants & roles is now behind the overflow,
+      // so landing means the panel renders, not that a row is expanded.
       render(<CaseViewScreen {...baseProps} initialTab="people" />);
-      expect(screen.getByRole('button', { name: /^Participants/ })).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByText(/Participants \(/)).toBeInTheDocument();
+    });
+
+    it('a deep link to a section that no longer exists lands somewhere real', () => {
+      render(<CaseViewScreen {...baseProps} initialTab="timeline" />);
+      expect(screen.getByRole('tab', { name: /^Record/ })).toHaveAttribute('aria-selected', 'true');
     });
   });
 

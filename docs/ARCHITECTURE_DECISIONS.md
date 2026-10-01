@@ -1304,3 +1304,83 @@ still available, in the menu.
 A process type with no validated recipe still gets a neutral state and no invented
 next step. Nothing in this wave softened that, and it is asserted here as well as
 in its own suite.
+
+## AD-010 — The case workspace is horizontal, and a stage is not a row
+
+**Status:** **implemented** in the Wave B.2 corrective pass (2026-10-01).
+Presentation and information architecture only — the process engine, the stage
+registries and the validated workflow are untouched.
+
+**Supersedes the navigation half of AD-009.** AD-009's substance stands: one
+calm surface, one primary action, no twelve destinations, no second engine. What
+it got wrong was the shape of the workspace underneath.
+
+### A vertical accordion is not a workspace
+
+AD-009 replaced twelve tabs with progressive vertical sections. In production use
+that read as a settings screen: tall rows to open and close, scrolling past what
+you did not want, one surface at a time with no sense of where you were. Human
+product direction after review: horizontal navigation.
+
+The important constraint was that the destinations must NOT be the old rows
+promoted. They were derived from what each thing actually is:
+
+| Kind | Members | Where it went |
+|---|---|---|
+| procedural stage | investigation | **Investigation** destination |
+| case artefact | allegations, evidence | **content of** the stage they belong to |
+| procedural events | meetings | **Meetings** (they span every stage) |
+| issued / received | letters, files, correspondence | **Documents** |
+| case history | the chronology | **Record** |
+| advisory | Compass's analysis | **Compass analysis** |
+| stage result | outcome | **Outcome**, only once one exists |
+| administration | tasks, participants, roles, case information | overflow |
+| organisational classification | themes | overflow |
+| specialist tool | the tribunal estimator | overflow |
+
+Allegations and evidence stopped being peers of the stage that produces them.
+Themes describe patterns across the ORGANISATION, not this case's procedure. The
+estimator is consumed by nothing.
+
+### The investigation had no home
+
+Human finding: "An Investigation meeting filter is not an Investigation
+workspace." A complete investigation workflow already existed — allegations,
+evidence, the seeded seven-step checklist, an assigned investigator with a target
+date, investigation meetings and their witnesses, the report, the submit-findings
+gate — spread across five separate accordion rows.
+
+`InvestigationTab` gathers them onto one surface. It holds **no state, no write
+capability and no store access**, asserted by test: every record it shows is the
+existing record from the existing source. It is a view of the workflow, not a
+second one. A process type whose own stage registry has no `investigation` stage
+— a grievance — gets "Allegations & evidence" instead, because naming it an
+investigation would assert a procedure that type does not have.
+
+### Responsive overflow, never a fallback to the stack
+
+The bar measures real rendered widths and moves the rightmost destinations into
+"More" rather than wrapping. Order is preserved so nothing jumps position as the
+window resizes, and it never collapses below two visible destinations. It does
+not revert to a vertical list at any width.
+
+### Meeting state comes from storage, not inference
+
+`meetingRecordState` labels `meetings[].status` (scheduled / in_progress /
+review_draft / completed / cancelled) and `meetingSignatureState` labels the
+signature leg mirrored down from `signing_requests`. They are **separate**: a
+completed record never sent for signature is not awaiting anything. An
+unrecognised stored value is never relabelled into something friendlier, and no
+status the backend cannot produce is invented.
+
+### The P0 that changed the verification standard
+
+`<GuardrailsPanel>` shipped in CaseViewScreen's JSX **unimported** from Wave B
+and crashed the Case View for every case with an open guardrail — 252 cases, 8.5%
+of production. Three waves of guardrail assertions had read source text and never
+rendered the branch. Core `no-undef` cannot see JSX element names, so lint passed;
+Vite resolves them at runtime, so the build passed.
+
+Two permanent guards: `react/jsx-no-undef` is now enabled, and critical UI
+branches are verified by rendering them. `src/test/support/renderCaseView.jsx`
+exists so that is cheap.
