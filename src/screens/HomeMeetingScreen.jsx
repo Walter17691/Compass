@@ -2,6 +2,8 @@ import { isGenuineMeetingRecord } from '../lib/caseStage.js';
 import { useState } from 'react';
 import { EmployeeSelect } from '../components/EmployeeSelect';
 import { SCREENS, MEETING_TYPES } from '../constants';
+import { meetingSetupActions, SETUP_ACTION } from '../lib/meetingSetupAction';
+import { COLOR, FONT } from '../styles/tokens';
 import { invitationGuidance } from '../lib/invitationGuidance';
 import { caseRequirementNotice, CASE_REQUIREMENT } from '../lib/meetingCaseRequirement';
 import { CheckIcon, WarningIcon } from '../components/Icons';
@@ -491,6 +493,17 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
               ? !meetingSetup.employee.trim()
               : !meetingSetup.employeeId;
             const disabled = parentageMissing||!meetingSetup.type||!!caseNotice;
+            // Wave C1 — three equal-width controls, with "Start meeting" filled in
+            // every state including after a future date and time had been entered.
+            // Prepare is not a lifecycle transition at all, so it is never the
+            // primary; between the two that are, the manager's own input decides.
+            // Every control stays present and every handler is unchanged — this
+            // governs emphasis only.
+            const setupActions = meetingSetupActions(meetingSetup, { disabled });
+            const isPrimaryAction = id => setupActions.primary?.id === id;
+            const actionStyle = (id, enabled) => isPrimaryAction(id)
+              ? {flex:1,background:enabled?COLOR.purple:COLOR.border,border:"none",borderRadius:10,padding:"14px",fontSize:15,color:enabled?COLOR.paper:COLOR.inkQuiet,fontWeight:600,cursor:enabled?"pointer":"not-allowed",transition:"all 0.15s",fontFamily:FONT.sans}
+              : {flex:"0 1 auto",background:"none",border:"none",borderRadius:10,padding:"14px 12px",fontSize:14,color:enabled?COLOR.purple:COLOR.inkQuiet,fontWeight:600,cursor:enabled?"pointer":"not-allowed",transition:"all 0.15s",fontFamily:FONT.sans};
             // Shared by both buttons below — sets meeting type/caseInfo/
             // participants identically, only the final destination screen
             // differs. Kept as a closure over meetingSetup rather than a
@@ -575,7 +588,7 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
                         if(r?.ok) setScreen(SCREENS.CASE_VIEW);
                       } finally { setStarting(false); }
                     }}
-                    style={{flex:1,background:"#FFFFFF",border:"1px solid "+((disabled||!meetingSetup.date||!meetingSetup.time)?"#E8E0D0":"#7C5CFC"),borderRadius:10,padding:"14px",fontSize:15,color:(disabled||!meetingSetup.date||!meetingSetup.time)?"#9B9098":"#7C5CFC",fontWeight:600,cursor:(disabled||!meetingSetup.date||!meetingSetup.time)?"not-allowed":"pointer",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                    style={actionStyle(SETUP_ACTION.SCHEDULE, !(disabled||!meetingSetup.date||!meetingSetup.time))}>
                     Schedule meeting
                   </button>
                 )}
@@ -584,7 +597,7 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
                     disabled={disabled}
                     title={caseNotice?caseNotice.blockedReason:undefined}
                     onClick={()=>{ commit(); setScreen(SCREENS.PREP); }}
-                    style={{flex:1,background:"#FFFFFF",border:"1px solid "+(disabled?"#E8E0D0":"#7C5CFC"),borderRadius:10,padding:"14px",fontSize:15,color:disabled?"#9B9098":"#7C5CFC",fontWeight:600,cursor:disabled?"not-allowed":"pointer",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+                    style={actionStyle(SETUP_ACTION.PREPARE, !disabled)}>
                     Prepare meeting
                   </button>
                 )}
@@ -626,7 +639,7 @@ export function HomeMeetingScreen({ beginMeeting, scheduleCaseMeeting, meetingSe
                       });
                     } finally { setStarting(false); }
                   }}
-                  style={{flex:1,background:disabled?"#E8E0D0":"#7C5CFC",border:"none",borderRadius:10,padding:"14px",fontSize:15,color:disabled?"#9B9098":"#FFFFFF",fontWeight:600,cursor:disabled?"not-allowed":"pointer",transition:"all 0.15s",fontFamily:"DM Sans,system-ui,sans-serif",boxShadow:disabled?"none":"0 4px 16px rgba(124,92,252,0.25)"}}>
+                  style={actionStyle(SETUP_ACTION.START, !(disabled||starting))}>
                   Start meeting
                 </button>
               </div>
