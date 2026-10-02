@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { SCREENS } from '../constants';
 import { Btn } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
@@ -10,6 +10,7 @@ import {
   reviewSupportCounts, defaultReviewSupport, proposedUpdates,
 } from '../lib/reviewSupport';
 import { neutraliseSummaryHeadings, processConsiderations, adviceSections } from '../lib/reviewAdvice';
+import { conversationTurns } from '../lib/askConversation';
 
 // Phase E0.6 — `cases` is deliberately NOT a prop any more. It existed solely to
 // let the non-HR "Request HR review" button find a case by employee-name
@@ -108,6 +109,14 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, requestHrReview, rev
 
   // C4.1 — presentation only. The rating is still generated, persisted and read
   // by every other consumer; it simply stops being rendered here as a verdict.
+  const turns = conversationTurns(askCompassHistory);
+  const askScrollRef = useRef(null);
+  // Follow the conversation as it grows, the way a transcript should.
+  useEffect(() => {
+    const el = askScrollRef.current;
+    if (el && category === REVIEW_SUPPORT.ASK) el.scrollTop = el.scrollHeight;
+  }, [turns.length, askCompassProcessing, category]);
+
   const considerations = processConsiderations({ riskScore, reviewGaps });
   const adviceParts = adviceSections(advisorNotes);
 
@@ -420,15 +429,36 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, requestHrReview, rev
                     {askCompassProcessing||editProcessing?"Working...":"Ask →"}
                   </button>
                 </div>
+                {/* The whole conversation, oldest first. This rendered
+                    `.slice(-2)` until now — the transcript was always complete
+                    in state, but the screen showed a window of two, so every
+                    new question appeared to replace the previous exchange. */}
                 <AskCompassErrorBoundary>
-                  {askCompassHistory.slice(-2).map((m,i)=>(
-                    <div key={i} style={{marginBottom:10}}>
-                      <div style={{...eyebrow,color:m.role==="user"?COLOR.inkQuiet:COLOR.purple,marginBottom:4}}>{m.role==="user"?"Your question":"Compass"}</div>
-                      <div style={{...TYPE.rowContext,color:m.role==="user"?COLOR.inkFaint:COLOR.ink,lineHeight:1.8}}><MDRenderer text={m.content}/></div>
-                    </div>
-                  ))}
+                  <div ref={askScrollRef} role="log" aria-label="Ask Compass conversation" aria-live="polite"
+                    style={{maxHeight:360,overflowY:"auto",paddingRight:4}}>
+                    {turns.length===0&&(
+                      <div style={{...TYPE.metadata,color:COLOR.inkQuiet}}>Ask about this record — the conversation stays here while you work.</div>
+                    )}
+                    {turns.map((m,i)=>(
+                      <div key={i} style={{marginBottom:12}}>
+                        <div style={{...eyebrow,color:m.role==="user"?COLOR.inkQuiet:COLOR.purple,marginBottom:4}}>{m.role==="user"?"You":"Compass"}</div>
+                        <div style={{...TYPE.rowContext,lineHeight:1.8,
+                                     color:m.failed?COLOR.amber:(m.role==="user"?COLOR.inkFaint:COLOR.ink),
+                                     ...(m.role==="user"?{borderLeft:`2px solid ${COLOR.border}`,paddingLeft:10}:{})}}>
+                          {m.role==="user"?m.content:<MDRenderer text={m.content}/>}
+                        </div>
+                      </div>
+                    ))}
+                    {/* The pending state belongs to the answer being waited for,
+                        not to the panel: everything above stays readable. */}
+                    {askCompassProcessing&&(
+                      <div style={{marginBottom:12}}>
+                        <div style={{...eyebrow,color:COLOR.purple,marginBottom:4}}>Compass</div>
+                        <div style={{...TYPE.metadata,color:COLOR.inkQuiet,fontStyle:"italic"}}>Compass is thinking...</div>
+                      </div>
+                    )}
+                  </div>
                 </AskCompassErrorBoundary>
-                {askCompassProcessing&&<div style={{...TYPE.metadata,color:COLOR.inkQuiet,fontStyle:"italic"}}>Compass is thinking...</div>}
               </>)}
             </div>
           </div>

@@ -141,8 +141,16 @@ describe('C.1A — one entry point binds record and analysis', () => {
       expect(body).toContain(setter);
     }
     // and everything else that was about the previous record
-    expect(body).toContain('setAskCompassHistory([])');
     expect(body).toContain('setReviewGaps([])');
+    // The Ask conversation was cleared here in C.1A. Superseded: Review's thread
+    // is now keyed by the record it concerns (askThreadKey), so presenting a
+    // different record already shows a different conversation — and the blanket
+    // clear would have wiped the organisation-wide widget's thread, which is a
+    // different conversation entirely. The isolation is asserted in
+    // askConversation.test.jsx; what matters here is that it is NOT done by
+    // clearing shared state.
+    expect(body).not.toContain('setAskCompassHistory([])');
+    expect(app).toContain('askCompassHistory={threadFor(askThreads, reviewAskKey)}');
   });
 
   it.each([

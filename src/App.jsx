@@ -126,6 +126,7 @@ import { ReviewScreen } from './screens/ReviewScreen';
 import { RecordScreen } from './screens/RecordScreen';
 import { UpdateAvailableNotice } from './components/UpdateAvailableNotice';
 import { groundingFromMeeting, groundingFromRecord, isAnalysisStale } from './lib/reviewGrounding';
+import { askThreadKey, threadFor, appendFailure, turnsForModel } from './lib/askConversation';
 import { useBuildStaleness } from './hooks/useBuildStaleness';
 import { CaseViewScreen } from './screens/CaseViewScreen';
 import { HomeScreen } from './screens/HomeScreen';
@@ -1408,6 +1409,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [editProcessing, setEditProcessing] = useState(false);
   const [homeChat, setHomeChat] = useState([]);
   const [askCompassHistory, setAskCompassHistory] = useState([]);
+  // Ask Compass threads keyed by the context they are about. The global widget
+  // keeps askCompassHistory (organisation-wide); Review's conversation is about
+  // the record on screen and lives here, so one can never appear on the other
+  // and a later turn can never be sent alongside the wrong grounding.
+  const [askThreads, setAskThreads] = useState({});
   const [showAskCompass, setShowAskCompass] = useState(false);
   const [reportNarrative, setReportNarrative] = useState("");
   const [showOnboarding, setShowOnboarding] = useState(!cases.length && !ls("compass_onboarded", false));
@@ -2945,7 +2951,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       userContent = (msg||"")+"\n\n"+caseContext+groundingBlock;
     }
     
-    const newHistory = [...history, {role:"user", content:userContent}];
+    const newHistory = [...turnsForModel(history), {role:"user", content:userContent}];
     const displayHistory = [...history, {role:"user", content:msg||"Please review the attached document."}];
     setHistory(displayHistory);
     
@@ -2964,7 +2970,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       setHistory([...displayHistory, {role:"assistant", content:reply}]);
       setHomeAttachment(null);
     } catch(e) {
-      setHistory([...displayHistory, {role:"assistant", content:"Sorry, something went wrong."}]);
+      setHistory(appendFailure(displayHistory, "Sorry, something went wrong. Your earlier questions and answers are still here."));
     }
     setProcessing(false);
   };
@@ -8865,6 +8871,10 @@ Please produce:
   // Analysis travels with its record or not at all. `meeting` carries its own
   // stored analysis; a bare record (a witness statement from Evidence) has
   // none, and the rail is cleared rather than inheriting someone else's.
+  // Which conversation Review is showing. Null when there is no identifiable
+  // record context, which threadFor treats as "no thread" rather than a shared one.
+  const reviewAskKey = askThreadKey({ meetingId: caseInfo.meetingId, caseId: caseInfo.caseId || caseInfo._linkedCaseId, surface: "review" }) || "review:none";
+
   const presentMeetingRecord = (source, { meetingType: mt = null, caseInfo: ci = null } = {}) => {
     const g = (source && typeof source === "object")
       ? groundingFromMeeting(source)
@@ -8877,8 +8887,11 @@ Please produce:
     // Written for THIS record. Null when there is nothing to be stale.
     setAnalysisForRecord(g.summary || g.advisorNotes || g.riskScore ? g.record : null);
     // Everything else that is about the previous record, and would otherwise
-    // read as though it were about this one.
-    setAskCompassHistory([]);
+    // read as though it were about this one. The Ask conversation is NOT cleared
+    // here any more: it is keyed by the record it concerns (askThreadKey), so
+    // presenting a different record already shows a different thread — and
+    // clearing would have wiped the organisation-wide widget's conversation,
+    // which is a different conversation entirely.
     setReviewGaps([]);
     setAiError("");
     setReviewGenerationFailed(false);
@@ -11834,7 +11847,7 @@ Please produce:
 
       {/* ══ REVIEW ══ */}
       {screen===SCREENS.REVIEW&&(
-        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={askCompassHistory} setAskCompassHistory={setAskCompassHistory} askCompass={(m,h,sh,sp)=>askCompass(m,h,sh,sp,{record:reviewOutput})} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} signatureEligible={signatureEligibleIn(cases, { caseId: caseInfo.caseId, meetingId: caseInfo.meetingId })} standalone={caseInfo.meetingHome===TABLE_HOME} onSaveAndSendForSignature={saveAndSendForSignature} draftStatus={draftStatus} onEditReviewRecord={onEditReviewRecord} onRetryReviewDraft={retryReviewDraft} advisorNotes={advisorNotes} reviewGaps={reviewGaps} riskScore={riskScore} analysisStale={isAnalysisStale({record:reviewOutput, analysisFor:analysisForRecord, hasAnalysis:!!(meetingSummary||advisorNotes||riskScore)})} reviewGenerationFailed={reviewGenerationFailed} onRetryGeneration={handleReview}
+        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={threadFor(askThreads, reviewAskKey)} setAskCompassHistory={next=>setAskThreads(t=>({...t, [reviewAskKey]: typeof next === "function" ? next(threadFor(t, reviewAskKey)) : next}))} askCompass={(m,h,sh,sp)=>askCompass(m,h,sh,sp,{record:reviewOutput})} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} signatureEligible={signatureEligibleIn(cases, { caseId: caseInfo.caseId, meetingId: caseInfo.meetingId })} standalone={caseInfo.meetingHome===TABLE_HOME} onSaveAndSendForSignature={saveAndSendForSignature} draftStatus={draftStatus} onEditReviewRecord={onEditReviewRecord} onRetryReviewDraft={retryReviewDraft} advisorNotes={advisorNotes} reviewGaps={reviewGaps} riskScore={riskScore} analysisStale={isAnalysisStale({record:reviewOutput, analysisFor:analysisForRecord, hasAnalysis:!!(meetingSummary||advisorNotes||riskScore)})} reviewGenerationFailed={reviewGenerationFailed} onRetryGeneration={handleReview}
           meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion}
           meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion}
         />
