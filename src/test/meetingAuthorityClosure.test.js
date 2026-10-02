@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { compileSubjectData } from '../lib/dsarCompile.js';
 import { DSAR_COLUMNS, fetchDsarMeetings, GATEWAY_FAILURE } from '../lib/meetingTableGateway.js';
+import { classifyTable, ORG_SCOPED_TABLES } from '../lib/dataInventory.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Phase E2A — MEETING AUTHORITY CLOSURE + DSAR INTEGRATION.
@@ -81,13 +82,46 @@ describe('E2A — the authority question has one answer', () => {
     // Recorded here because a table called "meetings_*" is exactly what a
     // no-third-store rule must account for rather than trip over. It stays, and
     // what is asserted is that no application code can reach it.
-    const everything = [
+    // NEW-44 amended this assertion, and the amendment is the interesting part.
+    // src/lib/dataInventory.js USED to be in the list below, and NEW-44 added
+    // the string 'meetings_legacy_unused' to it — as a classification entry, in
+    // UNUSED_LEGACY_TABLES, because a table that exists and is classified
+    // nowhere is precisely the failure NEW-44 was raised for.
+    //
+    // So the substring check started failing while the property it exists to
+    // protect — stated one line up, "no application code can reach it" — was
+    // never violated: a metadata registry naming a table is not a code path
+    // reaching it. dataInventory.js is a list of names by definition; asserting
+    // a name is absent from the inventory of names is asserting the table is
+    // unclassified, which is the bug, not the fix.
+    //
+    // The registry is therefore checked by what it SAYS rather than by whether
+    // a word appears in it, and the access surfaces keep the blunt check.
+    const accessSurfaces = [
       'src/App.jsx', 'src/lib/meetingStore.js', 'src/lib/meetingWrites.js',
       'src/lib/standaloneMeetingWrites.js', 'src/lib/meetingTableGateway.js',
-      'src/lib/meetingDiscovery.js', 'src/lib/dataInventory.js',
-      'src/screens/DsarScreen.jsx',
+      'src/lib/meetingDiscovery.js', 'src/screens/DsarScreen.jsx',
     ].map(read).join('\n');
-    expect(everything).not.toContain('meetings_legacy_unused');
+    expect(accessSurfaces).not.toContain('meetings_legacy_unused');
+
+    // Nothing reads, writes or deletes it anywhere in the application, which is
+    // the property that actually matters and is now asserted directly rather
+    // than inferred from a filename list.
+    const everySource = stripJs([
+      'src/App.jsx', 'src/lib/meetingStore.js', 'src/lib/meetingWrites.js',
+      'src/lib/standaloneMeetingWrites.js', 'src/lib/meetingTableGateway.js',
+      'src/lib/meetingDiscovery.js', 'src/screens/DsarScreen.jsx',
+      'src/lib/dataInventory.js', 'api/delete-org-data.js',
+    ].map(read).join('\n'));
+    for (const access of [
+      "from('meetings_legacy_unused')", 'from("meetings_legacy_unused")',
+      'meetings_legacy_unused?', 'rest/v1/meetings_legacy_unused',
+    ]) expect(everySource, access).not.toContain(access);
+
+    // And it is classified as the fossil it is: never swept by
+    // api/delete-org-data.js, never mistaken for the canonical store.
+    expect(classifyTable('meetings_legacy_unused')).toBe('unused_legacy');
+    expect(ORG_SCOPED_TABLES).not.toContain('meetings_legacy_unused');
   });
 
   it('the table is still reached through exactly one module', () => {

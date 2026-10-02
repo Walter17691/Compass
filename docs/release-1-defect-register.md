@@ -1807,7 +1807,7 @@ gate before duplicate-name support.
 - Documentation housekeeping: the stale *"NOT YET APPLIED"* header on
   `standalone_meetings_2026-09-25.sql` was corrected (applied semantics untouched).
 
-### NEW-44 — two org-scoped tables are unclassified for erasure — P2 (GDPR) — OPEN
+### NEW-44 — two org-scoped tables are unclassified for erasure — P2 (GDPR) — FIXED / DEPLOYED — AWAITING HUMAN APPROVAL
 - **Severity** P2 · **Area** GDPR erasure / data inventory · **Raised** 2026-09-25
   (found while verifying 4C.1's own erasure registration against the live schema)
 - **Not caused by Phase 4C and deliberately NOT fixed in 4C.1** — out of the
@@ -1850,6 +1850,145 @@ gate before duplicate-name support.
   `cases.user_id`). All **890** meetings are embedded in `cases.meetings`; **no
   standalone object exists**, so 4C needs **new schema and write paths, not a
   migration**.
+
+#### Resolution (2026-10-02)
+
+**The gap was bigger than two tables.** A live reading of `pg_class` /
+`pg_namespace` found **43** base tables in `public`, of which **eight** were
+classified nowhere — not two:
+
+| table | live rows | why the old gate could not see it |
+|---|---|---|
+| `customer_contracts` | 0 | postdates the 2026-08-25 snapshot |
+| `team_invites` | 2 | postdates the snapshot |
+| `organisations` | 4 | **no `org_id`** — its PK *is* the org id |
+| `profiles` | 0 | no `org_id` (keyed to `auth.users`) |
+| `platform_admins` | 1 | no `org_id` (platform operator grants) |
+| `api_rate_limits` | 17 | no `org_id` (operational counters) |
+| `calendar_synced_events` | 33 | no `org_id` (FK to `calendar_connections`) |
+| `meetings_legacy_unused` | 0 | no `org_id`; renamed-away fossil |
+
+**Root cause, restated.** Staleness was the symptom. The cause was two
+structural choices:
+
+1. **Relevance was defined as "has an `org_id` column."** Six of the eight have
+   no `org_id`, so no `org_id` sweep could ever list them, and
+   "no unclassified `org_id` tables" silently meant "we did not look at the
+   tables that cannot be erased by `org_id` at all" — the set *most* likely to
+   survive an erasure. Relevance is now decided by **schema**: every base table
+   in `public` that no extension owns must be classified.
+2. **The old test's failure direction was controlled by the hand-typed list.**
+   It asserted `snapshot.filter(t => !known.has(t))` is empty, so a table absent
+   from the snapshot was *never checked*. Forgetting to update the list made the
+   test **weaker, silently** — it could only ever fail if somebody chose to add
+   a name to it. (Live `org_id`-bearing tables: 37 today, 34 when this was
+   raised. The three added on 2026-09-27 were classified correctly but were
+   never in the snapshot, so they too went unchecked.)
+
+**What was decided for each table** (semantics first, classification second —
+the register required this): all eight are now in exactly one category, with
+the reason recorded at the entry in `src/lib/dataInventory.js`. Four new
+categories exist because those tables are real, not to absorb leftovers:
+`platform_scoped` (`organisations`, `profiles`, `platform_admins`),
+`infrastructure` (`api_rate_limits`), `parent_excluded`
+(`calendar_synced_events` — `NOT NULL`/`CASCADE` to an *excluded* parent, which
+is deliberately **not** the same claim as `cascade_covered`, whose parent is
+deleted), and `unused_legacy` (`meetings_legacy_unused`).
+
+`customer_contracts` and `team_invites` are **`INTENTIONALLY_EXCLUDED`**, as the
+register anticipated — but as a decision with a stated contract, not a guess:
+`customer_contracts` is Compass's own commercial record *of* this customer, and
+an HR Director must not be able to erase their employer's signed-contract record
+from Settings; `team_invites` is the `org_members` pipeline, and `org_members`
+is already excluded, so deleting pending invites would be the inconsistent
+choice. A mutation that "fixes" either by *actively deleting* it is caught.
+
+**The snapshot was removed, not updated.** `src/test/dataInventory.test.js` no
+longer contains a table list; it keeps only its three historical regressions.
+Coverage moved to `src/test/schemaInventoryGate.test.js`, which **derives** the
+table set by replaying every file in `supabase/` (107 files) rather than
+retyping it. Verified: the replay reproduces the live 43 **exactly, in both
+directions** — which also proves no table in this project was ever created
+outside a committed migration.
+
+**A convenient live source was rejected, with evidence.** PostgREST's OpenAPI
+document at `/rest/v1/` needs only the service key this repo already holds, and
+is wrong: measured on 2026-10-02 it returned **36 of 43** tables, because it
+advertises only what is granted to the API roles. The seven it cannot see
+include `customer_contracts` and `team_invites` — *the two tables NEW-44 exists
+to catch*. A gate built on it would have reported full coverage forever. This is
+recorded in `scripts/schema-drift-check.mjs` so nobody "simplifies" it back.
+
+**Two-tier enforcement, with each tier's blind spot stated:**
+- **CI (every commit, no credentials):** `schemaInventoryGate.test.js`. Catches
+  any table introduced the way all 43 were. Blind to a table created by hand in
+  the Supabase dashboard.
+- **Release/audit (`npm run schema:drift`):** `scripts/schema-drift-check.mjs`,
+  a plain Node script — **not** a serverless function (the Vercel budget is full
+  at 12/12, and a routed schema-enumeration endpoint would be new attack surface
+  for no product feature). Read-only hardcoded `SELECT`s against
+  `information_schema`/`pg_class`. It is the only tier that can see a
+  dashboard-created table, a changed cascade, or rows appearing in the fossil.
+  **Run it before any release containing a `supabase/` file, before any
+  compliance/erasure audit, and after any manual dashboard change.** Exit codes
+  are `0` no drift, `1` drift, **`2` could not verify** — a missing credential
+  must never look like a clean result, so it refuses to print a pass it did not
+  earn.
+
+**Verified behaviourally, not by reading source:** 13 mutations, 13 caught
+(comment-stripping disabled, rename/drop events ignored, intra-file order lost,
+`RENAME` widened to match `alter policy`, each of the two named tables
+un-classified again, `classifyTable` absorbing unknowns, `unclassifiedTables`
+always reporting clean, the relevance rule ignoring schema, a table in two
+categories, and `customer_contracts` "fixed" by deleting it). The drift command
+was driven with a real live reading (clean, exit 0) and five mutated readings: a
+dashboard-created table, a cascade downgraded to `SET NULL`, a cascade made
+nullable, rows in the fossil, and a *partial* reading — which correctly reports
+`UNVERIFIED` and exits 2 rather than passing.
+
+**No migration, no schema change, no production data mutated** — every live
+statement issued during this work was a `SELECT` or a `count(*)`.
+
+### NEW-45 — `team_invites` and `customer_contracts` are absent from DSAR disclosure — P2 (GDPR) — OPEN
+- **Severity** P2 · **Area** DSAR completeness · **Raised** 2026-10-02 (found
+  while auditing the erasure inventory for NEW-44)
+- **Deliberately NOT fixed in NEW-44** — different inventory, different
+  obligation, and outside the approved slice. Recorded rather than carried
+  silently.
+- **Observed.** `api/portal/_dsar-lookup.js` pre-fetches the six tables that have
+  no client-facing RLS path (`signing_requests`, `employee_portal_accounts`,
+  `employee_portal_invites`, `org_members`, `case_views`, `profiles`).
+  `team_invites` holds a named person's `name` + `email` + intended role and is
+  **not** among them; `customer_contracts.primary_contact_name` /
+  `primary_contact_email` likewise.
+- **Why it matters.** `dsarCompile.js`'s own header states the principle it was
+  hardened to meet: a person "can be the subject of their own DSAR as an internal
+  user — a manager or investigator — not only as a case's named employee", which
+  is exactly why `org_members` and `profiles` were wired in. A *pending* teammate
+  is the same person one step earlier in the same pipeline.
+- **Not an erasure gap.** Both tables are correctly classified
+  `INTENTIONALLY_EXCLUDED` for "Delete all data" (see NEW-44). Disclosure and
+  erasure are separate obligations and this is only the former.
+- **Remediation constraint.** Wiring these in touches the DSAR lookup route,
+  `dsarCompile` and its category list. It needs its own bounded slice with its own
+  rendered verification — not a drive-by addition.
+
+### NEW-46 — `api_rate_limits` rows carry a user id and never expire — P3 (retention) — OPEN
+- **Severity** P3 · **Area** retention · **Raised** 2026-10-02 (found while
+  classifying infrastructure tables for NEW-44)
+- **Observed.** `rate_key` is built as `` `chat:${caller.id}` `` /
+  `` `send-letter:${auth.caller.id}` `` / `` `sign-action:${signId}` ``
+  (`api/chat.js`, `api/send-letter.js`, `api/signing.js`), so a row contains a
+  pseudonymous auth user id. `check_rate_limit` **upserts** and resets
+  `window_start` in place; nothing deletes expired windows. 17 live rows.
+- **Scope, honestly.** No name, no case content, no `org_id` — so "Delete all
+  data" has no dimension to scope a delete to, and this is a retention question
+  rather than an erasure gap. Correctly classified `infrastructure` in
+  `dataInventory.js`, with this caveat recorded at the entry.
+- **Also noted:** `organisations.data_retention_years` is stored and editable in
+  Settings (`src/App.jsx:3092`) but **no code enforces it** — there is no
+  retention sweep anywhere in `src/` or `api/`. A configurable retention period
+  that does nothing is its own finding and needs its own slice.
 
 ### NEW-39 — internal HR advisory content sat inside the editable/signable record — P1
 - **Severity** **P1** · **Area** Review / data boundary · **Raised** 2026-09-25 (human UAT)
