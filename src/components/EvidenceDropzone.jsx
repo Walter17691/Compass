@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { COLOR, TYPE, RADIUS } from '../styles/tokens';
 
 // Presentational drag-and-drop / click-to-browse target — forwards the
 // native FileList to onFilesSelected and leaves reading/validation to the
@@ -19,9 +20,27 @@ export function EvidenceDropzone({ onFilesSelected, label = "Drop files or click
   const [focused, setFocused] = useState(false);
   const highlighted = dragOver || focused;
 
+  // Wave B.2 brand correction — this resting state was cream (#FDFAF5) behind a
+  // beige dashed border (#E8E0D0), left over from the pre-token palette. It was
+  // the last warm surface in the Case View and became conspicuous once everything
+  // around it moved to white and cool neutrals.
+  //
+  // Resting: white on a cool neutral dashed border — an empty target, which is
+  // what it is. Highlighted (drag-over OR keyboard focus, one shared treatment by
+  // design): the Compass purple border over the barely-there purple tint, enough
+  // to say "release here" without turning the area into a purple block.
+  //
+  // There are no uploading/success/error/disabled states to style: this component
+  // only forwards the FileList, and rejection is surfaced by the caller as a toast
+  // (readEvidenceFiles' onReject). Semantic colour therefore belongs there, not here.
+  const borderColor = highlighted ? COLOR.purple : COLOR.border;
+  const background  = highlighted ? COLOR.purpleTint : COLOR.surface;
+
   return (
     <label
-      style={{display:"flex",alignItems:"center",justifyContent:"center",border:"2px dashed",borderColor:highlighted?"#7C5CFC":"#E8E0D0",borderRadius:8,padding:"16px",cursor:"pointer",background:highlighted?"#F5F3FF":"#FDFAF5",transition:"all 0.15s"}}
+      style={{display:"flex",alignItems:"center",justifyContent:"center",border:"2px dashed",
+              borderColor,borderRadius:RADIUS.card,padding:"16px",cursor:"pointer",
+              background,transition:"border-color 0.15s, background 0.15s"}}
       onDragOver={e=>{e.preventDefault();setDragOver(true);}}
       onDragLeave={()=>setDragOver(false)}
       onDrop={e=>{e.preventDefault();setDragOver(false);onFilesSelected(e.dataTransfer.files);}}
@@ -29,8 +48,8 @@ export function EvidenceDropzone({ onFilesSelected, label = "Drop files or click
       <input type="file" multiple aria-label={label} onChange={e=>onFilesSelected(e.target.files)} onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)}
         style={{position:"absolute",width:1,height:1,padding:0,margin:-1,overflow:"hidden",clip:"rect(0,0,0,0)",whiteSpace:"nowrap",border:0}}/>
       <div style={{textAlign:"center"}}>
-        <div style={{fontSize:13,color:"#6B6375",fontWeight:500}}>{label}</div>
-        <div style={{fontSize:11,color:"#9B9098",marginTop:2}}>{hint}</div>
+        <div style={{...TYPE.rowContext,color:highlighted?COLOR.purple:COLOR.inkSoft,fontWeight:500}}>{label}</div>
+        <div style={{...TYPE.metadata,color:COLOR.inkQuiet,marginTop:2}}>{hint}</div>
       </div>
     </label>
   );

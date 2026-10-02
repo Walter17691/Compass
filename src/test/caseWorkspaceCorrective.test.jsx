@@ -828,3 +828,73 @@ describe('B.2c — brand: decoration is neutral, meaning keeps its colour', () =
     expect(row.style.borderLeft).toContain('rgb(138, 90, 0)');   // COLOR.amber
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+describe('B.2c — no warm surface survives anywhere the Case View renders', () => {
+  // The previous sweep asserted "0 cream elements" and was wrong, three times over:
+  // it queried a hand-listed selector (div,span,li,button) that omitted <label>,
+  // it read only backgroundColor and never border colours, and its source sweep
+  // covered twenty hand-listed components but not their shared children.
+  //
+  // So this derives rather than enumerates: EVERY element, EVERY colour property,
+  // across EVERY destination the workspace can open.
+  const WARM = [
+    'rgb(253, 250, 245)', 'rgb(232, 224, 208)',
+    'rgb(237, 229, 216)', 'rgb(245, 241, 234)',
+  ];
+  const COLOUR_PROPS = ['backgroundColor', 'borderTopColor', 'borderRightColor',
+                        'borderBottomColor', 'borderLeftColor'];
+
+  const warmElementsIn = container => {
+    const hits = [];
+    container.querySelectorAll('*').forEach(el => {
+      const s = getComputedStyle(el);
+      COLOUR_PROPS.forEach(p => {
+        if (WARM.includes(s[p])) hits.push(`${el.tagName}.${p}=${s[p]} :: ${(el.textContent||'').trim().slice(0,30)}`);
+      });
+    });
+    return hits;
+  };
+
+  it('the default destination is free of warm decoration', () => {
+    const { container } = renderCase({ meetings: [INVESTIGATION] });
+    expect(warmElementsIn(container)).toEqual([]);
+  });
+
+  it('every primary destination is too', async () => {
+    const user = userEvent.setup();
+    const { container } = renderCase({ meetings: [INVESTIGATION], outcome: 'First written warning' });
+    const bar = screen.getByRole('tablist', { name: 'Case workspace' });
+    const names = within(bar).getAllByRole('tab').map(t => t.textContent.trim());
+    for (const n of names) {
+      await user.click(screen.getByRole('tab', { name: n }));
+      expect(warmElementsIn(container), `destination: ${n}`).toEqual([]);
+    }
+  });
+
+  it('and so are the overflow destinations', async () => {
+    const user = userEvent.setup();
+    const { container } = renderCase({ meetings: [INVESTIGATION], estimatedWeeklyPay: 500 });
+    await user.click(screen.getByRole('button', { name: 'More ▾' }));
+    const items = within(screen.getByRole('menu', { name: 'More case destinations' }))
+      .getAllByRole('menuitem').map(i => i.textContent.trim());
+    // Close the menu that was opened just to read the list, so the loop below
+    // starts from a known-closed state rather than toggling it shut.
+    fireEvent.keyDown(document, { key: 'Escape' });
+    for (const n of items) {
+      await user.click(screen.getByRole('button', { name: 'More ▾' }));
+      await user.click(screen.getByRole('menuitem', { name: n }));
+      expect(warmElementsIn(container), `overflow: ${n}`).toEqual([]);
+    }
+  });
+
+  it('but semantic colour is untouched — a Guardrail still looks like a warning', () => {
+    const guardrail = { id: 'g1', caseId: 'c1', type: 'process_risk', status: 'open',
+      title: 'Same person chaired both', reasoning: 'ACAS expects separation.' };
+    const { container } = renderCase({}, { extraShell: { caseSignals: [guardrail] } });
+    expect(screen.getByText('Procedural guardrails')).toBeInTheDocument();
+    // No warm DECORATION, yet the semantic treatment survives.
+    expect(warmElementsIn(container)).toEqual([]);
+    expect(screen.getByText('Same person chaired both')).toBeInTheDocument();
+  });
+});
