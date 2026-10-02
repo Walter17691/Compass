@@ -126,6 +126,7 @@ import { ReviewScreen } from './screens/ReviewScreen';
 import { RecordScreen } from './screens/RecordScreen';
 import { UpdateAvailableNotice } from './components/UpdateAvailableNotice';
 import { groundingFromMeeting, groundingFromRecord, isAnalysisStale } from './lib/reviewGrounding';
+import { outcomeLetterStatus } from './lib/outcomeLetter';
 import { askThreadKey, threadFor, appendFailure, turnsForModel } from './lib/askConversation';
 import { useBuildStaleness } from './hooks/useBuildStaleness';
 import { CaseViewScreen } from './screens/CaseViewScreen';
@@ -11855,7 +11856,7 @@ Please produce:
 
       {/* ══ LETTERS ══ */}
       {screen===SCREENS.LETTER&&(
-        <LetterScreen handleLetter={handleLetter} activeLetter={activeLetter} aiProcessing={aiProcessing} letterOutput={letterOutput} letterSources={letterSources} onAskWhy={setLetterWhySignal} letterHistory={letterHistory} restoreLetterVersion={restoreLetterVersion} editingLetter={editingLetter} setEditingLetter={setEditingLetter} setLetterOutput={setLetterOutput} signature={signature} setShowSigPad={setShowSigPad} setSignature={setSignature} onRemoveSignature={()=>{setSignature(null);orgLsSet("compass_signature",null);}} caseInfo={caseInfo} triggerWithSig={triggerWithSig} pdfGenerating={pdfGenerating} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} letterIsApproved={letterIsApproved} letterApproval={letterApproval} approveLetter={approveLetter} onSendFromCompass={()=>setShowEmailLetter(true)} onSendForAcknowledgement={activeLetter==="outcome"?()=>setShowLetterAckModal(true):undefined} outcomeRecorded={!!cases.find(x=>x.id===activeCaseId)?.outcome} outcomeValue={cases.find(x=>x.id===activeCaseId)?.outcome} warningDurationMonths={cases.find(x=>x.id===activeCaseId)?.warningDurationMonths} warningExpiresAt={cases.find(x=>x.id===activeCaseId)?.warningExpiresAt} />
+        <LetterScreen handleLetter={handleLetter} activeLetter={activeLetter} aiProcessing={aiProcessing} letterOutput={letterOutput} letterSources={letterSources} onAskWhy={setLetterWhySignal} letterHistory={letterHistory} restoreLetterVersion={restoreLetterVersion} editingLetter={editingLetter} setEditingLetter={setEditingLetter} setLetterOutput={setLetterOutput} signature={signature} setShowSigPad={setShowSigPad} setSignature={setSignature} onRemoveSignature={()=>{setSignature(null);orgLsSet("compass_signature",null);}} caseInfo={caseInfo} triggerWithSig={triggerWithSig} pdfGenerating={pdfGenerating} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} letterIsApproved={letterIsApproved} letterApproval={letterApproval} approveLetter={approveLetter} onSendFromCompass={()=>setShowEmailLetter(true)} onSendForAcknowledgement={activeLetter==="outcome"?()=>setShowLetterAckModal(true):undefined} outcomeRecorded={!!cases.find(x=>x.id===activeCaseId)?.outcome} outcomeValue={cases.find(x=>x.id===activeCaseId)?.outcome} outcomeLetter={outcomeLetterStatus(cases.find(x=>x.id===activeCaseId))} warningDurationMonths={cases.find(x=>x.id===activeCaseId)?.warningDurationMonths} warningExpiresAt={cases.find(x=>x.id===activeCaseId)?.warningExpiresAt} />
       )}
 
       {/* ══ DASHBOARD ══ */}
@@ -12289,14 +12290,14 @@ Please produce:
           setOutcomeNotes={setOutcomeNotes}
           saveCases={saveCases}
           showToast={showToast}
-          handleLetter={handleLetter}
+          
           requestHrReview={requestHrReview}
           allegations={allegations}
           caseSignals={caseSignals}
           requestOverrideReason={requestOverrideReason}
           createCaseTask={createCaseTask}
-          setCaseInfo={setCaseInfo}
-          setReviewOutput={setReviewOutput}
+          
+          
           audit={audit}
           completingOutcomeDetails={completingOutcomeDetails}
           setCompletingOutcomeDetails={setCompletingOutcomeDetails}

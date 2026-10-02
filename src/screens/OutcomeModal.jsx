@@ -6,7 +6,9 @@ import { useModalA11y } from '../hooks/useModalA11y';
 import { isDisciplinaryMeeting, isGrievanceMeeting } from '../lib/meetingTypeMatch';
 import { isWarningOutcome, isValidWarningDurationMonths } from '../lib/outcomeTypes';
 import { addCalendarMonths, toISODateLocal } from '../lib/dates';
-import { COLOR, FONT } from '../styles/tokens';
+import { COLOR, FONT, TYPE, RADIUS, BUTTON } from '../styles/tokens';
+import { outcomeDecisionContext } from '../lib/outcomeDecisionContext';
+import { MDRenderer } from '../components/MDRenderer';
 
 // Defect #11/#12/#13 remediation — every other handleLetter call site
 // (CaseViewScreen.jsx's disciplinary_invite/outcome_letter/appeal/no-
@@ -61,8 +63,13 @@ function describeOutcomeDetail(outcomeType, issuedAt, durationMonths, expiresAt,
 // Intelligence's equivalent) since OutcomeModal is already a
 // self-contained modal, not a full screen orchestrated from App.jsx —
 // nothing else needs to know this check ran.
-export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcomeType, setOutcomeType, outcomeNotes, setOutcomeNotes, saveCases, showToast, handleLetter, requestHrReview, allegations, caseSignals, requestOverrideReason, createCaseTask, setCaseInfo, setReviewOutput, audit, completingOutcomeDetails, setCompletingOutcomeDetails, currentUserId }) {
+export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcomeType, setOutcomeType, outcomeNotes, setOutcomeNotes, saveCases, showToast, requestHrReview, allegations, caseSignals, requestOverrideReason, createCaseTask, audit, completingOutcomeDetails, setCompletingOutcomeDetails, currentUserId }) {
   const cs = cases.find(x=>x.id===activeCaseId);
+  // WAVE D2 — the record this decision is about, assembled from data this
+  // component was already given and already authorised to hold. No query, no
+  // fetch, no permission logic: see outcomeDecisionContext.js.
+  const context = outcomeDecisionContext({ caseObj: cs, cases, allegations });
+  const [showRecord, setShowRecord] = useState(false);
   const [showQualityCheck, setShowQualityCheck] = useState(false);
   const [qualityGaps, setQualityGaps] = useState([]);
   // Phase 6.5 hardening (closes Prompt 16 audit finding H4, HIGH) — see
@@ -161,19 +168,18 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
     // records WHAT was decided, which is worth keeping independently.
     audit("Outcome issued", describeOutcomeDetail(outcomeType, issuedAt, durationMonths, expiresAt), activeCaseId);
     setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");setWarningDurationMonths("");showToast(approvalAction?"Outcome recorded — approval requested":"Outcome recorded");
-    // Defect #11/#12/#13 remediation — ground caseInfo/reviewOutput from
-    // the authoritative case and its own relevant hearing meeting before
-    // drafting the letter (see findOutcomeRelevantMeeting/comment above).
-    const meeting = findOutcomeRelevantMeeting(cs);
-    setCaseInfo(p=>({...p, employee:cs.employeeName, manager:cs.manager||"", date:meeting?.date||p.date}));
-    setReviewOutput(meeting?.record||"");
-    // Defect #20 remediation — handleLetter is a closure over App.jsx's
-    // own caseInfo state; setCaseInfo above only schedules that update,
-    // it isn't visible yet in this same synchronous handler. Passing the
-    // employee/manager/date this modal just computed directly means
-    // handleLetter's own AI grounding and validation call both use the
-    // real value instead of whatever caseInfo held before this click.
-    handleLetter("outcome", {employeeName:cs.employeeName, manager:cs.manager||"", date:meeting?.date});
+    // ── WAVE D1 — recording a decision is not communicating it ──
+    //
+    // This used to call handleLetter("outcome", …) here, so one click both
+    // recorded the authoritative employment decision AND started drafting the
+    // letter that announces it. The button said so: "Issue outcome & generate
+    // letter". Two different acts, one of which is a formal communication to
+    // the employee, taken on a single confirmation.
+    //
+    // The decision is now recorded and nothing else happens. nextStep.js
+    // already returns "Draft outcome letter" while no outcome letter exists
+    // (its !hasDiscOutcome branch), so the workflow continues exactly as it
+    // did — the user simply takes the second step deliberately.
   };
 
   const issueOutcome = () => {
@@ -249,17 +255,78 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
 
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="outcome-modal-title" ref={containerRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div style={{background:"#FFFFFF",borderRadius:16,padding:28,width:"100%",maxWidth:480,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
+      <div style={{background:COLOR.surface,borderRadius:RADIUS.card,padding:24,width:"100%",maxWidth:620,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(15,18,36,0.18)",fontFamily:FONT.sans}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
           <div>
-            <div id="outcome-modal-title" style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:20,color:"#1C1820",fontWeight:400}}>{completingOutcomeDetails?"Complete outcome details":"Issue disciplinary outcome"}</div>
-            <div style={{fontSize:12,color:"#9B9098",marginTop:2}}>{cs?.employeeName}</div>
+            <div id="outcome-modal-title" style={{...TYPE.pageTitle,color:COLOR.ink}}>{completingOutcomeDetails?"Complete outcome details":"Record outcome"}</div>
+            <div style={{...TYPE.metadata,color:COLOR.inkQuiet,marginTop:2}}>{cs?.employeeName}</div>
           </div>
-          <button onClick={close} aria-label="Close" style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9B9098"}}>×</button>
+          <button onClick={close} aria-label="Close" style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:COLOR.inkQuiet}}>×</button>
         </div>
+        {/* ══ WAVE D2 — THE RECORD THIS DECISION IS ABOUT ══
+            Shown before the controls, because a decision-maker should see what
+            they are deciding before they are asked to decide it. Facts only:
+            no recommendation, no severity, no ranking, nothing generated. */}
+        {!completingOutcomeDetails&&!context.isEmpty&&(
+          <div style={{border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,padding:"14px 16px",marginBottom:18,background:COLOR.rail}}>
+            <div style={{...TYPE.micro,color:COLOR.inkFaint,marginBottom:10}}>The record you are deciding on</div>
+
+            {context.allegations.length>0&&(
+              <div style={{marginBottom:context.meeting||context.warnings.length?14:0}}>
+                <div style={{...TYPE.metadata,fontWeight:700,color:COLOR.ink,marginBottom:4}}>
+                  {context.allegations.length===1?"Allegation":"Allegations"}
+                </div>
+                <ul style={{margin:0,paddingLeft:18,...TYPE.rowContext,color:COLOR.inkSoft,lineHeight:1.7}}>
+                  {context.allegations.map(a=>(
+                    <li key={a.id}>
+                      {a.title}
+                      {/* The stored status, reported as stored. Compass has no
+                          authoritative "finding" object, so none is implied. */}
+                      {a.status&&<span style={{color:COLOR.inkQuiet}}> · {a.status}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {context.warnings.length>0&&(
+              <div style={{marginBottom:context.meeting?14:0}}>
+                <div style={{...TYPE.metadata,fontWeight:700,color:COLOR.ink,marginBottom:4}}>Live formal warnings</div>
+                <ul style={{margin:0,paddingLeft:18,...TYPE.rowContext,color:COLOR.inkSoft,lineHeight:1.7}}>
+                  {context.warnings.map(w=>(
+                    <li key={w.caseId}>
+                      {w.type} · expires {new Date(w.expiresAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {context.meeting&&(
+              <div>
+                {/* Progressive disclosure: the record is reachable without
+                    leaving the decision, and opening it cannot lose anything
+                    already entered — the form state lives above this. */}
+                <button type="button" onClick={()=>setShowRecord(v=>!v)} aria-expanded={showRecord}
+                  style={{...BUTTON.tertiary,fontSize:12,padding:0}}>
+                  {showRecord?"Hide":"Show"} the {(context.meeting.type||"meeting").toLowerCase()} record
+                  {context.meeting.date?` · ${context.meeting.date}`:""}
+                </button>
+                {showRecord&&(
+                  <div style={{marginTop:8,maxHeight:220,overflowY:"auto",padding:"10px 12px",background:COLOR.surface,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface}}>
+                    <div style={{...TYPE.rowContext,color:COLOR.inkSoft,lineHeight:1.7}}>
+                      <MDRenderer text={context.meeting.record||""}/>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{marginBottom:16}}>
-          <label htmlFor="outcome-type" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Outcome decision</label>
-          <select id="outcome-type" value={outcomeType} onChange={e=>setOutcomeType(e.target.value)} disabled={completingOutcomeDetails} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:FONT.sans,color:outcomeType?"#1C1820":"#9B9098",background:completingOutcomeDetails?"#F5F1EA":"#FDFAF5",outline:"none",boxSizing:"border-box"}}>
+          <label htmlFor="outcome-type" style={{fontSize:12,fontWeight:600,color:COLOR.ink,display:"block",marginBottom:6}}>Outcome decision</label>
+          <select id="outcome-type" value={outcomeType} onChange={e=>setOutcomeType(e.target.value)} disabled={completingOutcomeDetails} style={{width:"100%",fontSize:13,border:`1.5px solid ${COLOR.borderStrong}`,borderRadius:8,padding:"10px 12px",fontFamily:FONT.sans,color:outcomeType?COLOR.ink:COLOR.inkQuiet,background:completingOutcomeDetails?COLOR.rail:COLOR.surface,outline:"none",boxSizing:"border-box"}}>
             <option value="">Select outcome…</option>
             <option value="No further action">No further action</option>
             <option value="First written warning">First written warning</option>
@@ -268,50 +335,50 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
             <option value="Dismissal with notice">Dismissal with notice</option>
             <option value="Summary dismissal (gross misconduct)">Summary dismissal (gross misconduct)</option>
           </select>
-          {completingOutcomeDetails&&<div style={{fontSize:11,color:"#9B9098",marginTop:4}}>The outcome itself was already decided — this only completes its missing details.</div>}
+          {completingOutcomeDetails&&<div style={{fontSize:11,color:COLOR.inkQuiet,marginTop:4}}>The outcome itself was already decided — this only completes its missing details.</div>}
         </div>
         {completingOutcomeDetails&&(
           <div style={{marginBottom:16}}>
-            <label htmlFor="outcome-issue-date" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Original outcome issue date</label>
-            <input id="outcome-issue-date" type="date" value={confirmedIssueDate} onChange={e=>setConfirmedIssueDate(e.target.value)} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:FONT.sans,color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}/>
-            <div style={{fontSize:11,color:"#9B9098",marginTop:4}}>This wasn't recorded at the time — confirm (or correct) the date this outcome was actually decided. Pre-filled from the case's own hearing meeting date where available.</div>
+            <label htmlFor="outcome-issue-date" style={{fontSize:12,fontWeight:600,color:COLOR.ink,display:"block",marginBottom:6}}>Original outcome issue date</label>
+            <input id="outcome-issue-date" type="date" value={confirmedIssueDate} onChange={e=>setConfirmedIssueDate(e.target.value)} style={{width:"100%",fontSize:13,border:`1.5px solid ${COLOR.borderStrong}`,borderRadius:8,padding:"10px 12px",fontFamily:FONT.sans,color:COLOR.ink,background:COLOR.surface,outline:"none",boxSizing:"border-box"}}/>
+            <div style={{fontSize:11,color:COLOR.inkQuiet,marginTop:4}}>This wasn't recorded at the time — confirm (or correct) the date this outcome was actually decided. Pre-filled from the case's own hearing meeting date where available.</div>
           </div>
         )}
         {isWarning&&(
           <div style={{marginBottom:16}}>
-            <label htmlFor="warning-duration" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Warning duration</label>
+            <label htmlFor="warning-duration" style={{fontSize:12,fontWeight:600,color:COLOR.ink,display:"block",marginBottom:6}}>Warning duration</label>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <input id="warning-duration" type="number" min={1} max={60} step={1} value={warningDurationMonths} onChange={e=>setWarningDurationMonths(e.target.value)} placeholder="e.g. 6" style={{width:100,fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:FONT.sans,color:"#1C1820",background:"#FDFAF5",outline:"none",boxSizing:"border-box"}}/>
-              <span style={{fontSize:13,color:"#6B6375"}}>months</span>
+              <input id="warning-duration" type="number" min={1} max={60} step={1} value={warningDurationMonths} onChange={e=>setWarningDurationMonths(e.target.value)} placeholder="e.g. 6" style={{width:100,fontSize:13,border:`1.5px solid ${COLOR.borderStrong}`,borderRadius:8,padding:"10px 12px",fontFamily:FONT.sans,color:COLOR.ink,background:COLOR.surface,outline:"none",boxSizing:"border-box"}}/>
+              <span style={{fontSize:13,color:COLOR.inkFaint}}>months</span>
             </div>
             {warningDurationMonths&&!isValidWarningDurationMonths(warningDurationMonths)&&(
-              <div style={{fontSize:11,color:"#C84B2F",marginTop:4}}>Enter a whole number of months between 1 and 60.</div>
+              <div style={{fontSize:11,color:COLOR.red,marginTop:4}}>Enter a whole number of months between 1 and 60.</div>
             )}
             {previewExpiry&&(
-              <div style={{fontSize:12,color:"#6B6375",marginTop:6}}>Expires: <strong style={{color:"#1C1820"}}>{previewExpiry.toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"})}</strong> (calculated, not editable)</div>
+              <div style={{fontSize:12,color:COLOR.inkFaint,marginTop:6}}>Expires: <strong style={{color:COLOR.ink}}>{previewExpiry.toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"})}</strong> (calculated, not editable)</div>
             )}
           </div>
         )}
         <div style={{marginBottom:20}}>
-          <label htmlFor="outcome-notes" style={{fontSize:12,fontWeight:600,color:"#1C1820",display:"block",marginBottom:6}}>Notes <span style={{fontWeight:400,color:"#9B9098"}}>(optional)</span></label>
-          <textarea id="outcome-notes" value={outcomeNotes} onChange={e=>setOutcomeNotes(e.target.value)} placeholder="Any additional notes…" rows={3} style={{width:"100%",fontSize:13,border:"1.5px solid #E8E0D0",borderRadius:8,padding:"10px 12px",fontFamily:FONT.sans,color:"#1C1820",background:"#FDFAF5",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+          <label htmlFor="outcome-notes" style={{...TYPE.metadata,fontWeight:700,color:COLOR.ink,display:"block",marginBottom:6}}>Outcome reasoning <span style={{fontWeight:400,color:COLOR.inkQuiet}}>(optional)</span></label>
+          <textarea id="outcome-notes" value={outcomeNotes} onChange={e=>setOutcomeNotes(e.target.value)} placeholder="Why you reached this outcome…" rows={3} style={{width:"100%",fontSize:13,border:`1.5px solid ${COLOR.borderStrong}`,borderRadius:8,padding:"10px 12px",fontFamily:FONT.sans,color:COLOR.ink,background:COLOR.surface,outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
         </div>
         {!completingOutcomeDetails&&(
-          <div style={{background:"#FFF8F0",border:"1px solid #E8622A33",borderRadius:8,padding:"10px 14px",marginBottom:outcomeType&&approvalActionForOutcome(outcomeType)?10:20,fontSize:12,color:"#E8622A"}}>
+          <div style={{background:COLOR.amberTint,border:`1px solid ${COLOR.amber}33`,borderRadius:8,padding:"10px 14px",marginBottom:outcomeType&&approvalActionForOutcome(outcomeType)?10:20,fontSize:12,color:COLOR.amber}}>
             Issuing this outcome starts the employee's 5 working day appeal window (ACAS Code).
           </div>
         )}
         {!completingOutcomeDetails&&outcomeType&&approvalActionForOutcome(outcomeType)&&(
           <div style={{background:COLOR.purpleTint,border:`1px solid ${COLOR.purple}44`,borderRadius:8,padding:"10px 14px",marginBottom:20,fontSize:12,color:COLOR.purpleDeep}}>
-            {approvalActionLabel(approvalActionForOutcome(outcomeType))} requires sign-off — this will also open an approval request, visible on the case's Overview tab.
+            {approvalActionLabel(approvalActionForOutcome(outcomeType))} normally requires HR sign-off. Recording it opens an approval request on the case's Overview tab — the outcome is recorded now and is not held pending that approval.
           </div>
         )}
         <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-          <button onClick={close} disabled={saving} style={{fontSize:13,padding:"10px 20px",border:"1px solid #E8E0D0",borderRadius:8,background:"#FFFFFF",cursor:saving?"not-allowed":"pointer",color:"#6B6375",fontFamily:FONT.sans}}>Cancel</button>
+          <button onClick={close} disabled={saving} style={{fontSize:13,padding:"10px 20px",border:`1px solid ${COLOR.borderStrong}`,borderRadius:8,background:"#FFFFFF",cursor:saving?"not-allowed":"pointer",color:COLOR.inkFaint,fontFamily:FONT.sans}}>Cancel</button>
           {completingOutcomeDetails ? (
-            <button disabled={!outcomeType||saving||!durationValid||!issueDateValid} onClick={completeOutcomeDetails} style={{fontSize:13,padding:"10px 20px",background:!outcomeType||saving||!durationValid||!issueDateValid?"#B8A9F8":"#1C1820",border:"none",borderRadius:8,color:"#fff",cursor:!outcomeType||saving||!durationValid||!issueDateValid?"not-allowed":"pointer",fontWeight:600,fontFamily:FONT.sans}}>{saving?"Saving…":"Save outcome details"}</button>
+            <button disabled={!outcomeType||saving||!durationValid||!issueDateValid} onClick={completeOutcomeDetails} style={{fontSize:13,padding:"10px 20px",background:!outcomeType||saving||!durationValid||!issueDateValid?COLOR.border:COLOR.purple,border:"none",borderRadius:8,color:!outcomeType||saving||!durationValid||!issueDateValid?COLOR.inkQuiet:COLOR.paper,cursor:!outcomeType||saving||!durationValid||!issueDateValid?"not-allowed":"pointer",fontWeight:600,fontFamily:FONT.sans}}>{saving?"Saving…":"Save outcome details"}</button>
           ) : (
-            <button disabled={!outcomeType||saving||!durationValid} onClick={issueOutcome} style={{fontSize:13,padding:"10px 20px",background:!outcomeType||saving||!durationValid?"#B8A9F8":"#1C1820",border:"none",borderRadius:8,color:"#fff",cursor:!outcomeType||saving||!durationValid?"not-allowed":"pointer",fontWeight:600,fontFamily:FONT.sans}}>{saving?"Recording outcome…":"Issue outcome & generate letter"}</button>
+            <button disabled={!outcomeType||saving||!durationValid} onClick={issueOutcome} style={{fontSize:13,padding:"10px 20px",background:!outcomeType||saving||!durationValid?COLOR.border:COLOR.purple,border:"none",borderRadius:8,color:!outcomeType||saving||!durationValid?COLOR.inkQuiet:COLOR.paper,cursor:!outcomeType||saving||!durationValid?"not-allowed":"pointer",fontWeight:600,fontFamily:FONT.sans}}>{saving?"Recording outcome…":"Record outcome"}</button>
           )}
         </div>
       </div>

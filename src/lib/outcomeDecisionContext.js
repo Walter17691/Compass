@@ -1,0 +1,79 @@
+// ─────────────────────────────────────────────────────────────────────────
+// WAVE D2 — the record the decision is actually about.
+//
+// The outcome was recorded in a 480px modal containing a dropdown, an optional
+// duration and a notes box. Nothing on screen said what the employee was
+// alleged to have done, what the hearing established, or whether they were
+// already under a live warning. The decision surface was not cluttered — it was
+// empty, and the manager had to carry the case in their head.
+//
+// ┌─ NO NEW RETRIEVAL. NONE. ───────────────────────────────────────────────┐
+// │ Every value here is derived from data the caller was ALREADY given and  │
+// │ already authorised to hold: the case object it is rendering, the        │
+// │ allegations already loaded under RLS, the meetings already on that      │
+// │ case. This module performs no query, no fetch and no permission logic,  │
+// │ so a case, allegation or meeting the viewer cannot see never arrives —  │
+// │ exactly the rule employeeFile.js states for its own authorised slice.   │
+// │                                                                          │
+// │ Nothing is fetched and hidden client-side. There is nothing to hide.     │
+// └─────────────────────────────────────────────────────────────────────────┘
+//
+// ┌─ COMPASS DOES NOT DECIDE ───────────────────────────────────────────────┐
+// │ No recommendation, no severity, no score, no "suggested outcome", and   │
+// │ no ranking of the material. This assembles facts for a human and stops. │
+// └─────────────────────────────────────────────────────────────────────────┘
+// ─────────────────────────────────────────────────────────────────────────
+
+import { deriveCurrentWarnings } from './employeeFile';
+import { isGenuineMeetingRecord } from './caseStage';
+import { isDisciplinaryMeeting, isGrievanceMeeting } from './meetingTypeMatch';
+
+// An allegation is what is alleged. Compass has no authoritative "finding"
+// object, so this never implies one: the status is reported exactly as stored,
+// and the absence of a finding is shown as absence, not inferred from the
+// outcome the manager is about to choose.
+export function decisionAllegations(allegations = [], caseId) {
+  if (!caseId) return [];
+  return (Array.isArray(allegations) ? allegations : [])
+    .filter(a => a && a.caseId === caseId)
+    .map(a => ({ id: a.id, title: a.title, status: a.status || null }));
+}
+
+// The hearing this decision follows. The same two matchers the rest of the
+// product uses, and only a GENUINE record — a letter-only meeting is a
+// communication artefact, not a hearing, and offering it here would show the
+// decision-maker a letter where they expected the record of the meeting.
+export function decisionMeeting(caseObj) {
+  const meetings = Array.isArray(caseObj?.meetings) ? caseObj.meetings : [];
+  const relevant = meetings.filter(m =>
+    isGenuineMeetingRecord(m) && (isDisciplinaryMeeting(m.type) || isGrievanceMeeting(m.type)));
+  return relevant[relevant.length - 1] || null;
+}
+
+// Live formal warnings, from the ONE authoritative derivation Employee File
+// uses. Not recreated here, so Letter of Concern, management concerns, ordinary
+// conversations, expired warnings and overturned warnings are excluded by that
+// function's own rules rather than by a second set that could drift from them.
+//
+// `cases` must already be the authorised slice for this employee. The case
+// being decided is excluded: its own outcome is the decision in progress, not
+// prior history.
+export function priorLiveWarnings({ cases = [], allegations = [], currentCaseId = null, now = new Date() } = {}) {
+  return deriveCurrentWarnings(cases, allegations, now)
+    .filter(w => w.caseId !== currentCaseId);
+}
+
+export function outcomeDecisionContext({ caseObj = null, cases = [], allegations = [], now = new Date() } = {}) {
+  const caseId = caseObj?.id || null;
+  const allegationList = decisionAllegations(allegations, caseId);
+  const meeting = decisionMeeting(caseObj);
+  const warnings = priorLiveWarnings({ cases, allegations, currentCaseId: caseId, now });
+  return {
+    allegations: allegationList,
+    meeting,
+    warnings,
+    // True when there is genuinely nothing to show, so the surface can say so
+    // rather than rendering three empty headings.
+    isEmpty: allegationList.length === 0 && !meeting && warnings.length === 0,
+  };
+}

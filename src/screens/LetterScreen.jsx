@@ -4,7 +4,8 @@ import { Btn } from '../components/Primitives';
 import { MDRenderer } from '../components/MDRenderer';
 import { CheckIcon } from '../components/Icons';
 import { PageHeader } from '../components/design/PageHeader';
-import { COLOR, TYPE, FONT } from '../styles/tokens';
+import { COLOR, TYPE, FONT, RADIUS } from '../styles/tokens';
+import { outcomeLetterNotice, OUTCOME_LETTER } from '../lib/outcomeLetter';
 import { validateFormalLetter } from '../lib/letterValidation';
 
 // UAT Product Hierarchy pass, Part 3 — this screen was the brief's own
@@ -33,7 +34,7 @@ const OTHER_LETTER_LABELS = {
   "no-case-answer": "Response letter",
 };
 
-export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterOutput, letterSources=[], onAskWhy, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, onRemoveSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen, letterIsApproved, letterApproval, approveLetter, onSendFromCompass, onSendForAcknowledgement, outcomeRecorded=true, outcomeValue, warningDurationMonths, warningExpiresAt }) {
+export function LetterScreen({ outcomeLetter=null, handleLetter, activeLetter, aiProcessing, letterOutput, letterSources=[], onAskWhy, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, onRemoveSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen, letterIsApproved, letterApproval, approveLetter, onSendFromCompass, onSendForAcknowledgement, outcomeRecorded=true, outcomeValue, warningDurationMonths, warningExpiresAt }) {
   const [showHistory, setShowHistory] = useState(false);
   // Phase 6.5 hardening (closes Prompt 16 audit finding H10, HIGH) — an
   // "Outcome letter" can be reached before any real outcome decision
@@ -97,6 +98,23 @@ export function LetterScreen({ handleLetter, activeLetter, aiProcessing, letterO
         </div>
       </div>
       <div style={{maxWidth:900,margin:"28px auto",padding:"0 20px"}}>
+        {/* ══ WAVE D3 — a letter must not outlive the decision it states ══
+            Derived in App from the authoritative case (outcomeLetter.js): a
+            letter saved BEFORE the outcome now recorded was written for a
+            different decision. An ISSUED letter is never called stale — it is
+            a correct record of what was sent, and is preserved, not rewritten. */}
+        {activeLetter==="outcome"&&outcomeLetter&&outcomeLetterNotice(outcomeLetter)&&(
+          <div role="status" style={{display:"flex",gap:10,alignItems:"flex-start",
+                 border:`1px solid ${COLOR.amber}44`,background:COLOR.amberTint,
+                 borderRadius:RADIUS.surface,padding:"12px 14px",marginBottom:16}}>
+            <span style={{...TYPE.micro,color:COLOR.amber,whiteSpace:"nowrap",paddingTop:1}}>
+              {outcomeLetter.state===OUTCOME_LETTER.ISSUED_SUPERSEDED?"Already issued":"Out of date"}
+            </span>
+            <span style={{...TYPE.rowContext,color:COLOR.inkSoft,lineHeight:1.6}}>
+              {outcomeLetterNotice(outcomeLetter)}
+            </span>
+          </div>
+        )}
         {aiProcessing&&!letterOutput&&(
           <div style={{textAlign:"center",padding:50}}>
             <span className="pu" style={{color:COLOR.purple,fontSize:24}}>●</span>

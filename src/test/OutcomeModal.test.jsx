@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'fs';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { OutcomeModal } from '../screens/OutcomeModal.jsx';
@@ -13,7 +14,7 @@ describe('OutcomeModal — field labelling (Phase 6.5, Batch 13)', () => {
   it('labels the outcome decision select and the notes field', () => {
     render(<OutcomeModal cases={[cs]} activeCaseId="c1" setShowOutcomeModal={noop} outcomeType="" setOutcomeType={noop} outcomeNotes="" setOutcomeNotes={noop} saveCases={noop} showToast={noop} handleLetter={noop} startOffboarding={noop} requestHrReview={noop} allegations={[]} caseSignals={[]} requestOverrideReason={noop} createCaseTask={noop} setCaseInfo={noop} setReviewOutput={noop} audit={noop} setCompletingOutcomeDetails={noop} />);
     expect(screen.getByLabelText('Outcome decision')).toBeInTheDocument();
-    expect(screen.getByLabelText(/Notes/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Outcome reasoning/)).toBeInTheDocument();
   });
 });
 
@@ -42,15 +43,18 @@ describe('OutcomeModal — does not report success until the save is confirmed (
     const showToast = vi.fn();
     const handleLetter = vi.fn();
     render(<OutcomeModal {...baseProps} outcomeType="No further action" saveCases={saveCases} setShowOutcomeModal={setShowOutcomeModal} showToast={showToast} handleLetter={handleLetter} />);
-    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+    await user.click(screen.getByRole('button', { name: /Record outcome/ }));
     expect(saveCases).toHaveBeenCalledWith(expect.any(Array), 'c1');
     await waitFor(() => expect(setShowOutcomeModal).toHaveBeenCalledWith(false));
     expect(showToast).toHaveBeenCalledWith('Outcome recorded');
-    // Defect #20 remediation — handleLetter now receives the employee/
+    // WAVE D1 — recording the decision no longer drafts the communication.
+    // The spy is deliberately kept and the expectation inverted: this file is
+    // now a standing guard that the two acts cannot be recoupled.
+    // Superseded Defect #20 remediation — handleLetter used to receive the employee/
     // manager/date this modal just computed directly (rather than relying
     // on handleLetter's own closure over caseInfo state, which the
     // synchronous setCaseInfo call just above hasn't flushed into yet).
-    expect(handleLetter).toHaveBeenCalledWith('outcome', { employeeName: 'Sam Employee', manager: '', date: undefined });
+    expect(handleLetter).not.toHaveBeenCalled();
   });
 
   it('keeps the modal open and shows the generic error toast, without declaring success, on a genuine persistence failure (reason: "error")', async () => {
@@ -60,7 +64,7 @@ describe('OutcomeModal — does not report success until the save is confirmed (
     const showToast = vi.fn();
     const handleLetter = vi.fn();
     render(<OutcomeModal {...baseProps} outcomeType="No further action" saveCases={saveCases} setShowOutcomeModal={setShowOutcomeModal} showToast={showToast} handleLetter={handleLetter} />);
-    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+    await user.click(screen.getByRole('button', { name: /Record outcome/ }));
     await waitFor(() => expect(showToast).toHaveBeenCalledWith("Couldn't record the outcome — please try again", 'error'));
     expect(setShowOutcomeModal).not.toHaveBeenCalled();
     expect(handleLetter).not.toHaveBeenCalled();
@@ -81,7 +85,7 @@ describe('OutcomeModal — does not report success until the save is confirmed (
       const saveCases = vi.fn().mockResolvedValue({ ok: false, reason: 'conflict' });
       const showToast = vi.fn();
       render(<OutcomeModal {...baseProps} outcomeType="No further action" saveCases={saveCases} setShowOutcomeModal={noop} showToast={showToast} handleLetter={noop} />);
-      await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+      await user.click(screen.getByRole('button', { name: /Record outcome/ }));
       await waitFor(() => expect(saveCases).toHaveBeenCalledTimes(1));
       expect(showToast).not.toHaveBeenCalledWith("Couldn't record the outcome — please try again", 'error');
       // No success toast either — this genuinely didn't succeed yet.
@@ -96,7 +100,7 @@ describe('OutcomeModal — does not report success until the save is confirmed (
       const handleLetter = vi.fn();
       render(<OutcomeModal {...baseProps} outcomeType="Final written warning" saveCases={saveCases} setShowOutcomeModal={setShowOutcomeModal} showToast={noop} handleLetter={handleLetter} requestHrReview={requestHrReview} />);
       await user.type(screen.getByLabelText('Warning duration'), '12');
-      await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+      await user.click(screen.getByRole('button', { name: /Record outcome/ }));
       await waitFor(() => expect(saveCases).toHaveBeenCalledTimes(1));
       expect(setShowOutcomeModal).not.toHaveBeenCalled();
       expect(requestHrReview).not.toHaveBeenCalled();
@@ -107,7 +111,7 @@ describe('OutcomeModal — does not report success until the save is confirmed (
       const user = userEvent.setup();
       const saveCases = vi.fn().mockResolvedValue({ ok: false, reason: 'conflict' });
       render(<OutcomeModal {...baseProps} outcomeType="No further action" saveCases={saveCases} setShowOutcomeModal={noop} showToast={noop} handleLetter={noop} />);
-      await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+      await user.click(screen.getByRole('button', { name: /Record outcome/ }));
       await waitFor(() => expect(saveCases).toHaveBeenCalledTimes(1));
       // Give any stray microtask/retry a chance to fire, then confirm
       // the count never grows on its own.
@@ -126,7 +130,7 @@ describe('OutcomeModal — does not report success until the save is confirmed (
       render(<OutcomeModal {...baseProps} outcomeType="No further action" saveCases={saveCases} setShowOutcomeModal={setShowOutcomeModal} showToast={showToast} handleLetter={handleLetter} />);
 
       // First attempt: loses to a conflict — nothing declared, modal stays.
-      await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+      await user.click(screen.getByRole('button', { name: /Record outcome/ }));
       await waitFor(() => expect(saveCases).toHaveBeenCalledTimes(1));
       expect(setShowOutcomeModal).not.toHaveBeenCalled();
 
@@ -134,22 +138,25 @@ describe('OutcomeModal — does not report success until the save is confirmed (
       // this modal holds are exactly what a retry (against the now-
       // refreshed `cases` prop the real app would have re-rendered with)
       // resubmits, not lost or cleared by the failed first attempt.
-      const retryButton = screen.getByRole('button', { name: /Issue outcome/ });
+      const retryButton = screen.getByRole('button', { name: /Record outcome/ });
       await waitFor(() => expect(retryButton).toBeEnabled());
       await user.click(retryButton);
       await waitFor(() => expect(saveCases).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(setShowOutcomeModal).toHaveBeenCalledWith(false));
       expect(showToast).toHaveBeenCalledWith('Outcome recorded');
-      expect(handleLetter).toHaveBeenCalledWith('outcome', { employeeName: 'Sam Employee', manager: '', date: undefined });
+      // WAVE D1 — the retry records the decision and stops there. The
+      // conflict/retry invariants above are unchanged; only the letter that
+      // used to be drafted alongside them is gone.
+      expect(handleLetter).not.toHaveBeenCalled();
     });
   });
 
-  it('disables Issue outcome and Cancel, and shows a pending label, while the save is in flight', async () => {
+  it('disables Record outcome and Cancel, and shows a pending label, while the save is in flight', async () => {
     const user = userEvent.setup();
     let resolveSave;
     const saveCases = vi.fn(() => new Promise(r => { resolveSave = r; }));
     render(<OutcomeModal {...baseProps} outcomeType="No further action" saveCases={saveCases} setShowOutcomeModal={noop} showToast={noop} handleLetter={noop} />);
-    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+    await user.click(screen.getByRole('button', { name: /Record outcome/ }));
     expect(screen.getByRole('button', { name: 'Recording outcome…' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
     resolveSave({ ok: true });
@@ -162,7 +169,7 @@ describe('OutcomeModal — does not report success until the save is confirmed (
     const saveCases = vi.fn(() => new Promise(r => { resolveSave = r; }));
     const setShowOutcomeModal = vi.fn();
     render(<OutcomeModal {...baseProps} outcomeType="No further action" saveCases={saveCases} setShowOutcomeModal={setShowOutcomeModal} showToast={noop} handleLetter={noop} />);
-    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+    await user.click(screen.getByRole('button', { name: /Record outcome/ }));
     await user.keyboard('{Escape}');
     expect(setShowOutcomeModal).not.toHaveBeenCalled();
     resolveSave({ ok: true });
@@ -183,88 +190,38 @@ describe('OutcomeModal — does not report success until the save is confirmed (
 // letter addressed to the wrong person. These tests verify the fix:
 // caseInfo/reviewOutput are now grounded from cs/its hearing meeting
 // immediately before handleLetter fires.
-describe('OutcomeModal — grounds caseInfo/reviewOutput before drafting the outcome letter (Defect #11/#12/#13)', () => {
-  const goldenPathCase = {
-    id: 'c1',
-    employeeName: 'UAT - Test Employee (Golden Path)',
-    manager: 'Walter Carta',
-    description: "Allegation: repeated late arrival without notice. O'Brien-Test's manager (Site Lead) raised the concern.",
-    meetings: [
-      { id: 'm1', type: 'Investigation', date: '2026-09-07', record: 'Investigation record text.' },
-      { id: 'm2', type: 'Disciplinary', date: '2026-09-08', record: 'The panel decided a first written warning, to remain on file for six months.' },
-    ],
-  };
-  const groundingProps = {
-    cases: [goldenPathCase], activeCaseId: 'c1', setOutcomeType: noop,
-    outcomeNotes: 'Documented rationale for this test.', setOutcomeNotes: noop,
-    startOffboarding: noop, requestHrReview: noop, allegations: [], caseSignals: [],
-    requestOverrideReason: noop, createCaseTask: noop, saveCases: vi.fn().mockResolvedValue({ ok: true }),
-    setShowOutcomeModal: noop, showToast: noop, audit: noop, setCompletingOutcomeDetails: noop,
-  };
+// ── WAVE D1 — this protection MOVED, it was not dropped ──
+//
+// Defect #11/#12/#13: the outcome letter must be grounded in the case's real
+// employeeName and its own relevant hearing record, never a name pulled from
+// the case narrative or a guessed default.
+//
+// That grounding belonged to drafting the letter, and OutcomeModal no longer
+// drafts one — so the contract now lives where the letter is actually drafted:
+// CaseViewScreen's outcome_letter action. Asserted there rather than deleted,
+// because the defect it prevents is unchanged.
+describe('the outcome letter is still grounded — on the letter path (Defect #11/#12/#13)', () => {
+  const caseView = readFileSync('src/screens/CaseViewScreen.jsx', 'utf8');
 
-  it('sets caseInfo.employee to the case\'s real employeeName, never a name pulled from the case narrative', async () => {
-    const user = userEvent.setup();
-    const setCaseInfo = vi.fn();
-    render(<OutcomeModal {...groundingProps} outcomeType="First written warning" handleLetter={noop} setCaseInfo={setCaseInfo} setReviewOutput={noop} />);
-    await user.type(screen.getByLabelText('Warning duration'), '6');
-    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
-    await waitFor(() => expect(setCaseInfo).toHaveBeenCalled());
-    const updater = setCaseInfo.mock.calls[0][0];
-    const result = updater({});
-    expect(result.employee).toBe('UAT - Test Employee (Golden Path)');
-    expect(result.employee).not.toMatch(/O'Brien-Test/);
-    expect(result.manager).toBe('Walter Carta');
+  it('grounds the record and the employee from the case\'s own relevant meeting', () => {
+    const i = caseView.indexOf('nextStep.action==="outcome_letter"');
+    expect(i).toBeGreaterThan(-1);
+    const branch = caseView.slice(i, i + 400);
+    expect(branch).toContain('const m=relevantMeeting()');
+    expect(branch).toContain('setReviewOutput(m.record||"")');
+    expect(branch).toContain('employee:cs.employeeName');
   });
 
-  it('sets reviewOutput to the relevant Disciplinary meeting\'s own record, grounding the AI on the real hearing decision (six months, not a guessed default)', async () => {
-    const user = userEvent.setup();
-    const setReviewOutput = vi.fn();
-    render(<OutcomeModal {...groundingProps} outcomeType="First written warning" handleLetter={noop} setCaseInfo={noop} setReviewOutput={setReviewOutput} />);
-    await user.type(screen.getByLabelText('Warning duration'), '6');
-    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
-    await waitFor(() => expect(setReviewOutput).toHaveBeenCalledWith(expect.stringContaining('six months')));
-  });
-
-  it('grounds before calling handleLetter, so the AI request is never sent ungrounded', async () => {
-    const user = userEvent.setup();
-    const calls = [];
-    const setCaseInfo = () => calls.push('setCaseInfo');
-    const handleLetter = () => calls.push('handleLetter');
-    render(<OutcomeModal {...groundingProps} outcomeType="First written warning" handleLetter={handleLetter} setCaseInfo={setCaseInfo} setReviewOutput={noop} />);
-    await user.type(screen.getByLabelText('Warning duration'), '6');
-    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
-    await waitFor(() => expect(calls).toContain('handleLetter'));
-    expect(calls.indexOf('setCaseInfo')).toBeLessThan(calls.indexOf('handleLetter'));
-  });
-
-  it('picks the most recent Disciplinary/Grievance meeting when several meetings exist, not just the last meeting overall', async () => {
-    const user = userEvent.setup();
-    const caseWithTrailingNote = {
-      ...goldenPathCase,
-      meetings: [...goldenPathCase.meetings, { id: 'm3', type: 'Informal check-in', date: '2026-09-09', record: 'Unrelated later note.' }],
-    };
-    const setReviewOutput = vi.fn();
-    render(<OutcomeModal {...groundingProps} cases={[caseWithTrailingNote]} outcomeType="First written warning" handleLetter={noop} setCaseInfo={noop} setReviewOutput={setReviewOutput} />);
-    await user.type(screen.getByLabelText('Warning duration'), '6');
-    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
-    await waitFor(() => expect(setReviewOutput).toHaveBeenCalledWith(expect.stringContaining('six months')));
-  });
-
-  it('falls back to the last meeting overall when no Disciplinary/Grievance meeting exists', async () => {
-    const user = userEvent.setup();
-    const caseNoHearing = { ...goldenPathCase, meetings: [{ id: 'm1', type: 'Informal chat', date: '2026-09-01', record: 'Only an informal chat happened.' }] };
-    const setReviewOutput = vi.fn();
-    render(<OutcomeModal {...groundingProps} cases={[caseNoHearing]} outcomeType="First written warning" handleLetter={noop} setCaseInfo={noop} setReviewOutput={setReviewOutput} />);
-    await user.type(screen.getByLabelText('Warning duration'), '6');
-    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
-    await waitFor(() => expect(setReviewOutput).toHaveBeenCalledWith('Only an informal chat happened.'));
+  it('OutcomeModal itself no longer grounds or drafts anything', () => {
+    const outcome = readFileSync('src/screens/OutcomeModal.jsx', 'utf8')
+      .split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+    expect(outcome).not.toContain('setReviewOutput');
+    expect(outcome).not.toContain('setCaseInfo');
+    expect(outcome).not.toContain('handleLetter');
   });
 });
 
-// UAT Golden Path remediation (Defect #12) — Outcome UX tests: which
-// outcome types require a warning duration, validation of the entered
-// value, the calculated (never independently editable) expiry preview,
-// and that all four new fields actually reach saveCases.
+
 describe('OutcomeModal — warning duration field (Defect #12)', () => {
   const durationProps = {
     cases: [cs], activeCaseId: 'c1', setOutcomeType: noop,
@@ -277,47 +234,47 @@ describe('OutcomeModal — warning duration field (Defect #12)', () => {
   it.each(['First written warning', 'Final written warning'])('%s requires a warning duration — submit stays disabled until one is entered', async (outcomeType) => {
     render(<OutcomeModal {...durationProps} outcomeType={outcomeType} />);
     expect(screen.getByLabelText('Warning duration')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Issue outcome/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Record outcome/ })).toBeDisabled();
   });
 
   it.each(['No further action', 'Demotion', 'Dismissal with notice', 'Summary dismissal (gross misconduct)'])('%s does not show or require a warning duration', (outcomeType) => {
     render(<OutcomeModal {...durationProps} outcomeType={outcomeType} />);
     expect(screen.queryByLabelText('Warning duration')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Issue outcome/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Record outcome/ })).toBeEnabled();
   });
 
   it('rejects zero', async () => {
     const user = userEvent.setup();
     render(<OutcomeModal {...durationProps} outcomeType="First written warning" />);
     await user.type(screen.getByLabelText('Warning duration'), '0');
-    expect(screen.getByRole('button', { name: /Issue outcome/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Record outcome/ })).toBeDisabled();
   });
 
   it('rejects a negative value', async () => {
     const user = userEvent.setup();
     render(<OutcomeModal {...durationProps} outcomeType="First written warning" />);
     await user.type(screen.getByLabelText('Warning duration'), '-3');
-    expect(screen.getByRole('button', { name: /Issue outcome/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Record outcome/ })).toBeDisabled();
   });
 
   it('rejects a decimal value', async () => {
     const user = userEvent.setup();
     render(<OutcomeModal {...durationProps} outcomeType="First written warning" />);
     await user.type(screen.getByLabelText('Warning duration'), '6.5');
-    expect(screen.getByRole('button', { name: /Issue outcome/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Record outcome/ })).toBeDisabled();
   });
 
   it('rejects empty for a warning outcome', () => {
     render(<OutcomeModal {...durationProps} outcomeType="First written warning" />);
     expect(screen.getByLabelText('Warning duration')).toHaveValue(null);
-    expect(screen.getByRole('button', { name: /Issue outcome/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Record outcome/ })).toBeDisabled();
   });
 
   it('accepts a valid positive integer', async () => {
     const user = userEvent.setup();
     render(<OutcomeModal {...durationProps} outcomeType="First written warning" />);
     await user.type(screen.getByLabelText('Warning duration'), '6');
-    expect(screen.getByRole('button', { name: /Issue outcome/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Record outcome/ })).toBeEnabled();
   });
 
   it('shows a calculated expiry preview once a valid duration is entered, and none before', async () => {
@@ -334,7 +291,7 @@ describe('OutcomeModal — warning duration field (Defect #12)', () => {
     const saveCases = vi.fn().mockResolvedValue({ ok: true });
     render(<OutcomeModal {...durationProps} outcomeType="First written warning" saveCases={saveCases} />);
     await user.type(screen.getByLabelText('Warning duration'), '6');
-    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+    await user.click(screen.getByRole('button', { name: /Record outcome/ }));
     await waitFor(() => expect(saveCases).toHaveBeenCalled());
     const [savedCases] = saveCases.mock.calls[0];
     const saved = savedCases.find(c => c.id === 'c1');
@@ -354,7 +311,7 @@ describe('OutcomeModal — warning duration field (Defect #12)', () => {
     const user = userEvent.setup();
     const saveCases = vi.fn().mockResolvedValue({ ok: true });
     render(<OutcomeModal {...durationProps} outcomeType="No further action" saveCases={saveCases} />);
-    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+    await user.click(screen.getByRole('button', { name: /Record outcome/ }));
     await waitFor(() => expect(saveCases).toHaveBeenCalled());
     const [savedCases] = saveCases.mock.calls[0];
     const saved = savedCases.find(c => c.id === 'c1');
@@ -382,7 +339,7 @@ describe('OutcomeModal — persists the authoritative decision-maker (Appeal Ind
     const user = userEvent.setup();
     const saveCases = vi.fn().mockResolvedValue({ ok: true });
     render(<OutcomeModal {...decidedByProps} outcomeType="No further action" saveCases={saveCases} currentUserId="hr-walter" />);
-    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+    await user.click(screen.getByRole('button', { name: /Record outcome/ }));
     await waitFor(() => expect(saveCases).toHaveBeenCalled());
     const [savedCases] = saveCases.mock.calls[0];
     const saved = savedCases.find(c => c.id === 'c1');
@@ -394,7 +351,7 @@ describe('OutcomeModal — persists the authoritative decision-maker (Appeal Ind
     const saveCases = vi.fn().mockResolvedValue({ ok: true });
     const caseWithManager = { ...cs, manager: 'Someone Else Entirely', ownerId: 'owner-not-decider' };
     render(<OutcomeModal {...decidedByProps} cases={[caseWithManager]} outcomeType="No further action" saveCases={saveCases} currentUserId="hr-walter" />);
-    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+    await user.click(screen.getByRole('button', { name: /Record outcome/ }));
     await waitFor(() => expect(saveCases).toHaveBeenCalled());
     const [savedCases] = saveCases.mock.calls[0];
     const saved = savedCases.find(c => c.id === 'c1');
@@ -406,7 +363,7 @@ describe('OutcomeModal — persists the authoritative decision-maker (Appeal Ind
     const user = userEvent.setup();
     const saveCases = vi.fn().mockResolvedValue({ ok: true });
     render(<OutcomeModal {...decidedByProps} outcomeType="No further action" saveCases={saveCases} />);
-    await user.click(screen.getByRole('button', { name: /Issue outcome/ }));
+    await user.click(screen.getByRole('button', { name: /Record outcome/ }));
     await waitFor(() => expect(saveCases).toHaveBeenCalled());
     const [savedCases] = saveCases.mock.calls[0];
     const saved = savedCases.find(c => c.id === 'c1');
