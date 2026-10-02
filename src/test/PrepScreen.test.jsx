@@ -42,7 +42,9 @@ describe('PrepScreen — field labelling (Phase 6.5, Batch 13)', () => {
     // canonically; with one selected it shows who, and does not ask again.
     expect(screen.getByLabelText(/Who is this meeting with\?/)).toBeInTheDocument();
     expect(screen.getByLabelText('Your name')).toBeInTheDocument();
-    expect(screen.getByLabelText(/Background/)).toBeInTheDocument();
+    // Wave C2 — "Background" is now "Why this meeting is happening" (ad-hoc) or
+    // "Anything else to add" (case-grounded): the field asks what it is for.
+    expect(screen.getByRole('heading', { name: /Why this meeting is happening/ })).toBeInTheDocument();
   });
 
   it('labels each prep question row\'s text field and its allegation/evidence link selects', () => {
@@ -72,9 +74,14 @@ describe('PrepScreen — surfaces a generation failure (Defect #4)', () => {
     expect(screen.queryByText(/Compass AI is temporarily unavailable/)).not.toBeInTheDocument();
   });
 
-  it('the manual skip path stays available regardless of aiError', () => {
+  it('starting the meeting stays available regardless of aiError', () => {
+    // Wave C2 — this used to be a small underlined "Skip prep and start meeting
+    // now" link, which framed preparation as compulsory and the real lifecycle
+    // action as an escape hatch. Start is now the primary action and is never
+    // gated on Compass having produced anything.
     render(<PrepScreen {...baseProps} aiError="Compass AI is temporarily unavailable." />);
-    expect(screen.getByText('Skip prep and start meeting now')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start meeting' })).toBeEnabled();
+    expect(screen.queryByText('Skip prep and start meeting now')).not.toBeInTheDocument();
   });
 });
 
@@ -122,26 +129,26 @@ describe('PrepScreen — structured appeal preparation (P1)', () => {
     expect(screen.queryByText('Hearing')).not.toBeInTheDocument();
   });
 
-  it('K. Background becomes optional Additional context for a case-grounded meeting', () => {
+  it('K. Background becomes optional "Anything else to add" for a case-grounded meeting', () => {
     renderAppeal();
-    expect(screen.getByText(/Additional context/)).toBeInTheDocument();
-    expect(screen.getByText(/\(optional\)/)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Add anything relevant that isn't already recorded in Compass.")).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText(/Previous warnings, allegations, relevant history/)).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Anything else to add/ })).toBeInTheDocument();
+    expect(screen.getByText(/^Optional\./)).toBeInTheDocument();
+    expect(screen.getByText(/add only what is not recorded there/)).toBeInTheDocument();
+    expect(screen.queryByText(/Previous warnings, allegations, relevant history/)).not.toBeInTheDocument();
   });
 
   it('K. it explains that case facts are drawn automatically', () => {
     renderAppeal();
-    expect(screen.getByText(/drawn from the case record automatically/)).toBeInTheDocument();
+    expect(screen.getByText(/already drawn from the case record/)).toBeInTheDocument();
   });
 });
 
 describe('PrepScreen — non-appeal and ad-hoc preparation is unchanged (S, T)', () => {
-  it('T. an ad-hoc meeting keeps the free-text Background field and its original placeholder', () => {
+  it('T. an ad-hoc meeting keeps the free-text background field and its original guidance', () => {
     render(<PrepScreen {...baseProps} meetingType={{ id: 'disciplinary', label: 'Disciplinary' }} caseInfo={{ employee: 'A', manager: 'B', date: '', context: '' }} />);
-    expect(screen.getByPlaceholderText(/Previous warnings, allegations, relevant history/)).toBeInTheDocument();
-    expect(screen.getByText(/Background/)).toBeInTheDocument();
-    expect(screen.queryByText(/drawn from the case record automatically/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Previous warnings, allegations, relevant history/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Why this meeting is happening/ })).toBeInTheDocument();
+    expect(screen.queryByText(/already drawn from the case record/)).not.toBeInTheDocument();
   });
 
   it('S. an ad-hoc meeting keeps an editable chair and meeting type', () => {
@@ -156,6 +163,6 @@ describe('PrepScreen — non-appeal and ad-hoc preparation is unchanged (S, T)',
       caseInfo={{ employee: 'A', manager: 'B', date: '', context: '', preparedCaseId: 'c1' }} />);
     expect(document.getElementById('prep-manager-name').tagName).toBe('INPUT');
     expect(document.getElementById('prep-meeting-type').tagName).toBe('SELECT');
-    expect(screen.getByText(/Additional context/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Anything else to add/ })).toBeInTheDocument();
   });
 });

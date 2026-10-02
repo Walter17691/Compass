@@ -113,13 +113,24 @@ describe('handlePrepare fails closed on an incomplete pack (C2)', () => {
 describe('PrepScreen cannot present an incomplete pack as ready (C2)', () => {
   const screen = readFileSync('src/screens/PrepScreen.jsx', 'utf8');
 
-  it('C2f. PREP PACK READY and Start meeting are both gated on prepNotes being present', () => {
-    const block = screen.slice(screen.indexOf('{prepNotes&&('));
-    const end = block.indexOf('Start meeting');
-    expect(end).toBeGreaterThan(-1);
-    expect(block.slice(0, end)).toContain('Prep pack ready');
+  it('Wave C2 — the prep pack no longer GATES starting the meeting', () => {
+    // This previously asserted that "Start meeting" only existed inside the
+    // {prepNotes&&(...)} block, i.e. that a manager could not start from this
+    // screen until Compass had generated something. Preparation is optional
+    // metadata, not a precondition, so that gate is deliberately gone.
+    // Bound the slice to the disclosure that actually contains the pack, rather
+    // than to end-of-file — otherwise it swallows the primary action below it.
+    const from = screen.indexOf('{prepNotes&&(');
+    const packBlock = screen.slice(from, screen.indexOf('</Reveal>', from));
+    expect(packBlock).not.toContain('Start meeting');
+    // Start exists unconditionally, outside any prepNotes guard.
+    expect(screen).toContain('{starting?"Starting…":"Start meeting"}');
     // No independent "ready" flag that could drift out of step with the text.
     expect(screen).not.toMatch(/prepPackReady|isPrepReady/);
+    // And nothing introduced a score, percentage or readiness rating. CODE only:
+    // the screen's own documentation says it deliberately has none of these.
+    const code = screen.split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+    expect(code).not.toMatch(/readinessScore|readinessPct|amber.?green/i);
   });
 });
 

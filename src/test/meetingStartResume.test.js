@@ -505,7 +505,15 @@ describe('the Resume affordance is minimal and truthful', () => {
 
   it('both PrepScreen routes persist before entering the live screen', () => {
     expect(prep).toContain('await beginMeeting({ meetingId: caseInfo.meetingId || null });');
-    expect((prep.match(/onClick=\{startMeeting\}/g) || []).length).toBe(2);
+    // Wave C2 — this pinned TWO Start routes: the primary and the small
+    // underlined "Skip prep and start meeting now" link. The skip link is gone,
+    // because preparation is optional metadata and starting was never an escape
+    // hatch from it. The invariant is unchanged and is asserted directly: every
+    // Start route on this screen goes through startMeeting, there is at least
+    // one, and startMeeting persists via beginMeeting before any navigation.
+    const startRoutes = (prep.match(/onClick=\{startMeeting\}/g) || []).length;
+    expect(startRoutes).toBeGreaterThanOrEqual(1);
+    expect((prep.match(/onClick=\{async[^}]*beginMeeting/g) || []).length).toBe(0);
     expect(prep).not.toContain('setScreen(SCREENS.RECORD)');
   });
 });
