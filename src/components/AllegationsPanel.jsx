@@ -61,7 +61,7 @@ function ReadOnlyField({ label, value, placeholder }) {
   );
 }
 
-export function AllegationsPanel({ cs, allegations, allAllegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, saveCases, cases, confirmDialog, showToast, evidenceSuggestions=[], evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, setReviewOutput, setScreen, screens, orgMembers, fmtDate, caseSignals=[], onAskWhy, generateAppealReview, appealReviewLoading, recordAppealOutcome, policies, consistencyReview, consistencyReviewLoading, generateConsistencyReview, canDecide=true, canDecideAppeal=true }) {
+export function AllegationsPanel({ cs, allegations, allAllegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, saveCases, cases, confirmDialog, showToast, evidenceSuggestions=[], evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, onPresentMeetingRecord, orgMembers, fmtDate, caseSignals=[], onAskWhy, generateAppealReview, appealReviewLoading, recordAppealOutcome, policies, consistencyReview, consistencyReviewLoading, generateConsistencyReview, canDecide=true, canDecideAppeal=true }) {
   const [showNew, setShowNew] = useState(false);
   const [newForm, setNewForm] = useState({ title:"", description:"", period:"", peopleInvolved:"" });
   const [expandedId, setExpandedId] = useState(null);
@@ -85,7 +85,7 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
   // — reused, not reimplemented, so the matrix never substitutes an AI
   // summary for the actual source.
   const openEvidence = (ev) => {
-    if (ev.record) { setReviewOutput(ev.record); setScreen(screens.REVIEW); }
+    if (ev.record) { onPresentMeetingRecord(ev.record); }
     else if (ev.dataUrl) { window.open(ev.dataUrl, "_blank"); }
     else { showToast?.("No stored file for this evidence item", "error"); }
   };

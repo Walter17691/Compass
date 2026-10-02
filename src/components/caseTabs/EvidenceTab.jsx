@@ -14,7 +14,7 @@ const FINDING_LABEL = {
 // No longer gated to the investigation stage — evidence (and witness
 // statements specifically) can come in at any point in a case, not just
 // while it's formally "in investigation".
-export function EvidenceTab({ cs, cases, saveCases, currentUser, showToast, setReviewOutput, setScreen, screens, fmtDate, setMeetingSetup, setCaseInfo, orgMembers, allegations=[], documentFindings={}, documentAnalysisLoading={}, onAnalyseEvidence, onAcceptFinding, onDismissFinding, onRemoveEvidence, promptDialog, audit }) {
+export function EvidenceTab({ cs, cases, saveCases, currentUser, showToast, onPresentMeetingRecord, setScreen, screens, fmtDate, setMeetingSetup, setCaseInfo, orgMembers, allegations=[], documentFindings={}, documentAnalysisLoading={}, onAnalyseEvidence, onAcceptFinding, onDismissFinding, onRemoveEvidence, promptDialog, audit }) {
   const addEvidenceFiles = async files => {
     const newItems = await readEvidenceFiles(files, { addedBy: currentUser?.name||"HR Manager", onReject: msg => showToast?.(msg, "error") });
     if(newItems.length) saveCases(cases.map(x=>x.id===cs.id?{...x, evidence:[...(x.evidence||[]), ...newItems]}:x));
@@ -52,7 +52,7 @@ export function EvidenceTab({ cs, cases, saveCases, currentUser, showToast, setR
             </div>
             <div style={{display:"flex",gap:6,flexShrink:0}}>
               {ev.dataUrl&&<a href={ev.dataUrl} download={ev.name} style={{fontSize:11,color:"#7A2FD8",background:"#EDE8FF",borderRadius:4,padding:"3px 8px",textDecoration:"none",fontWeight:500}}>Download</a>}
-              {ev.record&&<button onClick={()=>{setReviewOutput(ev.record);setScreen(screens.REVIEW);}} style={{fontSize:11,color:"#7A2FD8",background:"#EDE8FF",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>View notes</button>}
+              {ev.record&&<button onClick={()=>onPresentMeetingRecord(ev.record)} style={{fontSize:11,color:"#7A2FD8",background:"#EDE8FF",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>View notes</button>}
               {canAnalyseEvidence(ev)&&!analysed&&(
                 <button onClick={()=>onAnalyseEvidence?.(ev.id)} disabled={loading} style={{fontSize:11,color:"#7A2FD8",background:"none",border:"1px solid #E8EAF2",borderRadius:4,padding:"3px 8px",cursor:loading?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif"}}>{loading?"Analysing…":"Analyse document"}</button>
               )}

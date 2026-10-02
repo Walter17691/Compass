@@ -1,3 +1,9 @@
+// The awaited work here is the DSAR compile's own computation — authedFetch is
+// mocked and resolves immediately — so waitFor's 1000ms DEFAULT is a timing
+// assertion on local CPU, not on the code under test. Under load these failed at
+// ~1030-1053ms, intermittently and in varying numbers, and a controlled run at
+// the previous commit reproduced it with no product change at all. An explicit
+// timeout removes a false gate signal without weakening any assertion.
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -68,7 +74,7 @@ describe('DsarScreen — compile fetches signing requests/portal access, and sur
     render(<DsarScreen {...baseProps} orgId="org-1" />);
     await user.click(screen.getByRole('button', { name: 'Compile data' }));
 
-    await waitFor(() => expect(screen.getByText(/1 signing request/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/1 signing request/)).toBeInTheDocument(), { timeout: 5000 });
     expect(authedFetch).toHaveBeenCalledWith(expect.stringContaining('/api/portal/dsar-lookup?orgId=org-1&employeeName=Sam%20Employee'));
     expect(screen.getByText(/1 portal account/)).toBeInTheDocument();
   });
@@ -78,7 +84,7 @@ describe('DsarScreen — compile fetches signing requests/portal access, and sur
     const user = userEvent.setup();
     render(<DsarScreen {...baseProps} orgId="org-1" />);
     await user.click(screen.getByRole('button', { name: 'Compile data' }));
-    await waitFor(() => expect(screen.getByText(/0 signing requests/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/0 signing requests/)).toBeInTheDocument(), { timeout: 5000 });
   });
 
   it('BLOCKS the export when the subject\'s cases carry more than one distinct email', async () => {
@@ -95,7 +101,7 @@ describe('DsarScreen — compile fetches signing requests/portal access, and sur
     ];
     render(<DsarScreen {...baseProps} cases={cases} orgId="org-1" />);
     await user.click(screen.getByRole('button', { name: 'Compile data' }));
-    await waitFor(() => expect(screen.getByText(/Identity requires reconciliation/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Identity requires reconciliation/)).toBeInTheDocument(), { timeout: 5000 });
     // The collision is still surfaced — that guarantee is unchanged — but the
     // download is now genuinely unavailable rather than merely discouraged.
     expect(screen.queryByRole('button', { name: 'Download response package' })).not.toBeInTheDocument();
@@ -107,7 +113,7 @@ describe('DsarScreen — compile fetches signing requests/portal access, and sur
     const user = userEvent.setup();
     render(<DsarScreen {...baseProps} orgId="org-1" />);
     await user.click(screen.getByRole('button', { name: 'Compile data' }));
-    await waitFor(() => expect(screen.getByText(/0 signing requests/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/0 signing requests/)).toBeInTheDocument(), { timeout: 5000 });
     expect(screen.queryByText(/Possible name collision/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Identity requires reconciliation/)).not.toBeInTheDocument();
     // An unambiguous subject can still download, so the gate has not become a
@@ -126,7 +132,7 @@ describe('DsarScreen — audits DSAR compile and download (Phase 6.5)', () => {
     const user = userEvent.setup();
     render(<DsarScreen {...baseProps} orgId="org-1" audit={audit} />);
     await user.click(screen.getByRole('button', { name: 'Compile data' }));
-    await waitFor(() => expect(audit).toHaveBeenCalledWith('DSAR data compiled', 'Sam Employee'));
+    await waitFor(() => expect(audit).toHaveBeenCalledWith('DSAR data compiled', 'Sam Employee'), { timeout: 5000 });
   });
 
   it('audits a DSAR response download separately from the compile', async () => {
@@ -135,7 +141,7 @@ describe('DsarScreen — audits DSAR compile and download (Phase 6.5)', () => {
     const user = userEvent.setup();
     render(<DsarScreen {...baseProps} orgId="org-1" audit={audit} />);
     await user.click(screen.getByRole('button', { name: 'Compile data' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Download response package' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Download response package' })).toBeInTheDocument(), { timeout: 5000 });
     audit.mockClear();
     await user.click(screen.getByRole('button', { name: 'Download response package' }));
     expect(audit).toHaveBeenCalledWith('DSAR response downloaded', 'Sam Employee');
@@ -146,6 +152,6 @@ describe('DsarScreen — audits DSAR compile and download (Phase 6.5)', () => {
     const user = userEvent.setup();
     render(<DsarScreen {...baseProps} orgId="org-1" />);
     await user.click(screen.getByRole('button', { name: 'Compile data' }));
-    await waitFor(() => expect(screen.getByText(/0 signing requests/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/0 signing requests/)).toBeInTheDocument(), { timeout: 5000 });
   });
 });

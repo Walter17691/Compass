@@ -51,6 +51,7 @@ import { neutraliseSummaryHeadings, processConsiderations, adviceSections } from
 export function ReviewScreen({ caseInfo, meetingType, isHR, requestHrReview, reviewOutput, reviewOutputOriginal, meetingSummary, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, signatureEligible=false, standalone=false, onSaveAndSendForSignature, draftStatus=null, onEditReviewRecord, onRetryReviewDraft, advisorNotes="", reviewGaps=[], riskScore, reviewGenerationFailed, onRetryGeneration,
   meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion,
   meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion,
+  analysisStale=false,
 }) {
   // M8 — post-meeting proposed-updates review. Pending items (raised live
   // but never actioned) get one last explicit decision here; accepted
@@ -320,6 +321,15 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, requestHrReview, rev
             </div>
 
             <div style={{padding:"16px 18px"}}>
+              {/* C.1A — analysis written for an earlier version of the record
+                  must never read as though it were current. Stated, not hidden:
+                  the words are still useful, their provenance is the thing that
+                  changed. */}
+              {analysisStale&&(
+                <div role="status" style={{...TYPE.metadata,color:COLOR.amber,marginBottom:10,paddingBottom:10,borderBottom:`1px solid ${COLOR.borderFaint}`}}>
+                  This was written for an earlier version of the record. Re-generate it to analyse the record as it now stands.
+                </div>
+              )}
               {/* ── Summary: the short triage read (M10). Distinct from the full
                      record above — what matters, not the formatted dialogue. ── */}
               {category===REVIEW_SUPPORT.SUMMARY&&(

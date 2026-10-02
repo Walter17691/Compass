@@ -125,6 +125,7 @@ import { HomeMeetingScreen } from './screens/HomeMeetingScreen';
 import { ReviewScreen } from './screens/ReviewScreen';
 import { RecordScreen } from './screens/RecordScreen';
 import { UpdateAvailableNotice } from './components/UpdateAvailableNotice';
+import { groundingFromMeeting, groundingFromRecord, isAnalysisStale } from './lib/reviewGrounding';
 import { useBuildStaleness } from './hooks/useBuildStaleness';
 import { CaseViewScreen } from './screens/CaseViewScreen';
 import { HomeScreen } from './screens/HomeScreen';
@@ -457,6 +458,9 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     audit("AI-drafted letter approved for sending", `${caseInfo.employee||"Employee"} — ${meetingType?.label||""} (${activeLetter})`, activeCaseId);
   };
   const [riskScore, setRiskScore] = useState(null);
+  // C.1A — the record text the on-screen Summary/Advice/risk were written for.
+  // null means "no analysis", which is not the same as "analysis of nothing".
+  const [analysisForRecord, setAnalysisForRecord] = useState(null);
   const [riskProcessing, setRiskProcessing] = useState(false);
   const [prediction, setPrediction] = useState("");
   const [predProcessing, setPredProcessing] = useState(false);
@@ -2910,7 +2914,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // the only guard that holds. Case creation now has exactly three entry points,
   // all of which require a canonical employee id.
 
-  const askCompass = async (msg, history, setHistory, setProcessing) => {
+  const askCompass = async (msg, history, setHistory, setProcessing, grounding = null) => {
     if(!msg.trim() && !homeAttachment) return;
     setProcessing(true);
     // Kept out of the system prompt (below) and appended to the user turn
@@ -2920,16 +2924,25 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     const caseContext = cases.length > 0
       ? "Active cases: " + cases.map(ca=>ca.employeeName + " ("+ca.meetings.length+" meetings)").join(", ")
       : "No active cases yet.";
+    // C.1A — when asked from a screen that is reviewing a specific record, the
+    // question is about THAT record. Ask previously received only the case-name
+    // list, so "what is the allegation being investigated?" could not be
+    // answered from the thing on screen. Read at request time, so an edit made
+    // a moment ago is included. Provenance is stated, and the record is the
+    // employee-facing half — the internal advisory half is not sent.
+    const groundingBlock = grounding && typeof grounding.record === "string" && grounding.record.trim()
+      ? "\n\nThe user is currently reviewing this meeting record. Answer from it where it is relevant, treat allegations recorded in it as allegations rather than findings, and say so plainly if it does not contain the answer.\n\nMEETING RECORD UNDER REVIEW:\n" + grounding.record.trim()
+      : "";
     const sys = "You are Compass, an expert UK HR AI assistant. You help HR managers with UK employment law, ACAS codes of practice, and HR best practice. Give thorough, practical answers. Use plain numbered lists and bullet points (- ) for structure. Never use ## headers, never use ** for bold, never use emoji, never use markdown tables. Plain clear English only. Separate sections with a blank line.";
 
     let userContent;
     if(homeAttachment?.base64) {
       userContent = [
         {type:"document", source:{type:"base64", media_type:"application/pdf", data:homeAttachment.base64}},
-        {type:"text", text:(msg||"Please review this document and advise on any HR or legal considerations.")+"\n\n"+caseContext}
+        {type:"text", text:(msg||"Please review this document and advise on any HR or legal considerations.")+"\n\n"+caseContext+groundingBlock}
       ];
     } else {
-      userContent = (msg||"")+"\n\n"+caseContext;
+      userContent = (msg||"")+"\n\n"+caseContext+groundingBlock;
     }
     
     const newHistory = [...history, {role:"user", content:userContent}];
@@ -7704,6 +7717,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     const notes = Array.isArray(meeting.transcript) ? meeting.transcript : [];
     setTranscript(notes);
     setActiveCaseId(cs.id);
+    setAnalysisForRecord(null);
     setReviewOutput(""); setReviewOutputOriginal(""); setMeetingSummary("");
     setRiskScore(null); setPrediction(""); setReviewGenerationFailed(false);
     // Phase 3B slice 2 — a fresh draft session for this meeting.
@@ -7734,6 +7748,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       // not reappear inside the editable surface.
       const restored = splitMeetingRecord(existingDraft.record);
       setReviewOutput(restored.employeeFacing);
+      setAnalysisForRecord(restored.employeeFacing);   // C.1A — restored together
       setReviewOutputOriginal(splitMeetingRecord(existingDraft.recordOriginal || existingDraft.record).employeeFacing);
       setAdvisorNotes(existingDraft.advisorNotes || restored.internal);
       setMeetingSummary(existingDraft.summary || "");
@@ -7856,6 +7871,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     meetingEndedRef.current = true;
     setTranscript(notes);
     setActiveCaseId(null);
+    setAnalysisForRecord(null);
     setReviewOutput(""); setReviewOutputOriginal(""); setMeetingSummary("");
     setRiskScore(null); setPrediction(""); setReviewGenerationFailed(false);
     setAdvisorNotes("");
@@ -7874,6 +7890,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       // advisory content back into the editable surface (NEW-39).
       const restored = splitMeetingRecord(existingDraft.record);
       setReviewOutput(restored.employeeFacing);
+      setAnalysisForRecord(restored.employeeFacing);   // C.1A — restored together
       setReviewOutputOriginal(splitMeetingRecord(existingDraft.recordOriginal || existingDraft.record).employeeFacing);
       setAdvisorNotes(existingDraft.advisorNotes || restored.internal);
       setMeetingSummary(existingDraft.summary || "");
@@ -8304,7 +8321,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     }
 
     if(extra.length) { setTranscript(allNotes); setInputText(""); }
-    setScreen(SCREENS.REVIEW); setReviewOutput(""); setReviewOutputOriginal(""); setAdvisorNotes(""); setMeetingSummary(""); setAiError(""); setRiskScore(null); setPrediction(""); setReviewGenerationFailed(false);
+    setScreen(SCREENS.REVIEW); setAnalysisForRecord(null); setReviewOutput(""); setReviewOutputOriginal(""); setAdvisorNotes(""); setMeetingSummary(""); setAiError(""); setRiskScore(null); setPrediction(""); setReviewGenerationFailed(false);
     setAiProcessing(true);
     // Generate next steps deadlines
     orgLsSet("compass_meeting_draft", null); // transcript is now captured in the AI call in flight — the crash-recovery window has passed
@@ -8399,6 +8416,8 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         setReviewOutput(split.employeeFacing);
         setReviewOutputOriginal(split.employeeFacing);
         setAdvisorNotes(split.internal);
+        // C.1A — this analysis was written for this record text.
+        setAnalysisForRecord(split.employeeFacing);
       }
       await summaryPromise;
     } catch(e) {
@@ -8836,6 +8855,44 @@ Please produce:
     }
     return "Couldn't save this meeting — please try again.";
   };
+  // ── C.1A — presenting a saved record for review ──
+  //
+  // The one way to put an existing record on the Review screen. Every caller
+  // used to do `setReviewOutput(m.record)` and navigate, which swapped the
+  // record and left the PREVIOUS meeting's Summary, Advice, risk rating and Ask
+  // history in place — the grounding defect human UAT found.
+  //
+  // Analysis travels with its record or not at all. `meeting` carries its own
+  // stored analysis; a bare record (a witness statement from Evidence) has
+  // none, and the rail is cleared rather than inheriting someone else's.
+  const presentMeetingRecord = (source, { meetingType: mt = null, caseInfo: ci = null } = {}) => {
+    const g = (source && typeof source === "object")
+      ? groundingFromMeeting(source)
+      : groundingFromRecord(source);
+    setReviewOutput(g.record);
+    setReviewOutputOriginal(g.recordOriginal);
+    setAdvisorNotes(g.advisorNotes);
+    setMeetingSummary(g.summary);
+    setRiskScore(g.riskScore);
+    // Written for THIS record. Null when there is nothing to be stale.
+    setAnalysisForRecord(g.summary || g.advisorNotes || g.riskScore ? g.record : null);
+    // Everything else that is about the previous record, and would otherwise
+    // read as though it were about this one.
+    setAskCompassHistory([]);
+    setReviewGaps([]);
+    setAiError("");
+    setReviewGenerationFailed(false);
+    setEditingRecord(false);
+    draftMetaRef.current = null;
+    draftEditedRef.current = false;
+    draftSuspendedRef.current = false;
+    draftLastWrittenRef.current = g.record;
+    setDraftStatus(null);
+    if(mt) setMeetingType(mt);
+    if(ci) setCaseInfo(p => ({ ...p, ...ci }));
+    setScreen(SCREENS.REVIEW);
+  };
+
   const saveMeetingToCase = async (signatureInfo = {}) => {
     // Phase 6.5 hardening (closes independent audit finding 3.7) — the
     // button that calls this ("Save and go to case →", ReviewScreen.jsx/
@@ -11663,6 +11720,7 @@ Please produce:
 {/* ══ CASE VIEW ══ */}
       {screen===SCREENS.CASE_VIEW&&activeCaseId&&(
         <CaseViewScreen
+          onPresentMeetingRecord={presentMeetingRecord}
           onResumeMeeting={resumeMeeting}
           onStartScheduledMeeting={startScheduledMeeting} onOpenReviewForMeeting={openReviewForMeeting}
           onPrepareScheduledMeeting={prepareScheduledMeeting}
@@ -11776,7 +11834,7 @@ Please produce:
 
       {/* ══ REVIEW ══ */}
       {screen===SCREENS.REVIEW&&(
-        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={askCompassHistory} setAskCompassHistory={setAskCompassHistory} askCompass={askCompass} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} signatureEligible={signatureEligibleIn(cases, { caseId: caseInfo.caseId, meetingId: caseInfo.meetingId })} standalone={caseInfo.meetingHome===TABLE_HOME} onSaveAndSendForSignature={saveAndSendForSignature} draftStatus={draftStatus} onEditReviewRecord={onEditReviewRecord} onRetryReviewDraft={retryReviewDraft} advisorNotes={advisorNotes} reviewGaps={reviewGaps} riskScore={riskScore} reviewGenerationFailed={reviewGenerationFailed} onRetryGeneration={handleReview}
+        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={askCompassHistory} setAskCompassHistory={setAskCompassHistory} askCompass={(m,h,sh,sp)=>askCompass(m,h,sh,sp,{record:reviewOutput})} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} signatureEligible={signatureEligibleIn(cases, { caseId: caseInfo.caseId, meetingId: caseInfo.meetingId })} standalone={caseInfo.meetingHome===TABLE_HOME} onSaveAndSendForSignature={saveAndSendForSignature} draftStatus={draftStatus} onEditReviewRecord={onEditReviewRecord} onRetryReviewDraft={retryReviewDraft} advisorNotes={advisorNotes} reviewGaps={reviewGaps} riskScore={riskScore} analysisStale={isAnalysisStale({record:reviewOutput, analysisFor:analysisForRecord, hasAnalysis:!!(meetingSummary||advisorNotes||riskScore)})} reviewGenerationFailed={reviewGenerationFailed} onRetryGeneration={handleReview}
           meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion}
           meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion}
         />

@@ -50,7 +50,7 @@ const SUGGESTION_LABEL = {
 // Investigation meetings list (their natural narrative position, and
 // disciplinary-only — a grievance case never shows them) rather than
 // moving to Outcome, which is specifically about the decision itself.
-export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, setReviewOutput, setMeetingType, meetingTypes, fmtDate, attemptSubmitInvestigation, concludingInvestigation, investigationReportDraft, setShowHandoffModal, setLetterOutput, onAcceptSavedSuggestion, onDismissSavedSuggestion, promptDialog, audit }) {
+export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, onPresentMeetingRecord, meetingTypes, fmtDate, attemptSubmitInvestigation, concludingInvestigation, investigationReportDraft, setShowHandoffModal, setLetterOutput, onAcceptSavedSuggestion, onDismissSavedSuggestion, promptDialog, audit }) {
   const grievance = isGrievanceCase(cs);
   const meetings = cs.meetings||[];
   // Human UAT remediation, Batch 2, Part 9 — see SignedRecordModal's own
@@ -161,7 +161,7 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
           {m.signStatus&&!isTerminalStatus(m.signStatus)&&<button onClick={()=>markMeetingSigned(m)} style={{fontSize:10,background:"#E8F5EE",border:"none",borderRadius:4,padding:"2px 8px",color:"#1A7A4A",cursor:"pointer",fontFamily:FONT.sans}}>Mark signed</button>}
           {m.notetakerNotesStatus==="submitted"&&<span style={{fontSize:10,color:"#B87520",background:"#FEF5E7",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Notetaker notes awaiting review</span>}
           {m.notetakerNotesStatus==="reviewed"&&<span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Notetaker notes reviewed</span>}
-          {m.record&&<button onClick={()=>{setReviewOutput(m.record);setMeetingType(meetingTypes.find(t=>t.label===m.type)||null);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:m.manager||"",date:m.date}));setScreen(screens.REVIEW);}} style={{fontSize:11,background:"none",border:"1px solid #E8EAF2",borderRadius:6,padding:"4px 10px",color:"#4A4E63",cursor:"pointer",fontFamily:FONT.sans}}>View notes</button>}
+          {m.record&&<button onClick={()=>onPresentMeetingRecord(m,{meetingType:meetingTypes.find(t=>t.label===m.type)||null,caseInfo:{employee:cs.employeeName,manager:m.manager||"",date:m.date}})} style={{fontSize:11,background:"none",border:"1px solid #E8EAF2",borderRadius:6,padding:"4px 10px",color:"#4A4E63",cursor:"pointer",fontFamily:FONT.sans}}>View notes</button>}
           {/* Human UAT remediation, Batch 2, Part 9 — the only place the
               actual signature/acknowledgement was ever visible was the
               external, time-limited /sign/[id] link. "View notes" above
