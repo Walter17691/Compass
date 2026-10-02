@@ -1,8 +1,8 @@
 import { isGrievanceCase, hasLetterType } from '../../lib/caseStage';
-import { getProcessType } from '../../lib/processStages';
 import { isWarningOutcome } from '../../lib/outcomeTypes';
 import { computeAppealDeadline } from '../../lib/deadlines';
 import { FONT } from '../../styles/tokens';
+import { hasReachedOutcomeStage } from '../../lib/outcomeReachability';
 
 // Phase 6.5 hardening (closes Prompt 16 audit finding H12, HIGH) — this
 // used to hardcode a fixed list of stage ids ("disciplinary"/"hearing"/
@@ -21,15 +21,16 @@ import { FONT } from '../../styles/tokens';
 // later — the same threshold disciplinary/grievance already used, just
 // computed instead of hardcoded, so it's automatically correct for every
 // process type's own vocabulary.
-function isOutcomeReachable(cs, stage) {
-  if (cs.outcome) return true;
-  const stageIds = getProcessType(cs?.caseType).stages.map(s => s.id);
-  const outcomeStageId = stageIds.includes("outcome") ? "outcome" : stageIds.includes("decision") ? "decision" : null;
-  if (!outcomeStageId) return false;
-  const currentIndex = stageIds.indexOf(stage);
-  const outcomeIndex = stageIds.indexOf(outcomeStageId);
-  return currentIndex !== -1 && currentIndex >= outcomeIndex - 1;
-}
+// D1 completion — this local copy became the shared predicate in
+// outcomeReachability.js so navigation, nextStep and this card cannot drift.
+// The CARD asks a narrower question than the NAV: has the case reached its
+// decision point? The destination additionally requires a completed hearing
+// before it will advertise one (canRecordOutcome). Both definitions live in
+// outcomeReachability.js — this is the right one for this site, not a second
+// copy of the rule.
+const isOutcomeReachable = (cs, stage) =>
+  !!cs?.outcome || hasReachedOutcomeStage(cs, stage);
+
 
 // No longer gated to viewing the Disciplinary meetings group — this is
 // its own tab now, so it reads the case's actual lifecycle stage

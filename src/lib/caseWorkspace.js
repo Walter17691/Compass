@@ -56,7 +56,7 @@ export const WORKSPACE_MORE_LABEL = "More";
 export function caseWorkspaceDestinations({
   cs = {}, allegations = [], evidence = [], meetings = [], tasks = [],
   documents = [], communications = [], participants = [],
-  hasOutcome = false, canSeeThemes = false, showExposure = false,
+  hasOutcome = false, outcomeReachable = false, canSeeThemes = false, showExposure = false,
   hasCaseInformation = false,
 } = {}) {
   const openTasks = (tasks || []).filter(t => t && !t.done);
@@ -84,7 +84,11 @@ export function caseWorkspaceDestinations({
     },
     // Only when the case has actually reached one. A disciplinary at intake
     // offering an "Outcome" destination invites a decision that has no basis yet.
-    { id: "outcome", label: "Outcome", count: null, always: hasOutcome },
+    // D1 completion — available when the case is READY for a decision as well
+    // as when one exists. hasOutcome alone described only the latter, so the
+    // destination appeared after the decision had already been recorded, and
+    // the only route to recording one ran through drafting its letter first.
+    { id: "outcome", label: "Outcome", count: null, always: hasOutcome || outcomeReachable },
     // The full chronology. This is also the honest destination for "View full
     // record", which previously opened a section a thousand pixels below the fold.
     { id: "record", label: "Record", count: null, always: true },

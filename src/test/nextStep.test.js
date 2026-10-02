@@ -68,9 +68,22 @@ describe('getNextStep', () => {
       expect(step.action).toBe('send_signature');
     });
 
-    it('recommends drafting the outcome letter once signed with no outcome yet', () => {
+    // D1 COMPLETION — the decision comes before its communication. Signed with
+    // no outcome recorded now asks for the DECISION; the letter follows once
+    // one exists. Previously this jumped straight to the letter, which is how
+    // "Record outcome" became unreachable until a letter had been drafted.
+    it('asks for the decision once signed with no outcome yet', () => {
       const step = getNextStep({
         caseType: 'misconduct', stage: 'disciplinary',
+        meetings: [{ type: 'Disciplinary', record: 'notes', signStatus: 'signed' }],
+      });
+      expect(step.action).toBe('outcome');
+      expect(step.label).toBe('Record outcome');
+    });
+
+    it('recommends drafting the outcome letter once an outcome HAS been recorded', () => {
+      const step = getNextStep({
+        caseType: 'misconduct', stage: 'disciplinary', outcome: 'First written warning',
         meetings: [{ type: 'Disciplinary', record: 'notes', signStatus: 'signed' }],
       });
       expect(step.action).toBe('outcome_letter');
@@ -99,12 +112,12 @@ describe('getNextStep', () => {
     // jump straight to "Outcome issued — close or appeal" before the
     // hearing had even happened. letterType (now stamped alongside
     // letterOutput on save) lets this distinguish the two.
-    it('still recommends drafting the outcome letter when the only letterOutput present is an invitation, not an outcome', () => {
+    it('an invitation letter is not an outcome letter, so the decision is still what is asked for', () => {
       const step = getNextStep({
         caseType: 'misconduct', stage: 'disciplinary',
         meetings: [{ type: 'Disciplinary', record: 'notes', signStatus: 'signed', letterOutput: 'Dear Sam, please attend a disciplinary hearing...', letterType: 'invite' }],
       });
-      expect(step.action).toBe('outcome_letter');
+      expect(step.action).toBe('outcome');
     });
 
     it('legacy meetings with no recorded letterType keep the old behaviour (any letterOutput reads as the outcome)', () => {
@@ -152,10 +165,10 @@ describe('getNextStep', () => {
     });
 
     // B. Disciplinary hearing completed, no outcome, hearing signed.
-    it('B. hearing held and signed, no outcome yet -> draft outcome letter (pre-decision Copilot suggestion, unchanged)', () => {
+    it('B. hearing held and signed, no outcome yet -> RECORD the outcome (D1: decision before communication)', () => {
       const cs = openCase({ meetings: [{ type: 'Disciplinary', record: 'the hearing record', signStatus: 'signed' }] });
       expect(getCaseStage(cs)).toBe('disciplinary');
-      expect(getNextStep(cs).action).toBe('outcome_letter');
+      expect(getNextStep(cs).action).toBe('outcome');
     });
 
     // C. Outcome issued, no outcome letter, hearing unsigned — THE Defect
@@ -247,7 +260,9 @@ describe('getNextStep', () => {
       const cs = openCase({ meetings: [{ type: 'Disciplinary', record: 'the hearing record', signStatus: 'signed' }] });
       expect(cs.outcome).toBeFalsy();
       expect(getCaseStage(cs)).toBe('disciplinary');
-      expect(getNextStep(cs).action).toBe('outcome_letter');
+      // D1: it still fabricates nothing — it now asks for the decision itself
+      // rather than for a letter stating a decision nobody has recorded.
+      expect(getNextStep(cs).action).toBe('outcome');
     });
 
     // The exact Golden Path production fixture (case
@@ -398,9 +413,9 @@ describe('getNextStep — grievance-shaped cases', () => {
       expect(step.meetingType).toBe('grievance');
     });
 
-    it('recommends drafting the outcome letter once signed with no outcome yet — not the disciplinary inv_report branch', () => {
+    it('asks for the decision once signed with no outcome yet — not the disciplinary inv_report branch', () => {
       const step = getNextStep(grievanceCase('hearing', [{ type: 'Grievance', record: 'notes', signStatus: 'signed' }]));
-      expect(step.action).toBe('outcome_letter');
+      expect(step.action).toBe('outcome');
     });
 
     it('reaches post_outcome once signed with an outcome letter present, same appeal-window protection as disciplinary', () => {
@@ -408,9 +423,9 @@ describe('getNextStep — grievance-shaped cases', () => {
       expect(step.action).toBe('post_outcome');
     });
 
-    it('still recommends drafting the outcome letter when the only letterOutput present is a hearing invitation, same fix as disciplinary', () => {
+    it('an invitation letter is not an outcome letter, so the decision is still what is asked for (grievance)', () => {
       const step = getNextStep(grievanceCase('hearing', [{ type: 'Grievance', record: 'notes', signStatus: 'signed', letterOutput: 'Dear Sam, please attend a grievance hearing...', letterType: 'invite' }]));
-      expect(step.action).toBe('outcome_letter');
+      expect(step.action).toBe('outcome');
     });
   });
 

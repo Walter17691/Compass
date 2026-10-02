@@ -167,12 +167,15 @@ describe('4. completed — downstream recipe behaviour unchanged', () => {
     expect(step.action).not.toBe('resume_meeting');
   });
 
-  it('4.2 a completed AND signed hearing proceeds to the outcome letter', () => {
+  // D1 completion — a completed, signed hearing with no outcome recorded now
+  // proceeds to the DECISION. The letter follows once one exists; previously
+  // this asked for a letter stating a decision nobody had recorded.
+  it('4.2 a completed AND signed hearing proceeds to recording the outcome', () => {
     const step = getNextStep(discCase(disc({
       status: MEETING_STATUS.COMPLETED, record: 'The hearing was held.',
       signStatus: 'signed', endedAt: '2026-09-25T10:40:00.000Z',
     })), HR);
-    expect(step.action).toBe('outcome_letter');
+    expect(step.action).toBe('outcome');
   });
 
   it('4.3 the post-processor leaves non-schedulable actions completely alone', () => {

@@ -1,5 +1,6 @@
 import { getCaseStage, hasLetterType } from './caseStage.js';
 import { getProcessType } from './processStages.js';
+import { isTerminalStatus } from './eSignature.js';
 import { isInvestigationMeeting, isDisciplinaryMeeting, isAppealMeeting, isGrievanceMeeting } from './meetingTypeMatch.js';
 import { isMeetingComplete, lastGenuineMeeting, scheduledMeetingsFor,
          resumableMeetingFor, isGenuineMeeting, declaredStatus, MEETING_STATUS } from './meetingLifecycle.js';
@@ -259,7 +260,21 @@ function disciplinaryNextStep(cs, stage, ctx = {}) {
       return {label:"Proceed to disciplinary — send invitation", action:"disciplinary_invite", meetingType:"disciplinary", primary:true, reason:"ACAS Code: give the employee written notice of the allegations and evidence in good time before any hearing.", secondary:{label:"No case to answer — close", action:"close_no_case"}};
     case "disciplinary":
       if(!isMeetingComplete(lastDisc)) return {label:"Start disciplinary hearing", action:"start_disciplinary", meetingType:"disciplinary", primary:true, reason:"Invitation sent — the hearing hasn't been held yet."};
-      if(lastDisc?.signStatus!=="signed") return {label:"Send hearing record for signature", action:"send_signature", meetingType:"disciplinary", primary:true, reason:"The employee should confirm the hearing record is accurate."};
+      // isTerminalStatus, not ==="signed": declined and expired are TERMINAL in
+      // eSignature.js, and a decline is recorded as a plain fact for HR to follow
+      // up on. Testing for "signed" alone stranded every case whose employee
+      // refused — the suggestion repeated forever with no way past it.
+      if(!isTerminalStatus(lastDisc?.signStatus)) return {label:"Send hearing record for signature", action:"send_signature", meetingType:"disciplinary", primary:true, reason:"The employee should confirm the hearing record is accurate."};
+      // D1 completion — the DECISION comes before its communication. This used
+      // to jump straight to "Draft outcome letter" gated on hasDiscOutcome,
+      // which is a LETTER check (hasLetterType) — so the workflow asked for a
+      // letter stating a decision that had never been recorded, and recording
+      // one was only reachable afterwards.
+      // AND no outcome letter: a legacy case that already has one had its
+      // decision communicated before cs.outcome existed as a field. Asking it to
+      // record an outcome now would rewrite history for the 890 historical
+      // meetings, so those keep their existing behaviour exactly.
+      if(!cs.outcome && !hasDiscOutcome) return {label:"Record outcome", action:"outcome", meetingType:"disciplinary", primary:true, reason:"The hearing is complete — record the decision before it is put in writing."};
       if(!hasDiscOutcome) return {label:"Draft outcome letter", action:"outcome_letter", meetingType:"disciplinary", primary:true, reason:"ACAS Code: confirm the decision in writing, normally within 5 working days of the hearing."};
       return {label:"Outcome issued — close or appeal", action:"post_outcome", meetingType:"disciplinary", primary:true, reason:"Outcome letter sent — wait out the appeal window or close the case."};
     case "outcome":
@@ -324,7 +339,8 @@ function grievanceNextStep(cs, stage, ctx = {}) {
       return {label:"Schedule grievance meeting", action:"start_hearing", meetingType:"grievance", primary:true, reason:"No grievance meeting has been held yet — ACAS recommends dealing with grievances promptly."};
     case "hearing":
       if(!isMeetingComplete(lastHearing)) return {label:"Start grievance meeting", action:"start_hearing", meetingType:"grievance", primary:true, reason:"No grievance meeting recorded yet."};
-      if(lastHearing?.signStatus!=="signed") return {label:"Send grievance record for signature", action:"send_signature", meetingType:"grievance", primary:true, reason:"The employee should confirm the record is accurate before it's relied on."};
+      if(!isTerminalStatus(lastHearing?.signStatus)) return {label:"Send grievance record for signature", action:"send_signature", meetingType:"grievance", primary:true, reason:"The employee should confirm the record is accurate before it's relied on."};
+      if(!cs.outcome && !hasHearingOutcome) return {label:"Record outcome", action:"outcome", meetingType:"grievance", primary:true, reason:"The meeting is complete — record the decision before it is put in writing."};
       if(!hasHearingOutcome) return {label:"Draft grievance outcome letter", action:"outcome_letter", meetingType:"grievance", primary:true, reason:"ACAS Code: confirm the outcome in writing without unreasonable delay."};
       return {label:"Outcome issued — close or appeal", action:"post_outcome", meetingType:"grievance", primary:true, reason:"Outcome letter sent — wait out the appeal window or close the case."};
     case "outcome":

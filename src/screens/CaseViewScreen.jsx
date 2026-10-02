@@ -10,6 +10,7 @@ import { hasGuidedProcess } from '../lib/nextStep';
 import { caseStatusLabel, isClosedStage, describeWhatIsHappening } from '../lib/caseViewSummary';
 import { reasonForDefaultSurface, scheduledMeetingWhen, hasSubstantiveContext, hasCaseInformation } from '../lib/caseSurface';
 import { caseWorkspaceDestinations, destinationForLegacyTab, DEFAULT_DESTINATION } from '../lib/caseWorkspace';
+import { canRecordOutcome } from '../lib/outcomeReachability';
 import { CaseWorkspaceNav } from '../components/CaseWorkspaceNav';
 import { InvestigationTab } from '../components/caseTabs/InvestigationTab';
 import { isRiskExposureRelevant } from '../lib/tribunalExposureRelevance';
@@ -391,7 +392,10 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
     documents: cs.evidence || [],
     communications: [],
     participants: (cs.meetings || []).flatMap(m => m?.participants || []),
+    // HAS an outcome — unchanged meaning, used wherever "already decided" matters.
     hasOutcome: !!cs.outcome || stage === "outcome" || caseClosed,
+    // CAN record one — the separate idea the destination also needs.
+    outcomeReachable: canRecordOutcome(cs, stage),
     canSeeThemes: isHR,
     showExposure: showRiskExposure,
     hasCaseInformation: hasCaseInformation(cs, { repeatCount }) || hasKeyDates || !!processTemplate,
@@ -495,6 +499,15 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
       setScreen(SCREENS.HOME+"_meeting");
     }
     else if(nextStep.action==="send_signature"){const m=relevantMeeting();if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}}
+    // D1 completion — the workflow can now say "Record outcome", so the action
+    // must land somewhere. Opens the Outcome destination, where the decision is
+    // recorded; it does NOT record anything itself.
+    // setActiveTab, not goToDestination: the latter reads workspaceRef inside a
+    // requestAnimationFrame, and this handler is constructed during render, so
+    // calling it here trips react-hooks/refs. Same navigation, same state
+    // setter goToDestination itself uses — only the scroll-into-view nicety is
+    // skipped, and the destination is already in view from this control.
+    else if(nextStep.action==="outcome"){setActiveTab("outcome");}
     else if(nextStep.action==="inv_report"){attemptSubmitInvestigation(cs.id);}
     else if(nextStep.action==="disciplinary_invite"){saveCases(cases.map(x=>x.id===cs.id?{...x,stage:"disciplinary"}:x));setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",evidence:cs.evidence||[],appealManagerId:null,isAppealHearingInvitation:false}));setMeetingType(MEETING_TYPES.find(t=>t.id==="disciplinary")||null);setShowDraft(true);setDraftedType("invite");handleLetter("invite",{inline:true,employeeName:cs.employeeName,manager:cs.manager||""});}
     else if(nextStep.action==="appeal_invite"){
