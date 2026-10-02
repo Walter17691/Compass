@@ -195,6 +195,28 @@ describe('C4.1 — the advisory narrative is scannable without a second surface'
     expect(parts[0].prose).toBe(notes);
   });
 
+  // The actual scannability win. HR Advisor Notes is generated as one flowing
+  // paragraph and, measured on a real production record, contains no check-verb
+  // sentence at all — so grouping is inert on this field and segmentation is
+  // what does the work. MDRenderer gives each line its own paragraph.
+  it('segments a wall of prose into one paragraph per sentence', () => {
+    const wall = 'The record confirms the opening information was given. '
+      + 'The transcript does not capture the substantive questions. '
+      + 'No assessment of outcome can appropriately be made at this point.';
+    const [part] = adviceSections(wall);
+    expect(part.prose.split('\n')).toEqual([
+      'The record confirms the opening information was given.',
+      'The transcript does not capture the substantive questions.',
+      'No assessment of outcome can appropriately be made at this point.',
+    ]);
+  });
+
+  it('segments without altering a single word', () => {
+    const wall = 'One sentence here. Another sentence there.';
+    const [part] = adviceSections(wall);
+    expect(part.prose.replace(/\n/g, ' ')).toBe(wall);
+  });
+
   it('leaves already-structured advice exactly as the model wrote it', () => {
     const notes = '## Procedural points\nConfirm the policy.';
     const parts = adviceSections(notes);

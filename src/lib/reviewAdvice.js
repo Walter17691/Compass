@@ -142,11 +142,23 @@ export function adviceSections(advisorNotes) {
     .filter(Boolean);
 
   const items = sentences.filter(s => CHECK_VERB.test(s));
-  const prose = sentences.filter(s => !CHECK_VERB.test(s)).join(" ").trim();
+  // One sentence per line. MDRenderer gives each line its own paragraph, so a
+  // six-sentence wall becomes six short paragraphs — purely typographic, and
+  // the only honest scannability win available here.
+  //
+  // Measured on a real record rather than assumed: HR Advisor Notes is
+  // generated as "flowing prose - one paragraph", and the check-verb
+  // instruction governs the SUMMARY's action list, not this field. A real
+  // record's six sentences opened "This / Those / The / Before / The / The" —
+  // none of them a check verb — so the grouping below is correct to decline,
+  // but it is inert on this field in practice. Segmentation is what actually
+  // improves it, and it claims nothing about the content.
+  const asParagraphs = list => list.join("\n").trim();
 
-  if (!items.length) return [{ title: null, prose: text, items: [] }];
+  if (!items.length) return [{ title: null, prose: asParagraphs(sentences), items: [] }];
 
   const out = [];
+  const prose = asParagraphs(sentences.filter(s => !CHECK_VERB.test(s)));
   if (prose) out.push({ title: null, prose, items: [] });
   out.push({ title: "Before you continue", prose: "", items });
   return out;
