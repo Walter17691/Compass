@@ -110,12 +110,12 @@ export function OutcomeTab({ cs, stage, fmtDate, setShowOutcomeModal, setOutcome
 
   return (
     <div style={{background:"#FFFFFF",border:"1px solid #E8EAF2",borderRadius:12,padding:"16px 20px"}}>
-      <div style={{fontSize:13,color:"#1C1820",fontWeight:600,marginBottom:4}}>Issue {grievance?"grievance":"disciplinary"} outcome</div>
-      <div style={{fontSize:12,color:"#4A4E63",marginBottom:14}}>Once the hearing is complete, issue the written outcome. ACAS recommends within 5 working days of the hearing. The outcome letter starts the employee's 5-day appeal window.</div>
+      <div style={{fontSize:13,color:"#1C1820",fontWeight:600,marginBottom:4}}>Record {grievance?"grievance":"disciplinary"} outcome</div>
+      <div style={{fontSize:12,color:"#4A4E63",marginBottom:14}}>Once the hearing is complete, record the decision. The written outcome follows as a separate step. ACAS recommends within 5 working days of the hearing. The outcome letter starts the employee's 5-day appeal window.</div>
       {canDecide ? (
-        <button onClick={()=>setShowOutcomeModal(true)} style={{fontSize:13,background:"#1C1820",border:"none",borderRadius:8,padding:"10px 20px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:FONT.sans}}>Issue outcome →</button>
+        <button onClick={()=>setShowOutcomeModal(true)} style={{fontSize:13,background:"#1C1820",border:"none",borderRadius:8,padding:"10px 20px",color:"#fff",fontWeight:600,cursor:"pointer",fontFamily:FONT.sans}}>Record outcome →</button>
       ) : (
-        <div style={{fontSize:12,color:"#8A8EA3"}}>Only HR or this case's Hearing Manager can issue the outcome.</div>
+        <div style={{fontSize:12,color:"#8A8EA3"}}>Only HR or this case's Hearing Manager can record the outcome.</div>
       )}
     </div>
   );

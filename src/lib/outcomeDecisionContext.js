@@ -58,16 +58,34 @@ export function decisionMeeting(caseObj) {
 // `cases` must already be the authorised slice for this employee. The case
 // being decided is excluded: its own outcome is the decision in progress, not
 // prior history.
-export function priorLiveWarnings({ cases = [], allegations = [], currentCaseId = null, now = new Date() } = {}) {
-  return deriveCurrentWarnings(cases, allegations, now)
-    .filter(w => w.caseId !== currentCaseId);
+// ┌─ THE SLICE MUST BE THIS EMPLOYEE'S, AND I GOT THIS WRONG ───────────────┐
+// │ deriveCurrentWarnings states plainly that `cases` "must already be the   │
+// │ AUTHORISED, employee_id-linked slice — this function performs no         │
+// │ permission logic and no name matching". D2 handed it the component's     │
+// │ whole org-wide `cases` prop, so a fresh case with no outcome of its own  │
+// │ displayed two live warnings belonging to two DIFFERENT employees. Found  │
+// │ in human UAT on AT - Phase 3A Final UAT.                                 │
+// │                                                                          │
+// │ Scoped the way getEmployeeContext scopes everything else: strict         │
+// │ employeeId equality, never a name. A case whose employee identity is not │
+// │ established yields NOTHING — Compass cannot show "this person's prior    │
+// │ warnings" when it cannot establish who this person is, and guessing by   │
+// │ name is exactly how two people who share one get merged.                  │
+// └─────────────────────────────────────────────────────────────────────────┘
+export function priorLiveWarnings({ cases = [], allegations = [], currentCase = null, now = new Date() } = {}) {
+  const employeeId = currentCase?.employeeId || null;
+  if (!employeeId) return [];
+  const sameEmployee = (Array.isArray(cases) ? cases : [])
+    .filter(c => c && c.employeeId === employeeId);
+  return deriveCurrentWarnings(sameEmployee, allegations, now)
+    .filter(w => w.caseId !== currentCase?.id);
 }
 
 export function outcomeDecisionContext({ caseObj = null, cases = [], allegations = [], now = new Date() } = {}) {
   const caseId = caseObj?.id || null;
   const allegationList = decisionAllegations(allegations, caseId);
   const meeting = decisionMeeting(caseObj);
-  const warnings = priorLiveWarnings({ cases, allegations, currentCaseId: caseId, now });
+  const warnings = priorLiveWarnings({ cases, allegations, currentCase: caseObj, now });
   return {
     allegations: allegationList,
     meeting,

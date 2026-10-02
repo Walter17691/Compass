@@ -289,21 +289,8 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
               </div>
             )}
 
-            {context.warnings.length>0&&(
-              <div style={{marginBottom:context.meeting?14:0}}>
-                <div style={{...TYPE.metadata,fontWeight:700,color:COLOR.ink,marginBottom:4}}>Live formal warnings</div>
-                <ul style={{margin:0,paddingLeft:18,...TYPE.rowContext,color:COLOR.inkSoft,lineHeight:1.7}}>
-                  {context.warnings.map(w=>(
-                    <li key={w.caseId}>
-                      {w.type} · expires {new Date(w.expiresAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
             {context.meeting&&(
-              <div>
+              <div style={{marginBottom:context.warnings.length?14:0}}>
                 {/* Progressive disclosure: the record is reachable without
                     leaving the decision, and opening it cannot lose anything
                     already entered — the form state lives above this. */}
@@ -321,6 +308,19 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
                 )}
               </div>
             )}
+            {context.warnings.length>0&&(
+              <div style={{marginBottom:0}}>
+                <div style={{...TYPE.metadata,fontWeight:700,color:COLOR.ink,marginBottom:4}}>Live formal warnings</div>
+                <ul style={{margin:0,paddingLeft:18,...TYPE.rowContext,color:COLOR.inkSoft,lineHeight:1.7}}>
+                  {context.warnings.map(w=>(
+                    <li key={w.caseId}>
+                      {w.type} · expires {new Date(w.expiresAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
           </div>
         )}
 
@@ -365,7 +365,14 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
         </div>
         {!completingOutcomeDetails&&(
           <div style={{background:COLOR.amberTint,border:`1px solid ${COLOR.amber}33`,borderRadius:8,padding:"10px 14px",marginBottom:outcomeType&&approvalActionForOutcome(outcomeType)?10:20,fontSize:12,color:COLOR.amber}}>
-            Issuing this outcome starts the employee's 5 working day appeal window (ACAS Code).
+            {/* §3 — TRUTHFUL, not reworded. Traced: computeAppealDeadline returns
+                null until an outcome LETTER has been saved, so recording a
+                decision starts nothing. The window is then ANCHORED to this
+                decision's date (appealWindowAnchor prefers cs.outcomeIssuedAt),
+                which is deliberate — "the saved outcome letter is documentation
+                OF the decision, not the decision itself". Saying "issuing this
+                outcome starts the appeal window" was false at this moment. */}
+            Recording this does not notify the employee. The appeal window is tracked once the outcome letter is issued, counted from this decision's date (ACAS-recommended 5 working days).
           </div>
         )}
         {!completingOutcomeDetails&&outcomeType&&approvalActionForOutcome(outcomeType)&&(

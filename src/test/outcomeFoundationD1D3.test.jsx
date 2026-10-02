@@ -95,9 +95,14 @@ describe('D1 — recording a decision is not communicating it', () => {
     expect(screen.getByText(/the outcome is recorded now and is not held pending that approval/i)).toBeInTheDocument();
   });
 
-  it('keeps the ACAS appeal-window statement', () => {
+  // §3 — the banner must not describe RECORDING as issuing/communicating.
+  // Traced: computeAppealDeadline returns null until an outcome letter is
+  // saved, so recording a decision starts no window at all.
+  it('does not claim that recording the decision starts the appeal window', () => {
     render(<OutcomeModal {...props()} />);
-    expect(screen.getByText(/5 working day appeal window/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Issuing this outcome starts/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Recording this does not notify the employee/i)).toBeInTheDocument();
+    expect(screen.getByText(/once the outcome letter is issued/i)).toBeInTheDocument();
   });
 });
 
@@ -149,7 +154,11 @@ describe('D2 — the record the decision is about', () => {
       id: 'prior', outcome: 'First written warning', outcomeIssuedAt: '2026-01-01T00:00:00.000Z',
       warningExpiresAt: '2099-01-01', caseType: 'disciplinary',
     };
-    const warnings = priorLiveWarnings({ cases: [live, { ...baseCase, outcome: 'Final written warning', outcomeIssuedAt: '2026-02-01T00:00:00.000Z', warningExpiresAt: '2099-01-01' }], currentCaseId: CASE_ID });
+    const EMP = 'emp-1';
+    const warnings = priorLiveWarnings({
+      cases: [{ ...live, employeeId: EMP }, { ...baseCase, employeeId: EMP, outcome: 'Final written warning', outcomeIssuedAt: '2026-02-01T00:00:00.000Z', warningExpiresAt: '2099-01-01' }],
+      currentCase: { ...baseCase, employeeId: EMP },
+    });
     expect(warnings.map(w => w.caseId)).toEqual(['prior']);
   });
 
@@ -159,8 +168,8 @@ describe('D2 — the record the decision is about', () => {
     ['an unissued outcome', { outcome: 'First written warning', outcomeIssuedAt: null }],
     ['an expired warning', { outcome: 'First written warning', outcomeIssuedAt: '2020-01-01T00:00:00.000Z', warningExpiresAt: '2021-01-01' }],
   ])('never shows %s as a live warning', (_label, over) => {
-    const c = { id: 'p', warningExpiresAt: '2099-01-01', caseType: 'disciplinary', ...over };
-    expect(priorLiveWarnings({ cases: [c], currentCaseId: CASE_ID })).toEqual([]);
+    const c = { id: 'p', employeeId: 'emp-1', warningExpiresAt: '2099-01-01', caseType: 'disciplinary', ...over };
+    expect(priorLiveWarnings({ cases: [c], currentCase: { ...baseCase, employeeId: 'emp-1' } })).toEqual([]);
   });
 
   it('composes the three parts, and reports emptiness honestly', () => {
@@ -189,7 +198,9 @@ describe('D2 — the record the decision is about', () => {
 
   it('offers no recommendation, score or suggested outcome', () => {
     const { container } = render(<OutcomeModal {...props({ allegations, cases: [{ ...baseCase, meetings: [hearing] }] })} />);
-    expect(container.textContent).not.toMatch(/recommend|suggested outcome|severity|risk score|tribunal/i);
+    // "ACAS-recommended 5 working days" is a procedural timescale, not a
+    // recommended sanction — target the actual prohibition.
+    expect(container.textContent).not.toMatch(/we recommend|recommended outcome|suggested outcome|severity|risk score|tribunal/i);
   });
 });
 
@@ -200,6 +211,98 @@ const letterProps = (over = {}) => ({
   caseInfo: { employee: 'Sam Employee', manager: 'Alex Chair' }, pdfGenerating: false,
   saveMeetingToCase: noop, setScreen: noop, approveLetter: noop, outcomeRecorded: true,
   outcomeValue: 'First written warning', ...over,
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// HUMAN UAT CORRECTIONS — found on AT - Phase 3A Final UAT in production.
+// ─────────────────────────────────────────────────────────────────────────
+describe('UAT correction — prior warnings belong to THIS employee only', () => {
+  const EMP = 'emp-1';
+  const OTHER = 'emp-2';
+  const liveWarning = over => ({
+    id: 'w', employeeId: EMP, outcome: 'First written warning',
+    outcomeIssuedAt: '2026-01-01T00:00:00.000Z', warningExpiresAt: '2099-01-01',
+    caseType: 'disciplinary', ...over,
+  });
+
+  // THE DEFECT: a fresh case with no outcome displayed two live warnings
+  // belonging to two different employees, because the whole org-wide `cases`
+  // prop was handed to a function documented as needing an employee-linked slice.
+  it('never shows another employee\'s warning', () => {
+    const warnings = priorLiveWarnings({
+      cases: [liveWarning({ id: 'theirs', employeeId: OTHER })],
+      currentCase: { id: 'mine', employeeId: EMP },
+    });
+    expect(warnings).toEqual([]);
+  });
+
+  it('shows this employee\'s own prior warning', () => {
+    const warnings = priorLiveWarnings({
+      cases: [liveWarning({ id: 'mine-prior' })],
+      currentCase: { id: 'mine', employeeId: EMP },
+    });
+    expect(warnings.map(w => w.caseId)).toEqual(['mine-prior']);
+  });
+
+  // THE PRODUCTION SHAPE: every UAT fixture has employee_id NULL, so without
+  // the explicit guard `null === null` matches and the leak returns intact.
+  it('two identity-less cases are NOT treated as the same person', () => {
+    const theirs = liveWarning({ id: 'theirs', employeeId: null });
+    expect(priorLiveWarnings({
+      cases: [theirs],
+      currentCase: { id: 'mine', employeeId: null },
+    })).toEqual([]);
+  });
+
+  it('shows NOTHING when the case has no established employee identity', () => {
+    // Guessing by name is how two people who share one get merged.
+    expect(priorLiveWarnings({
+      cases: [liveWarning({ id: 'someone' })],
+      currentCase: { id: 'mine', employeeId: null, employeeName: 'Sam Employee' },
+    })).toEqual([]);
+  });
+
+  it('renders no warnings block for the production fixture shape (no employeeId)', () => {
+    const other = liveWarning({ id: 'theirs', employeeId: OTHER });
+    render(<OutcomeModal {...props({ cases: [baseCase, other] })} />);
+    expect(screen.queryByText(/Live formal warnings/)).not.toBeInTheDocument();
+  });
+});
+
+describe('UAT correction — the decision comes before the history', () => {
+  const allegations = [{ id: 'a1', caseId: CASE_ID, title: 'Unauthorised vehicle use', status: 'upheld' }];
+  const hearing = { id: 'm1', type: 'Disciplinary', date: '2026-09-11', record: '## Dialogue\nAC: Noted.', transcript: [{ text: 'x' }] };
+  const EMP = 'emp-1';
+  const withEverything = {
+    ...baseCase, employeeId: EMP, meetings: [hearing],
+  };
+  const prior = {
+    id: 'prior', employeeId: EMP, outcome: 'First written warning',
+    outcomeIssuedAt: '2026-01-01T00:00:00.000Z', warningExpiresAt: '2099-01-01', caseType: 'disciplinary',
+  };
+
+  const renderAll = () => render(<OutcomeModal {...props({
+    cases: [withEverything, prior], allegations, activeCaseId: CASE_ID,
+  })} />);
+
+  it('allegations appear before previous live warnings', () => {
+    const { container } = renderAll();
+    const text = container.textContent;
+    expect(text.indexOf('Unauthorised vehicle use')).toBeGreaterThan(-1);
+    expect(text.indexOf('Live formal warnings')).toBeGreaterThan(-1);
+    expect(text.indexOf('Unauthorised vehicle use')).toBeLessThan(text.indexOf('Live formal warnings'));
+  });
+
+  it('the disciplinary record appears before previous live warnings', () => {
+    const { container } = renderAll();
+    const text = container.textContent;
+    expect(text.indexOf('Show the disciplinary record')).toBeLessThan(text.indexOf('Live formal warnings'));
+  });
+
+  it('still invents no allegation where none exists', () => {
+    render(<OutcomeModal {...props({ cases: [withEverything], allegations: [] })} />);
+    expect(screen.queryByText(/Allegation/)).not.toBeInTheDocument();
+  });
 });
 
 describe('D3 — a letter must not outlive the decision it states', () => {
