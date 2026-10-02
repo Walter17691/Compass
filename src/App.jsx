@@ -124,6 +124,8 @@ import { IntakeScreen } from './screens/IntakeScreen';
 import { HomeMeetingScreen } from './screens/HomeMeetingScreen';
 import { ReviewScreen } from './screens/ReviewScreen';
 import { RecordScreen } from './screens/RecordScreen';
+import { UpdateAvailableNotice } from './components/UpdateAvailableNotice';
+import { useBuildStaleness } from './hooks/useBuildStaleness';
 import { CaseViewScreen } from './screens/CaseViewScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { GlobalAssistantScreen } from './screens/GlobalAssistantScreen';
@@ -324,6 +326,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     };
   };
   const [screen, setScreen] = useState(() => readNavFromUrl().screen);
+  // Inert unless this is a built page served over HTTP — see buildVersion.js.
+  const buildStale = useBuildStaleness();
   const navSyncSourceRef = useRef('init');
   // P1 remediation (2026-09-24) — the record route carried only screen=record,
   // so a browser refresh during a live meeting arrived with no case and no
@@ -11395,6 +11399,18 @@ Please produce:
         </div>
       )}
 
+
+      {/* ── BUILD STALENESS ──
+          A tab open across a deployment keeps running the build it loaded;
+          nothing used to say so, which is how UAT twice reviewed a screen that
+          production had already replaced. Advisory only — never auto-reloads,
+          and mid-meeting it says so rather than offering a reload as the
+          obvious next click. */}
+      <UpdateAvailableNotice
+        stale={buildStale}
+        meetingInProgress={screen===SCREENS.RECORD}
+        onReload={()=>window.location.reload()}
+      />
 
       {/* ── SIDEBAR ── */}
       <AppSidebar
