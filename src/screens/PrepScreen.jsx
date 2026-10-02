@@ -6,6 +6,7 @@ import { DateInput } from '../components/DateInput';
 import { LockIcon } from '../components/Icons';
 import { EmployeeSelect } from '../components/EmployeeSelect';
 import { COLOR, TYPE, FONT, RADIUS } from '../styles/tokens';
+import { splitPrepPack, prepPackSummary } from '../lib/prepPackSections';
 
 // ─────────────────────────────────────────────────────────────────────────
 // WAVE C2 — preparing for a conversation, not filling in a form for the AI.
@@ -70,6 +71,26 @@ function Reveal({ title, summary, defaultOpen = false, children }) {
         </span>
       </button>
       {open&&<div style={{marginTop:14}}>{children}</div>}
+    </div>
+  );
+}
+
+// One section of the generated pack. Collapsed by default: a manager looking for
+// the Opening Script should not have to read the Legal Checklist to find it.
+function PackSection({ title, whenUseful, body }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{borderBottom:`1px solid ${COLOR.borderFaint}`}}>
+      <button type="button" onClick={()=>setOpen(v=>!v)} aria-expanded={open}
+        style={{display:"flex",width:"100%",alignItems:"baseline",justifyContent:"space-between",gap:10,
+                background:"none",border:"none",padding:"10px 0",cursor:"pointer",textAlign:"left",fontFamily:FONT.sans}}>
+        <span style={{...TYPE.rowContext,color:COLOR.ink}}>{title}</span>
+        <span style={{...TYPE.metadata,color:COLOR.inkQuiet,whiteSpace:"nowrap"}}>
+          {whenUseful==="during"?"for the meeting":"to read now"}{" "}
+          <span aria-hidden="true" style={{display:"inline-block",transform:open?"rotate(90deg)":"none"}}>›</span>
+        </span>
+      </button>
+      {open&&<div style={{paddingBottom:14}}><MDRenderer text={body}/></div>}
     </div>
   );
 }
@@ -282,11 +303,29 @@ export function PrepScreen({ beginMeeting, isMobile, meetingType, setMeetingType
         </button>
       </Section>
 
-      {/* ── 4. COMPASS SUPPORT — available, not displayed at you ─────────── */}
+      {/* ── 4. ONE PRIMARY ACTION, ABOVE THE SUPPORT ─────────────────────────
+          Human UAT: "The manager must scroll through several screens of AI
+          output before reaching the Start meeting button." Correct — the pack
+          sat above it. Start now comes FIRST, so no amount of generated content
+          can bury the lifecycle action. Preparation is optional metadata and
+          nothing below gates it. */}
+      <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",borderTop:`1px solid ${COLOR.borderFaint}`,paddingTop:20,marginBottom:28}}>
+        <Btn onClick={startMeeting} disabled={!canStart} style={{fontSize:15,padding:"12px 24px"}}>
+          {starting?"Starting…":"Start meeting"}
+        </Btn>
+        <Btn variant="ghost" onClick={()=>{setMeetingType(null);setScreen(SCREENS.HOME);}} style={{fontSize:13}}>Back</Btn>
+        {essentialCount>0&&(
+          <span style={{...TYPE.metadata,color:COLOR.inkQuiet}}>
+            {essentialCount} marked essential
+          </span>
+        )}
+      </div>
+
+      {/* ── 5. COMPASS SUPPORT — available, not displayed at you ─────────── */}
       <Reveal
         title="Compass preparation support"
-        summary={prepNotes ? "Prep pack ready" : "Suggestions and background"}
-        defaultOpen={!!prepNotes}>
+        summary={prepNotes ? `Prep pack ready · ${prepPackSummary(prepNotes)}` : "Suggestions and background"}
+        defaultOpen={false}>
         <p style={{...TYPE.metadata,color:COLOR.inkQuiet,margin:"0 0 12px",lineHeight:1.5}}>
           Compass can read the case and suggest questions to consider. They are suggestions —
           you decide what to ask.
@@ -339,9 +378,12 @@ export function PrepScreen({ beginMeeting, isMobile, meetingType, setMeetingType
         {prepNotes&&(
           <div>
             <div style={labelStyle}>Prep pack</div>
-            <div style={{background:COLOR.surface,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.card,padding:16}}>
-              <MDRenderer text={prepNotes}/>
-            </div>
+            {/* One blob of nine sections became nine things a manager can choose
+                between. Nothing is summarised away, reordered or dropped — the
+                model's own order is preserved and unrecognised headings are kept. */}
+            {splitPrepPack(prepNotes).map((sec,i)=>(
+              <PackSection key={sec.title+i} title={sec.title} whenUseful={sec.whenUseful} body={sec.body}/>
+            ))}
           </div>
         )}
       </Reveal>
@@ -353,22 +395,7 @@ export function PrepScreen({ beginMeeting, isMobile, meetingType, setMeetingType
         <p role="alert" style={{...TYPE.metadata,color:"#C0392B",margin:"0 0 16px"}}>{aiError}</p>
       )}
 
-      {/* ── 5. ONE PRIMARY ACTION ───────────────────────────────────────────
-          Start is the lifecycle action and it leads. It was previously an
-          underlined "Skip prep and start meeting now" link, which framed
-          preparation as compulsory and the real action as an escape hatch.
-          Preparation is optional metadata; nothing here gates starting. */}
-      <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",borderTop:`1px solid ${COLOR.borderFaint}`,paddingTop:20}}>
-        <Btn onClick={startMeeting} disabled={!canStart} style={{fontSize:15,padding:"12px 24px"}}>
-          {starting?"Starting…":"Start meeting"}
-        </Btn>
-        <Btn variant="ghost" onClick={()=>{setMeetingType(null);setScreen(SCREENS.HOME);}} style={{fontSize:13}}>Back</Btn>
-        {essentialCount>0&&(
-          <span style={{...TYPE.metadata,color:COLOR.inkQuiet}}>
-            {essentialCount} marked essential
-          </span>
-        )}
-      </div>
+
     </div>
   );
 }
