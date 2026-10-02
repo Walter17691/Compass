@@ -9,6 +9,7 @@ import {
   REVIEW_SUPPORT, REVIEW_SUPPORT_LABEL,
   reviewSupportCounts, defaultReviewSupport, proposedUpdates,
 } from '../lib/reviewSupport';
+import { neutraliseSummaryHeadings, processConsiderations, adviceSections } from '../lib/reviewAdvice';
 
 // Phase E0.6 — `cases` is deliberately NOT a prop any more. It existed solely to
 // let the non-HR "Request HR review" button find a case by employee-name
@@ -99,10 +100,15 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, requestHrReview, rev
                 color:selected?COLOR.ink:COLOR.inkFaint,
                 fontWeight:selected?700:500,
                 boxShadow:selected?"0 1px 2px rgba(15,18,36,0.08)":"none"}}>
-        {REVIEW_SUPPORT_LABEL[key]}{counts[key]>0?` ${counts[key]}`:""}
+        {REVIEW_SUPPORT_LABEL[key]}
       </button>
     );
   };
+
+  // C4.1 — presentation only. The rating is still generated, persisted and read
+  // by every other consumer; it simply stops being rendered here as a verdict.
+  const considerations = processConsiderations({ riskScore, reviewGaps });
+  const adviceParts = adviceSections(advisorNotes);
 
   const cardStyle = {background:COLOR.surface,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.card};
   const eyebrow = {...TYPE.micro,color:COLOR.inkFaint};
@@ -318,7 +324,7 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, requestHrReview, rev
                      record above — what matters, not the formatted dialogue. ── */}
               {category===REVIEW_SUPPORT.SUMMARY&&(
                 meetingSummary
-                  ? <div style={{...TYPE.rowContext,lineHeight:1.8,color:COLOR.inkSoft}}><MDRenderer text={meetingSummary}/></div>
+                  ? <div style={{...TYPE.rowContext,lineHeight:1.8,color:COLOR.inkSoft}}><MDRenderer text={neutraliseSummaryHeadings(meetingSummary)}/></div>
                   : <div style={{...TYPE.metadata,color:COLOR.inkQuiet}}>No summary for this meeting.</div>
               )}
 
@@ -343,34 +349,51 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, requestHrReview, rev
                 {advisorNotes&&!editingRecord&&(
                   <div style={{marginBottom:16}}>
                     <div style={{...eyebrow,marginBottom:6}}>Internal Compass analysis · not part of the employee record</div>
-                    <div style={{...TYPE.rowContext,color:COLOR.inkSoft}}><MDRenderer text={advisorNotes} /></div>
+                    {/* C4.1 — the same narrative, split on its own grammatical
+                        form so it can be scanned. Not another panel, not another
+                        AI pass, and the headings are never forced onto content
+                        that does not support them (see reviewAdvice.js). */}
+                    {adviceParts.map((part,i)=>(
+                      <div key={i} style={{marginTop:i?10:0}}>
+                        {part.title&&<div style={{...TYPE.metadata,color:COLOR.ink,fontWeight:700,marginBottom:4}}>{part.title}</div>}
+                        {part.prose&&<div style={{...TYPE.rowContext,color:COLOR.inkSoft}}><MDRenderer text={part.prose} /></div>}
+                        {part.items.length>0&&(
+                          <ul style={{margin:0,paddingLeft:18,...TYPE.rowContext,color:COLOR.inkSoft,lineHeight:1.7}}>
+                            {part.items.map((it,j)=><li key={j}>{it}</li>)}
+                          </ul>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
 
                 {/* The EXISTING risk rating, demoted out of the permanent rail
                     into advice. Nothing new is computed and nothing is rated
                     here that was not rated before. */}
-                {riskScore&&(
+                {considerations.hasContent&&!editingRecord&&(
                   <div>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:6}}>
-                      <div style={eyebrow}>Risk assessment</div>
-                      <button onClick={()=>setShowRiskWhy(true)} style={{...BUTTON.tertiary,fontSize:11}}>Ask why</button>
+                      <div style={eyebrow}>Process considerations</div>
+                      {considerations.prose&&<button onClick={()=>setShowRiskWhy(true)} style={{...BUTTON.tertiary,fontSize:11}}>Ask why</button>}
                     </div>
-                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                      <span style={{...TYPE.rowName,color:riskScore.rating==="HIGH"?COLOR.red:riskScore.rating==="MEDIUM"?COLOR.amber:COLOR.green}}>{riskScore.rating}</span>
-                      <span style={{...TYPE.metadata,color:COLOR.inkQuiet}}>tribunal risk</span>
-                    </div>
-                    {riskScore.summary&&<div style={{...TYPE.rowContext,color:COLOR.inkSoft,lineHeight:1.6}}><MDRenderer text={riskScore.summary}/></div>}
-                    {riskScore.historyContext&&(
+                    {/* C4.1 — no rating word, no traffic-light colour, and no
+                        legal-exposure framing. Where the record cannot support
+                        an assessment, that is said plainly instead of being
+                        resolved into a reassuring one. */}
+                    {considerations.unassessable&&(
+                      <div style={{...TYPE.rowContext,color:COLOR.inkFaint,marginBottom:6}}>{considerations.unassessable}</div>
+                    )}
+                    {considerations.prose&&<div style={{...TYPE.rowContext,color:COLOR.inkSoft,lineHeight:1.6}}><MDRenderer text={considerations.prose}/></div>}
+                    {considerations.historyContext&&(
                       <div style={{marginTop:10,padding:"10px 12px",background:COLOR.purpleTint,borderRadius:RADIUS.surface}}>
                         <div style={{...eyebrow,color:COLOR.purple,marginBottom:4}}>Informed by this organisation's history</div>
-                        <div style={{...TYPE.rowContext,color:COLOR.inkSoft,lineHeight:1.6}}>{riskScore.historyContext}</div>
+                        <div style={{...TYPE.rowContext,color:COLOR.inkSoft,lineHeight:1.6}}>{considerations.historyContext}</div>
                       </div>
                     )}
                   </div>
                 )}
 
-                {(!reviewGaps.length||editingRecord)&&(!advisorNotes||editingRecord)&&!riskScore&&(
+                {(!reviewGaps.length||editingRecord)&&(!advisorNotes||editingRecord)&&!considerations.hasContent&&(
                   <div style={{...TYPE.metadata,color:COLOR.inkQuiet}}>Nothing to flag on this record.</div>
                 )}
               </>)}
@@ -400,13 +423,13 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, requestHrReview, rev
             </div>
           </div>
 
-          {showRiskWhy&&riskScore&&(
+          {showRiskWhy&&considerations.prose&&(
             <WhySourcesModal
-              title={`Risk assessment: ${riskScore.rating}`}
-              reasoning={riskScore.summary}
+              title="Process considerations"
+              reasoning={considerations.prose}
               sourceRefs={[
                 {kind:"transcript", label:"This meeting's record", detail:(reviewOutput||"").slice(0,300)||"The live transcript captured so far."},
-                ...(riskScore.historyContext ? [{kind:"context", label:"Organisational history", detail:riskScore.historyContext}] : []),
+                ...(considerations.historyContext ? [{kind:"context", label:"Organisational history", detail:considerations.historyContext}] : []),
               ]}
               resolveRef={ref=>ref}
               onClose={()=>setShowRiskWhy(false)}
