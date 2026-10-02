@@ -211,6 +211,56 @@ describe('C4.1 — the advisory narrative is scannable without a second surface'
     expect(adviceSections(null)).toEqual([]);
   });
 
+  // ── THE SHAPE THIS FUNCTION IS ACTUALLY GIVEN ──
+  //
+  // splitMeetingRecord hands back the advisory half INCLUDING its own heading
+  // line, so every real value starts with "## HR Advisor Notes". Opening a real
+  // production record showed the split never ran, because that heading was
+  // being read as "the model structured this". The fixtures below are the
+  // production shape, not bare prose.
+  it('splits the REAL advisory payload, which always leads with its own heading', () => {
+    const real = '## HR Advisor Notes\n\nThe transcript is limited to the opening formalities. '
+      + 'Confirm the substantive questions were put to the employee. Check the evidence gathered.';
+    const parts = adviceSections(real);
+    expect(parts).toHaveLength(2);
+    expect(parts[0].prose).toBe('The transcript is limited to the opening formalities.');
+    expect(parts[1].title).toBe('Before you continue');
+    expect(parts[1].items).toEqual([
+      'Confirm the substantive questions were put to the employee.',
+      'Check the evidence gathered.',
+    ]);
+  });
+
+  it('does not repeat the section heading inside a block the rail already labels', () => {
+    const real = '## HR Advisor Notes\n\nNothing further arises.';
+    const parts = adviceSections(real);
+    expect(parts).toHaveLength(1);
+    expect(parts[0].prose).toBe('Nothing further arises.');
+    expect(parts[0].prose).not.toMatch(/HR Advisor/);
+  });
+
+  it('accepts the British spelling and any heading level', () => {
+    expect(adviceSections('### HR Adviser Notes\nNothing further arises.')[0].prose)
+      .toBe('Nothing further arises.');
+  });
+
+  it('still leaves genuine sub-structure beneath that heading alone', () => {
+    const real = '## HR Advisor Notes\n\n### Procedural\nConfirm the policy.';
+    const parts = adviceSections(real);
+    expect(parts).toHaveLength(1);
+    expect(parts[0].title).toBeNull();
+    expect(parts[0].prose).toBe('### Procedural\nConfirm the policy.');
+  });
+
+  it('renders the split for a real payload on the screen', async () => {
+    const real = '## HR Advisor Notes\n\nThe transcript is limited. Confirm the substantive questions were put.';
+    render(<ReviewScreen {...base} advisorNotes={real} />);
+    await openAdvice();
+    expect(screen.getByText('Before you continue')).toBeInTheDocument();
+    expect(screen.getByText('Confirm the substantive questions were put.')).toBeInTheDocument();
+    expect(screen.queryByText('HR Advisor Notes')).not.toBeInTheDocument();
+  });
+
   it('renders inside the one support rail, adding no competing surface', async () => {
     render(<ReviewScreen {...base}
       advisorNotes="The policy point is unresolved. Confirm whether the policy was communicated."

@@ -108,11 +108,30 @@ export function processConsiderations({ riskScore = null, reviewGaps = [] } = {}
 // worse defect than a long paragraph.
 const CHECK_VERB = /^(Confirm|Check|Verify|Establish|Review|Consider|Record|Ensure|Obtain|Clarify)\b/;
 
+// splitMeetingRecord returns the advisory half INCLUDING its own "## HR Advisor
+// Notes" heading line — so every real advisorNotes value starts with one.
+//
+// Found by opening an actual production record rather than by a test: treating
+// that heading as evidence the model had structured the content meant the
+// "already structured, leave it alone" branch fired on EVERY real record and the
+// split never ran at all. The unit tests passed because their fixtures were
+// bare prose, which is not the shape this function is ever given.
+//
+// It is the section's own label, not structure within it, and the rail already
+// labels this block — so it is dropped before anything else is decided.
+const ADVISORY_SECTION_HEADING = /^[ \t]*#{1,6}[ \t]*HR Advis(?:o|e)r\b/i;
+
 export function adviceSections(advisorNotes) {
-  const text = typeof advisorNotes === "string" ? advisorNotes.trim() : "";
+  const raw = typeof advisorNotes === "string" ? advisorNotes.trim() : "";
+  if (!raw) return [];
+
+  const lines = raw.split("\n");
+  const text = (ADVISORY_SECTION_HEADING.test(lines[0].replace(/\r$/, ""))
+    ? lines.slice(1).join("\n")
+    : raw).trim();
   if (!text) return [];
 
-  // Already structured by the model — leave it exactly as it is.
+  // Structured by the model BENEATH its own section heading — leave as it is.
   if (text.split("\n").some(l => HEADING.test(l.replace(/\r$/, "")) && /^[ \t]*#/.test(l))) {
     return [{ title: null, prose: text, items: [] }];
   }
