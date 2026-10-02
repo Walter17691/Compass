@@ -127,6 +127,7 @@ import { RecordScreen } from './screens/RecordScreen';
 import { UpdateAvailableNotice } from './components/UpdateAvailableNotice';
 import { groundingFromMeeting, groundingFromRecord, isAnalysisStale } from './lib/reviewGrounding';
 import { outcomeLetterStatus } from './lib/outcomeLetter';
+import { partitionImportRows, describeSkippedImport } from './lib/caseIdentity';
 import { askThreadKey, threadFor, appendFailure, turnsForModel } from './lib/askConversation';
 import { useBuildStaleness } from './hooks/useBuildStaleness';
 import { CaseViewScreen } from './screens/CaseViewScreen';
@@ -1321,10 +1322,16 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     try {
       const text = await file.text();
       const objs = csvRowsToObjects(parseCsv(text));
-      const valid = objs.filter(o => o['employee name']?.trim());
-      const skipped = objs.length - valid.length;
-      const imported = valid.map(o => ({
+      const named = objs.filter(o => o['employee name']?.trim());
+      const unnamed = objs.length - named.length;
+      // WAVE D4.0C — a case belongs to an Employee File, not to a name. Rows
+      // that cannot be resolved to a canonical employee are skipped and
+      // counted, never imported as name-only cases to be reconciled later.
+      const { accepted, skipped: unidentified } = partitionImportRows(named, employeeRecords, { orgId: org?.id || null });
+      const skipped = unnamed + unidentified.length;
+      const imported = accepted.map(({ row: o, employeeId }) => ({
         id: crypto.randomUUID(),
+        employeeId,
         employeeName: o['employee name'].trim(),
         email: "",
         caseType: (o['case type']||"").trim().toLowerCase(),
@@ -1338,6 +1345,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       }));
       if(imported.length>0) saveCases([...cases, ...imported]);
       audit("Case history imported", `${imported.length} case${imported.length===1?"":"s"}`);
+      const identityNotice = describeSkippedImport(unidentified);
+      if(identityNotice) showToast(identityNotice, "error");
       showToast(`Imported ${imported.length} case${imported.length===1?"":"s"}${skipped>0?`, skipped ${skipped} row${skipped===1?"":"s"} with no employee name`:""}`);
     } catch(err) {
       console.error("Case CSV import error:", err);
