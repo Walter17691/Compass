@@ -171,7 +171,10 @@ describe('RecordScreen — Ask Compass cannot crash the meeting workspace (Batch
     expect(screen.getByText(/Compass couldn't display that response, but your meeting notes are safe/)).toBeInTheDocument();
     // The meeting notes textarea must remain intact and usable — this is
     // the whole point of scoping the boundary to just the response panel.
-    expect(screen.getByPlaceholderText(/Type or speak your meeting notes here/)).toBeInTheDocument();
+    // Wave C3 — the full-page notepad became a composer beneath the visible
+    // conversation, so the placeholder changed. Located by its accessible label,
+    // which is what a keyboard or screen-reader user actually has.
+    expect(screen.getByLabelText('Capture a note')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /End meeting/ })).toBeInTheDocument();
   });
 
