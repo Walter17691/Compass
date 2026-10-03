@@ -1949,6 +1949,67 @@ nullable, rows in the fossil, and a *partial* reading — which correctly report
 **No migration, no schema change, no production data mutated** — every live
 statement issued during this work was a `SELECT` or a `count(*)`.
 
+#### Second pass (2026-10-03) — a P1 deletion-ORDER defect the first pass could not see
+
+The first pass proved the deletion **set** was complete. It never checked that
+the list is also an **order**, and `api/delete-org-data.js` iterates it in
+sequence with one `DELETE` per table, each its own PostgREST request — **no
+transaction, no rollback**.
+
+**Observed.** Five tables RESTRICT-reference `employee_records`
+(`cases`, `dsar_requests`, `wellbeing_notes`, `concern_referrals`, `meetings`).
+Four were deleted before it. **`meetings` was at index 23; `employee_records` at
+index 9.** `meetings` was appended to the end of the list in Phase 4C.1 —
+correctly classified, genuinely deleted — and appending to a list that encodes an
+order is the whole bug.
+
+**Live and triggerable in the only paying tenant.** Production holds 4 `meetings`
+rows; **2 carry a non-null `employee_id`, and all 4 belong to `dbe871c5`
+(Compass LTD)** — the one organisation with `access_status='active'`. Pressing
+"Delete all data" there would have raised a foreign-key violation on
+`employee_records`, pushed it to `failedTables`, and returned HTTP 500 /
+`success:false` — **leaving the core PII record (name, job title, department,
+employee number, work email) behind after a GDPR Art. 17 erasure.** The Phase 6.5
+hardening meant it would at least have *reported* the failure rather than
+claiming success, which is the only reason this is not worse.
+
+**Fixed** by moving `meetings` to index 1, immediately after `cases`. The
+deletion **set is unchanged** (24 tables, asserted); only the order moved.
+
+**Made structural rather than remembered:** `RESTRICTING_FOREIGN_KEYS` records
+every RESTRICT/NO ACTION edge read live, and `deletionOrderViolations()` fails if
+any child is sequenced after its parent. Edges whose parent is never deleted
+(`locations`, `organisations`) correctly impose no constraint. The check also runs
+against the **live** FK graph in `scripts/schema-drift-check.mjs`, which is the
+half that catches a rule *becoming* RESTRICT underneath the recorded list.
+
+**The second gap: classification was prose.** A developer could add a table,
+give it a deletion category, and say nothing about what it is or what DSAR owes
+it — and no test would notice. `src/lib/dataClassification.js` now carries, per
+table, `purpose` / `dataClass` / `orgScoped` / `personRelated` / `caseRelated` /
+`dsar` / `retention`, with `exclusionReason` **required** for any table erasure
+spares. A 1:1 correspondence test means neither register can grow a table the
+other lacks, so answering the deletion question alone no longer passes.
+
+**`included_not_wired` exists on purpose.** Marking `team_invites` as `included`
+would claim an enforcement that does not exist; marking it `internal_withheld`
+would endorse the gap as a decision. The fifth value records an accepted
+obligation that is not yet implemented, and every such entry must name its defect
+(NEW-45). **Classification is not enforcement, and the vocabulary now says so.**
+
+**Retention: one honest value.** Every entry is `not_enforced`, because no
+retention sweep exists anywhere in `src/` or `api/`. A test asserts no entry can
+claim a rule while none is implemented. **E3 is not closed by this.**
+
+Verified: 24 new tests; **8 mutations, 8 caught** — including the real defect
+restored (`meetings` back at the end), the ordering check neutered, the RESTRICT
+edge deleted from the graph, an inventory entry removed for an existing
+application table, an exclusion reason stripped, the unwired DSAR obligation
+claimed as wired, retention claimed enforced, and person-related customer data
+marked DSAR not-applicable. No migration. No production data mutated — the
+`meetings` rows were counted, never touched, and "Delete all data" was never
+executed.
+
 ### NEW-45 — `team_invites` and `customer_contracts` are absent from DSAR disclosure — P2 (GDPR) — OPEN
 - **Severity** P2 · **Area** DSAR completeness · **Raised** 2026-10-02 (found
   while auditing the erasure inventory for NEW-44)

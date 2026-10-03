@@ -54,7 +54,9 @@ import { declaredPublicTables } from '../src/lib/schemaDeclarations.js';
 import {
   unclassifiedTables, classifyTable, CASCADE_COVERED_TABLES,
   PARENT_EXCLUDED_TABLES, UNUSED_LEGACY_TABLES, NON_RELEVANT_SCHEMAS,
+  ORG_SCOPED_TABLES, deletionOrderViolations,
 } from '../src/lib/dataInventory.js';
+import { classificationFor } from '../src/lib/dataClassification.js';
 
 const PROJECT_REF = process.env.SUPABASE_PROJECT_REF || 'npeegfsoijhdnnvuqjin';
 
@@ -178,8 +180,28 @@ function compare(live) {
         findings.push(`${table} depends on ${fk.parent}, which is classified ${classifyTable(fk.parent)} rather than intentionally_excluded — reclassify ${table}.`);
       }
     }
+    // NEW-44 (second pass) — deletion ORDER, checked against the LIVE restrict
+    // graph rather than the recorded one. The CI test checks the order against
+    // RESTRICTING_FOREIGN_KEYS, which is itself a recording; this is the half
+    // that notices a rule changing to RESTRICT underneath that list, which
+    // would make a previously-safe order unsafe without any code changing.
+    const liveRestricting = live.foreignKeys
+      .filter(f => f.delete_rule === 'RESTRICT' || f.delete_rule === 'NO ACTION')
+      .map(f => ({ child: f.child, parent: f.parent, column: f.column_name, rule: f.delete_rule }));
+    for (const v of deletionOrderViolations(ORG_SCOPED_TABLES, liveRestricting)) {
+      findings.push(`DELETION ORDER: ${v.why}`);
+    }
   } else {
     unverified.push('foreign keys / cascade rules (no foreignKeys in this reading)');
+    unverified.push('deletion ORDER against the live RESTRICT graph');
+  }
+
+  // Both registers must agree, live. A table present in production and in the
+  // deletion inventory but missing a classification would still pass the
+  // deletion gate alone.
+  const unclassifiedMeta = relevant.filter(t => !classificationFor(t));
+  if (unclassifiedMeta.length) {
+    findings.push(`Live with no entry in dataClassification.js: ${unclassifiedMeta.join(', ')} — say what each table is and what DSAR owes it.`);
   }
 
   // The fossil invariant.

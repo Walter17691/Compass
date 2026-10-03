@@ -22,8 +22,37 @@
 // kept out of this list and cleared separately — see its own call site
 // comment for why (the deletion event itself needs to survive as the one
 // audit row proving the erasure happened).
+// ┌─ THIS ARRAY IS AN ORDER, NOT A SET ─────────────────────────────────────┐
+// │ api/delete-org-data.js iterates it in sequence, one DELETE per table,    │
+// │ each its own PostgREST request — so there is no transaction and no        │
+// │ rollback. Five tables RESTRICT-reference employee_records, which means    │
+// │ every one of them must be deleted BEFORE it or the delete raises a        │
+// │ foreign-key violation and that table's rows survive the erasure.         │
+// │                                                                          │
+// │ NEW-44 (second pass) found exactly that, live: `meetings` was appended    │
+// │ to the END of this list in Phase 4C.1 — correctly classified, genuinely   │
+// │ deleted — but at index 23, after employee_records at index 9. Production   │
+// │ holds 4 meetings rows, 2 with a non-null employee_id, ALL of them in the  │
+// │ one active customer tenant, so "Delete all data" would have failed on     │
+// │ employee_records and left the core PII record behind. It is moved up      │
+// │ here, and the ordering is now a TEST against the live FK graph rather     │
+// │ than something the next person appending a table has to remember.         │
+// │                                                                          │
+// │ Appending to this list is safe ONLY for a table nothing RESTRICT-points   │
+// │ at. The test tells you; do not guess.                                     │
+// └─────────────────────────────────────────────────────────────────────────┘
 export const ORG_SCOPED_TABLES = [
-  'cases', 'starter_instances', 'dsar_requests', 'hr_review_requests', 'wellbeing_notes',
+  'cases',
+  // meetings (Phase 4C.1, supabase/standalone_meetings_2026-09-25.sql) — the
+  // standalone meeting store. Its own org_id column, and its case_id is NULLABLE
+  // by design, so the cases cascade reaches only the linked ones and would leave
+  // every genuinely standalone meeting behind. It must be deleted directly or
+  // "Delete all data" would silently spare meeting transcripts forever.
+  //
+  // POSITION IS LOAD-BEARING: meetings.employee_id -> employee_records is
+  // RESTRICT (verified live 2026-10-03), so it has to go before that table.
+  'meetings',
+  'starter_instances', 'dsar_requests', 'hr_review_requests', 'wellbeing_notes',
   'concern_referrals', 'leaver_instances', 'case_tasks', 'signing_requests', 'employee_records',
   'employee_portal_accounts', 'employee_portal_invites', 'case_views', 'improvement_initiatives',
   'manager_capability_insights', 'er_executive_briefs', 'org_events', 'integration_events',
@@ -40,13 +69,55 @@ export const ORG_SCOPED_TABLES = [
   // org_id column, no case_id/FK to cases at all, so nothing else's
   // cascade would ever reach it (see supabase/redundancy_cases_2026-08-27.sql).
   'redundancy_cases',
-  // meetings (Phase 4C.1, supabase/standalone_meetings_2026-09-25.sql) — the
-  // standalone meeting store. Its own org_id column, and its case_id is NULLABLE
-  // by design, so the cases cascade reaches only the linked ones and would leave
-  // every genuinely standalone meeting behind. It must be deleted directly or
-  // "Delete all data" would silently spare meeting transcripts forever.
-  'meetings',
 ];
+
+// ── NEW-44 (second pass) — the ordering constraint, as data ────────────────
+//
+// Every RESTRICT / NO ACTION foreign key in the live schema, read from
+// information_schema on 2026-10-03. Only edges whose BOTH ends are actively
+// deleted constrain the order: where the parent is never deleted (locations,
+// organisations) there is nothing to sequence against.
+//
+// Recorded here so the ordering test has something to check that is not the
+// ordering itself. It is re-verified live by scripts/schema-drift-check.mjs,
+// which is the half that catches a cascade changing underneath this list.
+export const RESTRICTING_FOREIGN_KEYS = [
+  { child: 'cases', parent: 'employee_records', column: 'employee_id', rule: 'RESTRICT' },
+  { child: 'concern_referrals', parent: 'employee_records', column: 'employee_id', rule: 'RESTRICT' },
+  { child: 'dsar_requests', parent: 'employee_records', column: 'employee_id', rule: 'RESTRICT' },
+  { child: 'meetings', parent: 'employee_records', column: 'employee_id', rule: 'RESTRICT' },
+  { child: 'wellbeing_notes', parent: 'employee_records', column: 'employee_id', rule: 'RESTRICT' },
+  { child: 'employee_activities', parent: 'locations', column: 'location_id', rule: 'RESTRICT' },
+  { child: 'employee_employment_events', parent: 'locations', column: 'new_location_id', rule: 'RESTRICT' },
+  { child: 'employee_employment_events', parent: 'locations', column: 'old_location_id', rule: 'RESTRICT' },
+  { child: 'employee_records', parent: 'locations', column: 'location_id', rule: 'RESTRICT' },
+  { child: 'cases', parent: 'locations', column: 'location_id', rule: 'NO ACTION' },
+  { child: 'cases', parent: 'organisations', column: 'org_id', rule: 'NO ACTION' },
+  { child: 'employee_records', parent: 'organisations', column: 'org_id', rule: 'NO ACTION' },
+  { child: 'meetings', parent: 'organisations', column: 'org_id', rule: 'NO ACTION' },
+];
+
+// Every ordering violation in the current deletion sequence. Empty is the only
+// acceptable answer; the test asserts that and names any offender.
+//
+// A violation is NOT cosmetic. The handler issues one DELETE per table with no
+// transaction, so a child deleted after its RESTRICT parent means the PARENT's
+// delete raises, the parent's rows survive, and the erasure reports a partial
+// failure — which is what GDPR Art. 17 was supposed to guarantee against.
+export function deletionOrderViolations(order = ORG_SCOPED_TABLES, fks = RESTRICTING_FOREIGN_KEYS) {
+  const index = new Map(order.map((t, i) => [t, i]));
+  return fks
+    .filter(fk => index.has(fk.child) && index.has(fk.parent))
+    .filter(fk => index.get(fk.child) > index.get(fk.parent))
+    .map(fk => ({
+      ...fk,
+      childIndex: index.get(fk.child),
+      parentIndex: index.get(fk.parent),
+      why: `${fk.child} is deleted at ${index.get(fk.child)} but ${fk.parent} at `
+        + `${index.get(fk.parent)}; ${fk.child}.${fk.column} is ${fk.rule}, so `
+        + `${fk.parent} would fail and its rows would survive the erasure.`,
+    }));
+}
 
 // Tables with an org_id column that are NOT deleted directly, because a
 // verified NOT NULL, ON DELETE CASCADE foreign key to `cases` (itself in

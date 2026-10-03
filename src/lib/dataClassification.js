@@ -1,0 +1,182 @@
+// NEW-44 (second pass) — what every live table IS, as machine-checkable data.
+//
+// WHY THIS EXISTS SEPARATELY FROM dataInventory.js. That module answers one
+// question — "does Delete all data erase this table, and in what order?" — and
+// the first NEW-44 pass made that question impossible to skip. It still cannot
+// answer the three questions a reviewer actually asks when a new durable table
+// lands:
+//
+//     is this customer data?        what does DSAR owe it?   what retains it?
+//
+// Those answers lived in prose comments. Prose is not a gate: a developer can
+// add `public.case_decisions`, classify it as deleted, and ship it having said
+// nothing about disclosure — and no test would notice.
+//
+// This is NOT a second inventory. dataInventory.js remains authoritative for
+// deletion and for deletion ORDER; this module carries attributes keyed by the
+// same table names, and src/test/dataClassification.test.js asserts the two are
+// in exact 1:1 correspondence. Neither can grow a table the other lacks.
+//
+// ┌─ CLASSIFICATION IS NOT ENFORCEMENT ─────────────────────────────────────┐
+// │ A `dsar` value says what Compass OWES, not what it currently DOES, and    │
+// │ the two differ today — which is why `included_not_wired` exists as a      │
+// │ distinct value rather than being rounded to either neighbour. Marking a   │
+// │ table `included` when no code reads it would be a lie in the one place a  │
+// │ reviewer would trust; marking it `internal_withheld` would endorse the    │
+// │ gap as a decision. Every `included_not_wired` entry must name its defect, │
+// │ and a test enforces that.                                                 │
+// └─────────────────────────────────────────────────────────────────────────┘
+
+export const DATA_CLASS = Object.freeze({
+  // Rows that exist because a customer put them there, or that describe their
+  // people. The only class "Delete all data" is about.
+  CUSTOMER: 'customer',
+  // The tenant/account/platform layer: who the organisation is, who may sign
+  // in, who operates Compass. A tenant action must not erase these.
+  PLATFORM: 'platform',
+  // Operational machinery with no HR content.
+  INFRASTRUCTURE: 'infrastructure',
+});
+
+// What a subject access request owes this table. Deliberately five values: the
+// fifth records an obligation Compass accepts and has not yet implemented.
+export const DSAR_DISPOSITION = Object.freeze({
+  INCLUDED: 'included',                         // read by the DSAR compiler today
+  INCLUDED_NOT_WIRED: 'included_not_wired',     // owed, NOT yet read — must cite a defect
+  INTERNAL_WITHHELD: 'internal_withheld',       // held, deliberately not disclosed
+  NOT_PERSONAL_DATA: 'not_personal_data',       // reference/config, no data subject
+  NOT_APPLICABLE: 'not_applicable',             // empty fossil, or outside the employee relationship
+});
+
+// ┌─ RETENTION, STATED HONESTLY ────────────────────────────────────────────┐
+// │ There is exactly ONE truthful retention value for every table in this    │
+// │ schema, and it is "not enforced".                                        │
+// │                                                                          │
+// │ organisations.data_retention_years is stored and editable in Settings     │
+// │ (src/App.jsx:3092) and NO code anywhere reads it to delete anything —     │
+// │ there is no retention sweep in src/ or api/. A configurable retention     │
+// │ period that deletes nothing is worse than none, because it reads as a     │
+// │ control. That is filed separately (NEW-46) and is E3 work.                │
+// │                                                                          │
+// │ So this field exists to make the absence VISIBLE and to stop a future     │
+// │ entry quietly claiming a rule that nothing implements. A test asserts no  │
+// │ entry claims enforcement while no sweep exists.                           │
+// └─────────────────────────────────────────────────────────────────────────┘
+export const RETENTION = Object.freeze({
+  NOT_ENFORCED: 'not_enforced',
+});
+
+export const RETENTION_ENFORCEMENT_IMPLEMENTED = false;
+
+const t = (purpose, dataClass, flags, dsar, extra = {}) => ({
+  purpose, dataClass, dsar, retention: RETENTION.NOT_ENFORCED,
+  orgScoped: !!flags.org, personRelated: !!flags.person, caseRelated: !!flags.case_,
+  ...extra,
+});
+
+const C = DATA_CLASS.CUSTOMER, P = DATA_CLASS.PLATFORM, I = DATA_CLASS.INFRASTRUCTURE;
+const D = DSAR_DISPOSITION;
+
+// All 43 live public base tables (verified against pg_class 2026-10-03).
+// `exclusionReason` is REQUIRED for any table Delete all data does not erase.
+export const TABLE_CLASSIFICATION = {
+  // ── case and employee content: actively erased ──
+  cases: t('The formal HR process record.', C, { org: 1, person: 1, case_: 1 }, D.INCLUDED),
+  meetings: t('Standalone meeting store — transcripts, prep packs, records.', C, { org: 1, person: 1, case_: 1 }, D.INCLUDED),
+  starter_instances: t('Onboarding process instances.', C, { org: 1, person: 1 }, D.INCLUDED),
+  dsar_requests: t('Subject access requests, themselves personal data.', C, { org: 1, person: 1 }, D.INCLUDED),
+  hr_review_requests: t('HR sign-off requests on a case decision.', C, { org: 1, person: 1, case_: 1 }, D.INCLUDED),
+  wellbeing_notes: t('Wellbeing notes about an employee.', C, { org: 1, person: 1 }, D.INCLUDED),
+  concern_referrals: t('Concerns raised about or by an employee.', C, { org: 1, person: 1, case_: 1 }, D.INCLUDED),
+  leaver_instances: t('Offboarding process instances.', C, { org: 1, person: 1 }, D.INCLUDED),
+  case_tasks: t('Case and org-level actions; case_id is nullable.', C, { org: 1, case_: 1 }, D.INCLUDED),
+  signing_requests: t('Signature requests — holds the signature and document text.', C, { org: 1, person: 1, case_: 1 }, D.INCLUDED),
+  employee_records: t('The core PII record: job title, department, manager, employee number.', C, { org: 1, person: 1 }, D.INCLUDED),
+  employee_portal_accounts: t("An employee's own access to their case data.", C, { org: 1, person: 1 }, D.INCLUDED),
+  employee_portal_invites: t('Pending employee portal invitations.', C, { org: 1, person: 1 }, D.INCLUDED),
+  case_views: t('Who viewed which case, and when.', C, { org: 1, person: 1, case_: 1 }, D.INCLUDED),
+  improvement_initiatives: t('Performance/improvement initiatives.', C, { org: 1, person: 1 }, D.INCLUDED),
+  manager_capability_insights: t('AI-derived manager capability analysis.', C, { org: 1, person: 1 }, D.INCLUDED),
+  er_executive_briefs: t('AI-generated organisation-level ER briefings.', C, { org: 1 }, D.INTERNAL_WITHHELD,
+    { dsarNote: 'Org-level aggregate analysis, not a record about one subject; not read by the DSAR compiler.' }),
+  org_events: t('Organisational intelligence event log.', C, { org: 1, person: 1 }, D.INCLUDED),
+  integration_events: t('Inbound/outbound integration activity log.', C, { org: 1 }, D.INTERNAL_WITHHELD,
+    { dsarNote: 'Integration plumbing log; no subject narrative. Not read by the DSAR compiler.' }),
+  organisation_themes: t('AI-derived org-wide theme taxonomy.', C, { org: 1 }, D.INCLUDED),
+  employee_activities: t('Employee activity records (Phase E1.6).', C, { org: 1, person: 1 }, D.INCLUDED),
+  employee_activity_records: t('Chronology entries under an employee activity.', C, { org: 1, person: 1 }, D.INCLUDED),
+  employee_employment_events: t('Employment event history (Phase E1.7).', C, { org: 1, person: 1 }, D.INCLUDED),
+  redundancy_cases: t('Redundancy process records.', C, { org: 1, person: 1, case_: 1 }, D.INCLUDED),
+
+  // ── erased for free by a NOT NULL / CASCADE FK to `cases` ──
+  allegations: t('Allegations under a case, with findings and appeal outcome.', C, { org: 1, person: 1, case_: 1 }, D.INCLUDED),
+  case_signals: t('Risk/guardrail signals derived for a case.', C, { org: 1, case_: 1 }, D.INCLUDED),
+  case_themes: t('Links a case to an organisation theme.', C, { org: 1, case_: 1 }, D.INTERNAL_WITHHELD,
+    { dsarNote: 'The join between a case and the org taxonomy. organisation_themes IS disclosed; this link table is not read by the DSAR compiler. Flagged for review, not silently dropped.' }),
+  case_access: t('Explicit per-user grants of access to a case.', C, { org: 1, case_: 1 }, D.INCLUDED),
+
+  // ── audit ──
+  audit_log: t('Immutable action log; the deletion event itself survives as one row.', C, { org: 1, person: 1, case_: 1 }, D.INCLUDED),
+
+  // ── deliberately NOT erased: account / org structure and integration config ──
+  org_members: t('Who belongs to the organisation and with what role.', P, { org: 1, person: 1 }, D.INCLUDED,
+    { exclusionReason: 'Team membership. "Delete all data" has never claimed to dissolve the HR team; removing teammates is a separate, larger action.' }),
+  org_roles: t('Role definitions available in the organisation.', P, { org: 1 }, D.NOT_PERSONAL_DATA,
+    { exclusionReason: 'Role configuration, not case or employee content.' }),
+  locations: t('Sites/locations used for employee and case scoping.', P, { org: 1 }, D.NOT_PERSONAL_DATA,
+    { exclusionReason: 'Reference data. Also RESTRICT-referenced by four tables, so deleting it is a structural change, not an erasure.' }),
+  process_templates: t('Customer-authored process recipes.', P, { org: 1 }, D.NOT_PERSONAL_DATA,
+    { exclusionReason: 'Configuration the customer authored; not a record about a person.' }),
+  calendar_connections: t('Google/Outlook calendar integration config and tokens.', P, { org: 1 }, D.INTERNAL_WITHHELD,
+    { exclusionReason: 'Disconnecting an integration is a different action from erasing case data.',
+      dsarNote: 'HR-staff integration credentials, not employee-subject data.' }),
+  graph_mail_connections: t('Microsoft Graph mail integration config.', P, { org: 1 }, D.INTERNAL_WITHHELD,
+    { exclusionReason: 'As calendar_connections — integration config, not case content.',
+      dsarNote: 'HR-staff integration credentials, not employee-subject data.' }),
+  customer_contracts: t("Compass's own commercial record of this customer.", P, { org: 1 }, D.NOT_APPLICABLE,
+    { exclusionReason: 'An HR Director must not be able to erase their employer\'s signed-contract record from Settings. CASCADEs from organisations, so it goes when the organisation genuinely goes.',
+      dsarNote: 'primary_contact_name/email is a commercial contact at the controller, not an employee data subject. See NEW-45.' }),
+  team_invites: t('Pending teammate invitations: name, email, intended role.', P, { org: 1, person: 1 }, D.INCLUDED_NOT_WIRED,
+    { exclusionReason: 'The org_members pipeline, and org_members is excluded — deleting pending invites would be the inconsistent choice.',
+      dsarDefect: 'NEW-45',
+      dsarNote: 'Holds a named person\'s name and email; org_members and employee_portal_invites ARE read by api/portal/_dsar-lookup.js and this is not. Owed, not yet wired.' }),
+
+  // ── platform layer: no org_id, never touched by a tenant action ──
+  organisations: t('The tenant row itself; its primary key IS the org id.', P, { person: 0 }, D.NOT_PERSONAL_DATA,
+    { exclusionReason: 'Deleting the organisation is the real "delete the organisation" lever and a far bigger action than this button. Most org-scoped tables CASCADE from it.' }),
+  profiles: t("A signed-in user's own account identity (name, role, company).", P, { person: 1 }, D.INCLUDED,
+    { exclusionReason: 'Keyed to auth.users, not to an org. Erasing it would strip the acting HR Director\'s own identity while they remain an org_member.' }),
+  platform_admins: t('Compass operator grants (granted/revoked by, when).', P, {}, D.NOT_APPLICABLE,
+    { exclusionReason: 'A tenant-triggered write here would be a privilege-boundary change, which platform-admin isolation forbids.' }),
+
+  // ── infrastructure ──
+  api_rate_limits: t('Rate-limit counters, reachable only via check_rate_limit.', I, {}, D.INTERNAL_WITHHELD,
+    { exclusionReason: 'No org dimension to scope a delete to; operational counters, no HR content.',
+      dsarNote: 'rate_key embeds an auth user id (chat:${caller.id}) and rows never expire — a retention question, filed as NEW-46, not an erasure gap.' }),
+  calendar_synced_events: t('Maps a Compass deadline to an external calendar event id.', I, {}, D.NOT_PERSONAL_DATA,
+    { exclusionReason: 'connection_id NOT NULL CASCADE to calendar_connections, which is itself excluded — its lifecycle correctly follows that parent.' }),
+  meetings_legacy_unused: t('Pre-4C.1 meeting store, renamed away. Must stay empty.', I, {}, D.NOT_APPLICABLE,
+    { exclusionReason: 'A fossil holding 0 rows. It has case-content columns, no org_id and a NULLABLE cascade, so it could not be erased per-org if it ever filled — which is why scripts/schema-drift-check.mjs fails if its row count is not zero.' }),
+};
+
+export function classificationFor(table) {
+  return TABLE_CLASSIFICATION[String(table || '').toLowerCase()] || null;
+}
+
+export function classifiedTableNames() {
+  return Object.keys(TABLE_CLASSIFICATION).sort();
+}
+
+export function tablesWithDataClass(dataClass) {
+  return Object.entries(TABLE_CLASSIFICATION)
+    .filter(([, meta]) => meta.dataClass === dataClass)
+    .map(([name]) => name).sort();
+}
+
+// Every DSAR obligation Compass has accepted and not yet implemented. Returned
+// as data so it appears in a test failure rather than only in a register.
+export function unwiredDsarObligations() {
+  return Object.entries(TABLE_CLASSIFICATION)
+    .filter(([, meta]) => meta.dsar === DSAR_DISPOSITION.INCLUDED_NOT_WIRED)
+    .map(([name, meta]) => ({ table: name, defect: meta.dsarDefect || null }));
+}
