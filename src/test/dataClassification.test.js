@@ -222,13 +222,25 @@ describe('NEW-44 — the previously missing tables stay classified', () => {
 
 // ── H. the future table, demonstrated without creating it ──
 describe('NEW-44 — a future durable table cannot ship unclassified', () => {
-  it('case_decisions would fail the classification gate', () => {
-    const future = [{ name: 'case_decisions_2027-01-01.sql', sql: 'create table public.case_decisions (id uuid);' }];
-    const declared = declaredPublicTables(future);
-    expect(declared.filter(t => !classificationFor(t))).toEqual(['case_decisions']);
-    // and it genuinely does not exist yet
-    expect(declaredPublicTables(corpus())).not.toContain('case_decisions');
-    expect(classificationFor('case_decisions')).toBeNull();
+  it('case_decisions ARRIVED in D4.2 and is fully classified — the gate did its job', () => {
+    // This test used to assert case_decisions would FAIL the gate because it did
+    // not exist. D4.2 created it, and the gate is why it could not land without
+    // a classification. Kept as the positive half of that proof.
+    expect(declaredPublicTables(corpus())).toContain('case_decisions');
+    const meta = classificationFor('case_decisions');
+    expect(meta).toBeTruthy();
+    expect(meta.dataClass).toBe(DATA_CLASS.CUSTOMER);
+    expect(classifyTable('case_decisions')).toBe('cascade_covered');
+    expect(meta.dsar).toBe(DSAR_DISPOSITION.INCLUDED_NOT_WIRED);
+    expect(meta.dsarDefect).toBe('D4.3');
+    expect(meta.retention).toBe(RETENTION.NOT_ENFORCED);
+  });
+
+  it('a table that still does not exist WOULD fail the classification gate', () => {
+    const future = [{ name: 'decision_notes_2027-01-01.sql', sql: 'create table public.decision_notes (id uuid);' }];
+    expect(declaredPublicTables(future).filter(t => !classificationFor(t))).toEqual(['decision_notes']);
+    expect(declaredPublicTables(corpus())).not.toContain('decision_notes');
+    expect(classificationFor('decision_notes')).toBeNull();
   });
 
   it('ask_threads would fail the classification gate', () => {
@@ -242,7 +254,7 @@ describe('NEW-44 — a future durable table cannot ship unclassified', () => {
     // a deletion category. Correspondence means a table must appear in BOTH
     // registers, so a developer cannot answer "is it deleted?" and stay silent
     // on "what is it, and what does DSAR owe it?".
-    const deletionOnly = [...new Set([...allClassifiedTables(), 'case_decisions'])].sort();
+    const deletionOnly = [...new Set([...allClassifiedTables(), 'decision_notes'])].sort();
     const classification = Object.keys(TABLE_CLASSIFICATION).sort();
     expect(classification).not.toEqual(deletionOnly);
   });
@@ -267,7 +279,13 @@ describe('NEW-44 — retention is recorded as unenforced, not invented', () => {
 
   it('names the unwired DSAR obligations rather than hiding them', () => {
     const unwired = unwiredDsarObligations();
-    expect(unwired).toEqual([{ table: 'team_invites', defect: 'NEW-45' }]);
+    expect(unwired).toEqual([
+      // D4.2: a decision about a person IS their personal data and is owed to
+      // them, but D4.2 is behaviour-preserving and nothing reads the table yet.
+      // D4.3 owns the cutover, at which point this becomes `included`.
+      { table: 'case_decisions', defect: 'D4.3' },
+      { table: 'team_invites', defect: 'NEW-45' },
+    ]);
     for (const row of unwired) {
       expect(row.defect, `${row.table} claims an unwired DSAR obligation with no defect reference`).toBeTruthy();
     }

@@ -127,7 +127,15 @@ export function deletionOrderViolations(order = ORG_SCOPED_TABLES, fks = RESTRIC
 // change could quietly invalidate — dataInventory.test.js keys off this
 // exact list, so a schema change that drops one of these cascades (or
 // makes case_id nullable) needs a human to update this file to notice.
-export const CASCADE_COVERED_TABLES = ['allegations', 'case_signals', 'case_themes', 'case_access'];
+export const CASCADE_COVERED_TABLES = [
+  'allegations', 'case_signals', 'case_themes', 'case_access',
+  // case_decisions (Wave D4.2, supabase/case_decisions_2026-10-03.sql) — its
+  // (case_id, org_id) -> cases(id, org_id) foreign key is NOT NULL and
+  // ON DELETE CASCADE, so the handler's own `cases` delete erases every
+  // decision row. Adding it to ORG_SCOPED_TABLES would be inert, and would
+  // also put it in the deletion ORDER where it does not belong.
+  'case_decisions',
+];
 
 // Tables with an org_id column that are deliberately left alone by
 // "Delete all data" — org/account structure and integration config, not

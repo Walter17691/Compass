@@ -107,12 +107,21 @@ describe('NEW-44 — the gate fails when it should', () => {
   // public.case_decisions for the D4 appeal model, or public.ask_threads for
   // durable Ask Compass, and classifies neither, the first test in this file
   // fails with that table's name in the message.
-  it('WOULD fail for public.case_decisions before it exists', () => {
-    const future = [{ name: 'case_decisions_2027-01-01.sql', sql: 'create table public.case_decisions (id uuid, case_id uuid);' }];
-    expect(unclassifiedTables(declaredPublicTables(future))).toEqual(['case_decisions']);
-    // and it genuinely does not exist yet, in either direction
-    expect(declaredPublicTables(corpus())).not.toContain('case_decisions');
-    expect(classifyTable('case_decisions')).toBeNull();
+  it('case_decisions ARRIVED in D4.2 and could not land unclassified', () => {
+    // This test previously asserted case_decisions would FAIL the gate because
+    // it did not exist. D4.2 created it, and the gate is precisely why it could
+    // not be merged without a deletion classification. Kept as the positive
+    // half of the same proof.
+    expect(declaredPublicTables(corpus())).toContain('case_decisions');
+    expect(classifyTable('case_decisions')).toBe('cascade_covered');
+    expect(unclassifiedTables(declaredPublicTables(corpus()))).toEqual([]);
+  });
+
+  it('WOULD still fail for a table that does not exist', () => {
+    const future = [{ name: 'decision_notes_2027-01-01.sql', sql: 'create table public.decision_notes (id uuid, case_id uuid);' }];
+    expect(unclassifiedTables(declaredPublicTables(future))).toEqual(['decision_notes']);
+    expect(declaredPublicTables(corpus())).not.toContain('decision_notes');
+    expect(classifyTable('decision_notes')).toBeNull();
   });
 
   it('WOULD fail for public.ask_threads before it exists', () => {
@@ -141,6 +150,9 @@ describe('NEW-44 — the derived schema matches production', () => {
   const LIVE_PUBLIC_TABLES_2026_10_02 = [
     'allegations', 'api_rate_limits', 'audit_log', 'calendar_connections',
     'calendar_synced_events', 'case_access', 'case_signals', 'case_tasks', 'case_themes',
+    // case_decisions added by Wave D4.2 and applied to production 2026-10-03,
+    // re-read from pg_class afterwards: 44 base tables, 44 with RLS, 0 views.
+    'case_decisions',
     'case_views', 'cases', 'concern_referrals', 'customer_contracts', 'dsar_requests',
     'employee_activities', 'employee_activity_records', 'employee_employment_events',
     'employee_portal_accounts', 'employee_portal_invites', 'employee_records',

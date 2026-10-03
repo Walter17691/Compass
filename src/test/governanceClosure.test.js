@@ -219,10 +219,13 @@ describe('NEW-44 — customer-data tables cannot silently lose RLS', () => {
     expect(missing, `Classified but absent from the RLS reading: ${missing.join(', ')}`).toEqual([]);
   });
 
-  it('RLS is enabled on all 43 tables, as measured', () => {
+  it('RLS is enabled on all 44 tables, as measured', () => {
+    // 43 before D4.2; case_decisions brings it to 44, with RLS enabled and two
+    // policies (select inheriting case access, insert requiring decision authority).
     const enabled = Object.values(RECORDED_RLS_2026_10_03).filter(r => r.rls).length;
-    expect(Object.keys(RECORDED_RLS_2026_10_03)).toHaveLength(43);
-    expect(enabled).toBe(43);
+    expect(Object.keys(RECORDED_RLS_2026_10_03)).toHaveLength(44);
+    expect(enabled).toBe(44);
+    expect(RECORDED_RLS_2026_10_03.case_decisions).toEqual({ rls: true, policies: 2 });
   });
 
   it('RLS alone is not treated as sufficient — posture is a separate declaration', () => {
@@ -261,10 +264,10 @@ describe('NEW-44D — structural tenancy is derived from the corpus', () => {
 
   it('discovers org-scoped tables from the corpus, matching the live count', () => {
     const { tables } = orgScopedShapes(corpus());
-    // 37 org_id-bearing base tables, measured live against information_schema
-    // on 2026-10-03. The parser is checked against production, not against
-    // another list in this repository.
-    expect(tables).toHaveLength(37);
+    // 37 org_id-bearing base tables measured live on 2026-10-03, plus
+    // case_decisions from D4.2 = 38. The parser is checked against production,
+    // not against another list in this repository.
+    expect(tables).toHaveLength(38);
     for (const t of tables) expect(t.columns, `${t.name}`).toContain('org_id');
   });
 
@@ -349,37 +352,47 @@ describe('NEW-44D — structural tenancy is derived from the corpus', () => {
     expect(v[0].why).toMatch(/cross-organisation row/);
   });
 
-  it('AUTOMATICALLY fails the case_decisions shape — org_id + case_id -> cases(id)', () => {
+  it('AUTOMATICALLY fails a case-linked table using org_id + case_id -> cases(id)', () => {
+    // The shape D4.2's case_decisions was forbidden from having. Proven on a
+    // synthetic name now that the real table exists in the compliant form.
     const synthetic = [...corpus(), {
-      name: 'case_decisions_2027-01-01.sql',
-      sql: `create table public.case_decisions (
+      name: 'decision_notes_2027-01-01.sql',
+      sql: `create table public.decision_notes (
               id uuid primary key,
               org_id uuid not null references public.organisations(id),
               case_id uuid not null references public.cases(id) on delete cascade,
-              outcome text not null
+              body text
             );`,
     }];
     const { tables, foreignKeys } = orgScopedShapes(synthetic);
     const v = tenancyViolations(tables, foreignKeys);
     expect(v).toHaveLength(1);
-    expect(v[0].table).toBe('case_decisions');
+    expect(v[0].table).toBe('decision_notes');
     expect(v[0].expectedParent).toBe('cases');
   });
 
-  it('PASSES the compliant case_decisions shape — composite (case_id, org_id)', () => {
+  it('the REAL case_decisions passes because it uses the composite form', () => {
+    const { tables, foreignKeys } = orgScopedShapes(corpus());
+    expect(tables.map(t => t.name)).toContain('case_decisions');
+    const fks = foreignKeys.filter(f => f.table === 'case_decisions' && f.columns.includes('case_id'));
+    expect(fks.some(isSameOrgComposite), 'case_decisions must declare (case_id, org_id) -> cases(id, org_id)').toBe(true);
+    expect(tenancyViolations(tables, foreignKeys)).toEqual([]);
+  });
+
+  it('PASSES a compliant case-linked shape — composite (case_id, org_id)', () => {
     const synthetic = [...corpus(), {
-      name: 'case_decisions_2027-01-01.sql',
-      sql: `create table public.case_decisions (
+      name: 'decision_notes_2027-01-01.sql',
+      sql: `create table public.decision_notes (
               id uuid primary key,
               org_id uuid not null,
               case_id uuid not null,
               outcome text not null,
-              constraint case_decisions_case_same_org_fkey
+              constraint decision_notes_case_same_org_fkey
                 foreign key (case_id, org_id) references public.cases(id, org_id) on delete cascade
             );`,
     }];
     const { tables, foreignKeys } = orgScopedShapes(synthetic);
-    expect(tables.map(t => t.name)).toContain('case_decisions');
+    expect(tables.map(t => t.name)).toContain('decision_notes');
     expect(tenancyViolations(tables, foreignKeys)).toEqual([]);
   });
 

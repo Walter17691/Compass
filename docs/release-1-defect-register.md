@@ -2135,6 +2135,68 @@ columns query gutted; renames applied after creates. Full suite 339/6677. Lint
 baseline 167. 12/12 functions. **No migration. `cases_id_org_key` NOT added** —
 it remains D4.2's to own.
 
+### WAVE D4.2 — authoritative case decision history foundation — 2026-10-03
+
+`public.case_decisions` created, additive and behaviour-preserving. **Nothing
+reads it yet** — `cases.outcome` remains the compatibility projection, and
+Current Warnings, `caseStage`, `nextStep`, OutcomeModal, the appeal workflow and
+the Employee File are all asserted unchanged. No dual write, and no consistency
+trigger (considered and rejected: it would be a dual write introduced silently).
+
+**Schema.** `cases_id_org_key UNIQUE (id, org_id)` added — Postgres requires a
+unique constraint matching a composite FK's column list, evidenced by
+`employee_records` already carrying both its PK and `employee_records_id_org_key`.
+`case_decisions` declares `(case_id, org_id) -> cases(id, org_id)`, so a decision
+in org A against a case in org B is unrepresentable. `cases.org_id` stays
+NULLABLE; the MATCH SIMPLE gap is closed on the child side with
+`org_id NOT NULL`.
+
+**One current head, DB-enforced.** Two partial unique indexes —
+`one_successor_idx` and `one_original_per_case_idx` — make the decisions for a
+case a single path, so exactly one row is unsuperseded. The §10 race (two users
+appealing the same head concurrently) fails the second insert with `23505` at
+commit time, proven live.
+
+**Append-only.** RLS grants SELECT and INSERT only; a trigger additionally blocks
+UPDATE/DELETE, forces `decided_by := auth.uid()`, requires `decided_at` on new
+decisions, and refuses `legacy_unmapped` for application writes. Service role and
+migration superuser exempt so backfill and rollback remain possible.
+
+**RLS inherits the case**, via the bare `EXISTS (SELECT 1 FROM public.cases …)`
+pattern from `allegations_case_tasks_authoritative_case_access_2026-09-05.sql`, so
+L1/L2/L3, `case_access`, revocation and confidential rules come from the parent
+and cannot drift. Write authority mirrors `protect_case_hr_only_columns()`: HR in
+this case's org, or this case's disciplinary officer. Recursion checked — `cases`'
+policies never reference `case_decisions`.
+
+**Backfill: 137/137, zero unexplained mismatches.** 136 exact outcome matches; 1
+`legacy_unmapped` preserving `"First written warning issued"` verbatim in
+`outcome_source_text`. Notes/duration/expiry 137/137. `decided_at` 2 known / 135
+NULL; `decided_by` 0 known / 137 NULL; communication 137 NULL. 0 orphans, 0
+cross-org mismatches, 0 appeal rows, 0 multiple heads. **No appeal rows from the
+37 `not_upheld` allegation records** — `not_upheld` means the original stands.
+
+**Communication vocabulary reduced to one value on evidence.** The audit proposed
+`signature_request` and `tracked_send`; only the first is real. `letterTracking`
+is populated nowhere (`dsarCaseDisclosure.js` says so itself; the only writes are
+`letterTracking: {}`), and `api/send-letter.js` persists nothing.
+
+**Governance:** `cascade_covered` (NOT NULL composite FK, ON DELETE CASCADE), so
+not in the deletion ORDER; `customer` / org+person+case scoped;
+`retention: not_enforced`; RLS posture recorded (2 policies); fingerprint
+refreshed. DSAR is **`included_not_wired`, owned by D4.3** — a decision about a
+person is their personal data and is owed to them, but wiring it into
+`compileSubjectData` would change Wave 0 disclosure in a slice forbidden from
+doing so. NEW-44D discovered the table automatically from the corpus with no
+manual list edit: 44 declared, 38 org-scoped, 0 tenancy violations.
+
+Verified: 51 D4.2 tests; 13 live negative tests (each a statement designed to
+fail, so nothing persisted); 7 governance + 12 domain mutations, all caught.
+**A real test gap was found by mutation and fixed**: the legacy-provenance
+assertion only checked the stray string appeared somewhere in the file, so a
+mutation normalising the backfill's else-branch to a real sanction survived. The
+branch itself is now asserted.
+
 ### NEW-47 — DSAR discloses the theme taxonomy but not the subject's own theme links — P3 — OPEN
 - **Severity** P3 · **Area** DSAR disclosure policy · **Raised** 2026-10-03
   (NEW-44 governance closure, §8 review)

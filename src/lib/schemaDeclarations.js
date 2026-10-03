@@ -173,8 +173,14 @@ function balancedBody(text, from) {
 }
 
 const NOT_A_COLUMN = /^(constraint|primary|foreign|unique|check|exclude|like|using|partition)\b/i;
-const FK_CLAUSE = /foreign\s+key\s*\(([^)]*)\)\s*references\s+(?:public\s*\.\s*)?"?([a-z_][a-z0-9_]*)"?/gi;
-const INLINE_REF = /^\s*"?([a-z_][a-z0-9_]*)"?\s+[^,]*?\breferences\s+(?:public\s*\.\s*)?"?([a-z_][a-z0-9_]*)"?/i;
+// `references` may be schema-qualified, and the schema matters. D4.2's
+// case_decisions.decided_by references auth.users(id); without capturing the
+// schema this parser recorded a foreign key to a public table called "auth".
+// Harmless for the tenancy rule, which only reasons about tenant columns, but
+// wrong — so non-public parents are now dropped rather than mislabelled.
+const FK_CLAUSE = /foreign\s+key\s*\(([^)]*)\)\s*references\s+(?:"?([a-z_][a-z0-9_]*)"?\s*\.\s*)?"?([a-z_][a-z0-9_]*)"?/gi;
+const INLINE_REF = /^\s*"?([a-z_][a-z0-9_]*)"?\s+[^,]*?\breferences\s+(?:"?([a-z_][a-z0-9_]*)"?\s*\.\s*)?"?([a-z_][a-z0-9_]*)"?/i;
+const isPublicParent = schema => !schema || schema.toLowerCase() === 'public';
 
 const columnList = raw => raw.split(',').map(c => c.trim().replace(/^"|"$/g, '').toLowerCase()).filter(Boolean);
 
@@ -182,7 +188,8 @@ function foreignKeysIn(text) {
   const out = [];
   FK_CLAUSE.lastIndex = 0;
   for (let m = FK_CLAUSE.exec(text); m; m = FK_CLAUSE.exec(text)) {
-    out.push({ columns: columnList(m[1]), parent: m[2].toLowerCase() });
+    if (!isPublicParent(m[2])) continue;
+    out.push({ columns: columnList(m[1]), parent: m[3].toLowerCase() });
   }
   return out;
 }
@@ -248,7 +255,9 @@ export function declaredTableShapes(files = []) {
           const name = trimmed.match(/^"?([a-z_][a-z0-9_]*)"?/i);
           if (name) shape.columns.add(name[1].toLowerCase());
           const inline = trimmed.match(INLINE_REF);
-          if (inline) shape.foreignKeys.push({ columns: [inline[1].toLowerCase()], parent: inline[2].toLowerCase() });
+          if (inline && isPublicParent(inline[2])) {
+            shape.foreignKeys.push({ columns: [inline[1].toLowerCase()], parent: inline[3].toLowerCase() });
+          }
         }
       } else if (ev.kind === 'alter') {
         if (/\brename\s+to\b/i.test(ev.statement)) continue;   // the rename event handles it
