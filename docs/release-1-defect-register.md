@@ -2197,6 +2197,82 @@ assertion only checked the stray string appeared somewhere in the file, so a
 mutation normalising the backfill's else-branch to a real sanction survived. The
 branch itself is now asserted.
 
+### NEW-48 — historical CSV import could manufacture an operational case outcome — P1 — FIXED / DEPLOYED — AWAITING HUMAN APPROVAL
+- **Severity** **P1** · **Area** outcome authority / data integrity · **Raised** 2026-10-03
+  (D4.3 prerequisite inspection)
+- **Observed.** `handleCaseCsvImport` wrote `outcome: o['outcome'] || ""` straight
+  into `cases.outcome` on INSERT. That manufactured an operational case outcome
+  while bypassing **every** control a decision carries:
+  - `approvalActionForOutcome` / `requestHrReview` never invoked, so an imported
+    `Final written warning`, `Dismissal with notice` or `Summary dismissal`
+    **never reached the HR sign-off gate** the UI path triggers;
+  - `computeDecisionQualityGaps` never invoked — no decision-quality check;
+  - it audits `"Case history imported"`, so `log_audit_event`'s own
+    `'Outcome issued'` validation never applied;
+  - **`protect_case_hr_only_columns` is `BEFORE UPDATE` only**, so the INSERT was
+    unchecked at database level. The only real gates were the UI's `isHR` test
+    and `cases` INSERT RLS.
+- **Reachability.** Settings → Employee records → "Import from CSV", available to
+  **any HR user** (`hr_manager` or `hr_director`). Intended for historical
+  migration — the audit action, the section label and the template filename all
+  say "case history".
+- **Also the manufacturing route for incomplete warnings.** It wrote an outcome
+  with no `outcome_issued_at`, no duration and no expiry — the exact shape that
+  made the "Complete outcome details" path exist (85 such cases, all in E2E test
+  organisations, 0 in the active tenant).
+- **NOT evidence of cross-tenant access.** Tested separately: with RLS in force a
+  client sees 0 cases and 0 decision rows. Tenant isolation was never implicated.
+- **Resolution (D4.2b, 2026-10-03).** Two independent halves:
+  1. **Application** — the importer no longer persists an outcome. Non-empty
+     values are counted and reported through the established skipped-import
+     convention as a skipped **field** on an imported row, never a skipped row.
+     The template's `Outcome` column is gone, along with its
+     `"First written warning issued"` example — which D4.1 traced as the origin of
+     the single non-canonical outcome string in production.
+  2. **Database** — `protect_case_outcome_on_insert` refuses any case INSERT
+     populating `outcome`, `outcome_issued_at`, `outcome_notes`,
+     `warning_duration_months`, `warning_expires_at` or
+     `disciplinary_decided_by`. Proven live: each of the six rejected with
+     `42501` and the field named; all six combined likewise; an ordinary insert
+     with an empty outcome still succeeds.
+- **Stage semantics verified, not assumed.** Skipping the outcome does not create
+  contradictory cases: production already holds **37 of 106 closed cases with no
+  outcome**, `getCaseStage` returns `"closed"` before any outcome branch, and
+  `protect_case_closure` requires HR authority rather than an outcome. Imported
+  stage is preserved.
+- **UPDATE deliberately NOT hardened** — see the D4.3 handoff obligation below.
+
+### NEW-49 — the D4.2 append-only guard's privileged-path test is always true — P2 — OPEN
+- **Severity** P2 · **Area** decision-history integrity (defence in depth) ·
+  **Raised** 2026-10-03 (found while implementing D4.2b's own guard)
+- **Observed.** `case_decisions_append_only_guard` (Wave D4.2) exempts
+  `coalesce(auth.role(),'') = 'service_role' **or current_user in
+  ('postgres','supabase_admin')**`. Inside a `SECURITY DEFINER` function
+  `current_user` is **always the function owner**, so that clause is
+  unconditionally true and **the guard never fires for any caller**.
+- **Proven, not inferred.** With the session role switched to `authenticated`, a
+  `SECURITY DEFINER` function still reported `current_user=postgres` while a
+  `SECURITY INVOKER` one reported `current_user=authenticated`. The same mistake
+  was made in D4.2b's first draft and corrected there before deployment — that
+  guard now matches `protect_case_hr_only_columns` and `protect_case_closure`,
+  which use `auth.role()` and nothing else.
+- **Impact — dormant, not live.** RLS is the primary lock and is intact:
+  `case_decisions` carries only SELECT and INSERT policies, and an unauthorised
+  client was measured as seeing **0 rows**. So UPDATE/DELETE of decision history
+  is still refused. What IS inert is the trigger's **INSERT-side** protections —
+  forcing `decided_by := auth.uid()`, requiring `decided_at`, and refusing
+  `legacy_unmapped`. An **authorised HR user** could therefore insert a decision
+  attributing it to another user, undated, or carrying the legacy marker.
+- **Why it is not exploitable today.** No application path writes
+  `case_decisions` at all (asserted by test), so the inert protections guard an
+  operation nobody performs. The exposure becomes real the moment D4.3 makes the
+  table authoritative.
+- **Recommended fix: inside D4.3's deployment unit**, where the RPC becomes the
+  sole writer and provenance forcing is load-bearing. Deliberately **not** patched
+  in D4.2b: D4.2 is approved and frozen, and silently altering a deployed
+  security guard outside the agreed slice is the wrong move even when the change
+  is a one-line improvement.
+
 ### NEW-47 — DSAR discloses the theme taxonomy but not the subject's own theme links — P3 — OPEN
 - **Severity** P3 · **Area** DSAR disclosure policy · **Raised** 2026-10-03
   (NEW-44 governance closure, §8 review)

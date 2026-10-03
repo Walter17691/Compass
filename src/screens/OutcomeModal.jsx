@@ -3,36 +3,16 @@ import { approvalActionForOutcome, approvalActionLabel } from '../lib/approvals'
 import { computeDecisionQualityGaps } from '../lib/decisionQuality';
 import { DecisionQualityCheckModal } from '../components/DecisionQualityCheckModal';
 import { useModalA11y } from '../hooks/useModalA11y';
-import { isDisciplinaryMeeting, isGrievanceMeeting } from '../lib/meetingTypeMatch';
 import { isWarningOutcome, isValidWarningDurationMonths } from '../lib/outcomeTypes';
 import { addCalendarMonths, toISODateLocal } from '../lib/dates';
 import { COLOR, FONT, TYPE, RADIUS, BUTTON } from '../styles/tokens';
 import { outcomeDecisionContext } from '../lib/outcomeDecisionContext';
 import { MDRenderer } from '../components/MDRenderer';
 
-// Defect #11/#12/#13 remediation — every other handleLetter call site
-// (CaseViewScreen.jsx's disciplinary_invite/outcome_letter/appeal/no-
-// case-answer actions) sets caseInfo.employee/manager and reviewOutput
-// from the authoritative case + its own relevant hearing meeting
-// immediately before drafting a letter. This modal's own "Issue outcome
-// & generate letter" button was the one call site that never did either
-// — handleLetter's prompt got no explicit "Employee: X" fact and no
-// meeting-record context at all, so the AI fell back to the case's own
-// free-text description (which named a different real participant, a
-// reporting manager, in a way that read as if they were the case
-// subject) and had no source for the hearing's actual decided warning
-// duration or hearing manager name, filling both with generic guesses.
-// Mirrors CaseViewScreen's own relevantMeeting() (a local, unexported
-// closure there) rather than importing it, since it's this small and
-// this modal has no other reason to depend on that file.
-function findOutcomeRelevantMeeting(cs) {
-  const meetings = cs?.meetings || [];
-  const matching = meetings.filter(m => isDisciplinaryMeeting(m.type) || isGrievanceMeeting(m.type));
-  return matching[matching.length - 1] || meetings[meetings.length - 1] || null;
-}
+// WAVE D4.2b — findOutcomeRelevantMeeting was removed with the completion
+// mode: it existed only to pre-fill that flow's issue-date input.
 
-// Shared audit-detail text for both "Outcome issued" (finalizeOutcome)
-// and "Outcome details amended" (completeOutcomeDetails) — structured,
+// Audit-detail text for "Outcome issued" (finalizeOutcome) — structured,
 // non-sensitive (no free-text outcomeNotes rationale included, only the
 // facts a reader needs to establish what/when/duration/expiry), same
 // shape either way so the two audit actions read as clearly related.
@@ -63,7 +43,7 @@ function describeOutcomeDetail(outcomeType, issuedAt, durationMonths, expiresAt,
 // Intelligence's equivalent) since OutcomeModal is already a
 // self-contained modal, not a full screen orchestrated from App.jsx —
 // nothing else needs to know this check ran.
-export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcomeType, setOutcomeType, outcomeNotes, setOutcomeNotes, saveCases, showToast, requestHrReview, allegations, caseSignals, requestOverrideReason, createCaseTask, audit, completingOutcomeDetails, setCompletingOutcomeDetails, currentUserId }) {
+export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcomeType, setOutcomeType, outcomeNotes, setOutcomeNotes, saveCases, showToast, requestHrReview, allegations, caseSignals, requestOverrideReason, createCaseTask, audit, currentUserId }) {
   const cs = cases.find(x=>x.id===activeCaseId);
   // WAVE D2 — the record this decision is about, assembled from data this
   // component was already given and already authorised to hold. No query, no
@@ -81,19 +61,15 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
   // can hold an in-progress, not-yet-valid value ("", "0", "6.5") without
   // fighting a controlled numeric input.
   const [warningDurationMonths, setWarningDurationMonths] = useState("");
-  // Defect #14 remediation — only used in completingOutcomeDetails mode,
-  // where outcome_issued_at is unknown and must never be silently set to
-  // "now" (that would misrepresent when the outcome was actually
-  // decided, and would shift the ACAS appeal-window clock this field
-  // conceptually anchors). Lazily pre-filled with the case's own most
-  // recent hearing meeting date as a starting point for HR to confirm or
-  // correct — never auto-saved without HR explicitly reviewing this
-  // field, since the Save button remains disabled until it's populated.
-  const [confirmedIssueDate, setConfirmedIssueDate] = useState(() => findOutcomeRelevantMeeting(cs)?.date || "");
+  // WAVE D4.2b — the "complete outcome details" mode is gone, and with it the
+  // confirmed-issue-date input. Warning duration is SUBSTANTIVE decision data
+  // (it sets how long the sanction is live, therefore whether it is a Current
+  // Warning), so supplying it after the fact was editing the sanction through a
+  // metadata route. A new decision always captures its own duration and is
+  // always dated now, so there is nothing left to confirm or correct here.
   const isWarning = isWarningOutcome(outcomeType);
   const durationValid = !isWarning || isValidWarningDurationMonths(warningDurationMonths);
-  const issueDateValid = !completingOutcomeDetails || !!confirmedIssueDate;
-  const previewBaseDate = completingOutcomeDetails ? (confirmedIssueDate ? new Date(confirmedIssueDate) : null) : new Date();
+  const previewBaseDate = new Date();
   const previewExpiry = isWarning && isValidWarningDurationMonths(warningDurationMonths) && previewBaseDate
     ? addCalendarMonths(previewBaseDate, Number(warningDurationMonths))
     : null;
@@ -212,37 +188,12 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
   // issued" anywhere else in the app (Timeline, audit, letter-drafting
   // toasts). No quality-check gate either — that's specifically for a
   // NEW decision's own evidentiary basis, which isn't what's happening
-  // here. outcome_issued_at is set from confirmedIssueDate (HR-reviewed,
-  // pre-filled only as a starting suggestion — see its own useState
-  // comment above), never from "now".
-  const completeOutcomeDetails = async () => {
-    if(!confirmedIssueDate || (isWarning && !isValidWarningDurationMonths(warningDurationMonths))) return;
-    setSaving(true);
-    const issuedAt = new Date(confirmedIssueDate);
-    const durationMonths = isWarning ? Number(warningDurationMonths) : null;
-    const expiresAt = durationMonths ? toISODateLocal(addCalendarMonths(issuedAt, durationMonths)) : null;
-    const result = await saveCases(cases.map(x=>x.id===activeCaseId?{...x,
-      outcomeIssuedAt:issuedAt.toISOString(),
-      outcomeNotes:outcomeNotes,
-      warningDurationMonths:durationMonths,
-      warningExpiresAt:expiresAt,
-    }:x), activeCaseId);
-    setSaving(false);
-    if(!result?.ok) {
-      if(result?.reason !== 'conflict') showToast("Couldn't save outcome details — please try again", "error");
-      return;
-    }
-    audit("Outcome details amended", describeOutcomeDetail(outcomeType, issuedAt, durationMonths, expiresAt, {amended:true}), activeCaseId);
-    setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");setWarningDurationMonths("");setCompletingOutcomeDetails(false);
-    showToast("Outcome details saved");
-  };
-
   // Guarded against saving — an Escape press or backdrop click while the
   // outcome write is in flight (useModalA11y calls this directly) must
   // not hide the modal out from under an in-progress save; the disabled
   // Cancel button already covers the primary click path, this covers the
   // keyboard/backdrop ones the hook wires up independently.
-  const close = () => { if(saving) return; setShowOutcomeModal(false); setOutcomeType(""); setOutcomeNotes(""); setWarningDurationMonths(""); setCompletingOutcomeDetails(false); };
+  const close = () => { if(saving) return; setShowOutcomeModal(false); setOutcomeType(""); setOutcomeNotes(""); setWarningDurationMonths(""); };
   // Called unconditionally, ahead of the early return below (DecisionQuality
   // CheckModal — itself now hook-managed too, active:false while it isn't
   // showing) — the rules of hooks don't allow this after a conditional return.
@@ -258,7 +209,7 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
       <div style={{background:COLOR.surface,borderRadius:RADIUS.card,padding:24,width:"100%",maxWidth:620,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(15,18,36,0.18)",fontFamily:FONT.sans}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
           <div>
-            <div id="outcome-modal-title" style={{...TYPE.pageTitle,color:COLOR.ink}}>{completingOutcomeDetails?"Complete outcome details":"Record outcome"}</div>
+            <div id="outcome-modal-title" style={{...TYPE.pageTitle,color:COLOR.ink}}>{"Record outcome"}</div>
             <div style={{...TYPE.metadata,color:COLOR.inkQuiet,marginTop:2}}>{cs?.employeeName}</div>
           </div>
           <button onClick={close} aria-label="Close" style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:COLOR.inkQuiet}}>×</button>
@@ -267,7 +218,7 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
             Shown before the controls, because a decision-maker should see what
             they are deciding before they are asked to decide it. Facts only:
             no recommendation, no severity, no ranking, nothing generated. */}
-        {!completingOutcomeDetails&&!context.isEmpty&&(
+        {!context.isEmpty&&(
           <div style={{border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,padding:"14px 16px",marginBottom:18,background:COLOR.rail}}>
             <div style={{...TYPE.micro,color:COLOR.inkFaint,marginBottom:10}}>The record you are deciding on</div>
 
@@ -326,7 +277,7 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
 
         <div style={{marginBottom:16}}>
           <label htmlFor="outcome-type" style={{fontSize:12,fontWeight:600,color:COLOR.ink,display:"block",marginBottom:6}}>Outcome decision</label>
-          <select id="outcome-type" value={outcomeType} onChange={e=>setOutcomeType(e.target.value)} disabled={completingOutcomeDetails} style={{width:"100%",fontSize:13,border:`1.5px solid ${COLOR.borderStrong}`,borderRadius:8,padding:"10px 12px",fontFamily:FONT.sans,color:outcomeType?COLOR.ink:COLOR.inkQuiet,background:completingOutcomeDetails?COLOR.rail:COLOR.surface,outline:"none",boxSizing:"border-box"}}>
+          <select id="outcome-type" value={outcomeType} onChange={e=>setOutcomeType(e.target.value)} style={{width:"100%",fontSize:13,border:`1.5px solid ${COLOR.borderStrong}`,borderRadius:8,padding:"10px 12px",fontFamily:FONT.sans,color:outcomeType?COLOR.ink:COLOR.inkQuiet,background:COLOR.surface,outline:"none",boxSizing:"border-box"}}>
             <option value="">Select outcome…</option>
             <option value="No further action">No further action</option>
             <option value="First written warning">First written warning</option>
@@ -335,15 +286,7 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
             <option value="Dismissal with notice">Dismissal with notice</option>
             <option value="Summary dismissal (gross misconduct)">Summary dismissal (gross misconduct)</option>
           </select>
-          {completingOutcomeDetails&&<div style={{fontSize:11,color:COLOR.inkQuiet,marginTop:4}}>The outcome itself was already decided — this only completes its missing details.</div>}
         </div>
-        {completingOutcomeDetails&&(
-          <div style={{marginBottom:16}}>
-            <label htmlFor="outcome-issue-date" style={{fontSize:12,fontWeight:600,color:COLOR.ink,display:"block",marginBottom:6}}>Original outcome issue date</label>
-            <input id="outcome-issue-date" type="date" value={confirmedIssueDate} onChange={e=>setConfirmedIssueDate(e.target.value)} style={{width:"100%",fontSize:13,border:`1.5px solid ${COLOR.borderStrong}`,borderRadius:8,padding:"10px 12px",fontFamily:FONT.sans,color:COLOR.ink,background:COLOR.surface,outline:"none",boxSizing:"border-box"}}/>
-            <div style={{fontSize:11,color:COLOR.inkQuiet,marginTop:4}}>This wasn't recorded at the time — confirm (or correct) the date this outcome was actually decided. Pre-filled from the case's own hearing meeting date where available.</div>
-          </div>
-        )}
         {isWarning&&(
           <div style={{marginBottom:16}}>
             <label htmlFor="warning-duration" style={{fontSize:12,fontWeight:600,color:COLOR.ink,display:"block",marginBottom:6}}>Warning duration</label>
@@ -363,8 +306,7 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
           <label htmlFor="outcome-notes" style={{...TYPE.metadata,fontWeight:700,color:COLOR.ink,display:"block",marginBottom:6}}>Outcome reasoning <span style={{fontWeight:400,color:COLOR.inkQuiet}}>(optional)</span></label>
           <textarea id="outcome-notes" value={outcomeNotes} onChange={e=>setOutcomeNotes(e.target.value)} placeholder="Why you reached this outcome…" rows={3} style={{width:"100%",fontSize:13,border:`1.5px solid ${COLOR.borderStrong}`,borderRadius:8,padding:"10px 12px",fontFamily:FONT.sans,color:COLOR.ink,background:COLOR.surface,outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
         </div>
-        {!completingOutcomeDetails&&(
-          <div style={{background:COLOR.amberTint,border:`1px solid ${COLOR.amber}33`,borderRadius:8,padding:"10px 14px",marginBottom:outcomeType&&approvalActionForOutcome(outcomeType)?10:20,fontSize:12,color:COLOR.amber}}>
+        <div style={{background:COLOR.amberTint,border:`1px solid ${COLOR.amber}33`,borderRadius:8,padding:"10px 14px",marginBottom:outcomeType&&approvalActionForOutcome(outcomeType)?10:20,fontSize:12,color:COLOR.amber}}>
             {/* §3 — TRUTHFUL, not reworded. Traced: computeAppealDeadline returns
                 null until an outcome LETTER has been saved, so recording a
                 decision starts nothing. The window is then ANCHORED to this
@@ -374,19 +316,14 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
                 outcome starts the appeal window" was false at this moment. */}
             Recording this does not notify the employee. The appeal window is tracked once the outcome letter is issued, counted from this decision's date (ACAS-recommended 5 working days).
           </div>
-        )}
-        {!completingOutcomeDetails&&outcomeType&&approvalActionForOutcome(outcomeType)&&(
+        {outcomeType&&approvalActionForOutcome(outcomeType)&&(
           <div style={{background:COLOR.purpleTint,border:`1px solid ${COLOR.purple}44`,borderRadius:8,padding:"10px 14px",marginBottom:20,fontSize:12,color:COLOR.purpleDeep}}>
             {approvalActionLabel(approvalActionForOutcome(outcomeType))} normally requires HR sign-off. Recording it opens an approval request on the case's Overview tab — the outcome is recorded now and is not held pending that approval.
           </div>
         )}
         <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
           <button onClick={close} disabled={saving} style={{fontSize:13,padding:"10px 20px",border:`1px solid ${COLOR.borderStrong}`,borderRadius:8,background:"#FFFFFF",cursor:saving?"not-allowed":"pointer",color:COLOR.inkFaint,fontFamily:FONT.sans}}>Cancel</button>
-          {completingOutcomeDetails ? (
-            <button disabled={!outcomeType||saving||!durationValid||!issueDateValid} onClick={completeOutcomeDetails} style={{fontSize:13,padding:"10px 20px",background:!outcomeType||saving||!durationValid||!issueDateValid?COLOR.border:COLOR.purple,border:"none",borderRadius:8,color:!outcomeType||saving||!durationValid||!issueDateValid?COLOR.inkQuiet:COLOR.paper,cursor:!outcomeType||saving||!durationValid||!issueDateValid?"not-allowed":"pointer",fontWeight:600,fontFamily:FONT.sans}}>{saving?"Saving…":"Save outcome details"}</button>
-          ) : (
-            <button disabled={!outcomeType||saving||!durationValid} onClick={issueOutcome} style={{fontSize:13,padding:"10px 20px",background:!outcomeType||saving||!durationValid?COLOR.border:COLOR.purple,border:"none",borderRadius:8,color:!outcomeType||saving||!durationValid?COLOR.inkQuiet:COLOR.paper,cursor:!outcomeType||saving||!durationValid?"not-allowed":"pointer",fontWeight:600,fontFamily:FONT.sans}}>{saving?"Recording outcome…":"Record outcome"}</button>
-          )}
+          <button disabled={!outcomeType||saving||!durationValid} onClick={issueOutcome} style={{fontSize:13,padding:"10px 20px",background:!outcomeType||saving||!durationValid?COLOR.border:COLOR.purple,border:"none",borderRadius:8,color:!outcomeType||saving||!durationValid?COLOR.inkQuiet:COLOR.paper,cursor:!outcomeType||saving||!durationValid?"not-allowed":"pointer",fontWeight:600,fontFamily:FONT.sans}}>{saving?"Recording outcome…":"Record outcome"}</button>
         </div>
       </div>
     </div>

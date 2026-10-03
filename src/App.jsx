@@ -127,7 +127,7 @@ import { RecordScreen } from './screens/RecordScreen';
 import { UpdateAvailableNotice } from './components/UpdateAvailableNotice';
 import { groundingFromMeeting, groundingFromRecord, isAnalysisStale } from './lib/reviewGrounding';
 import { outcomeLetterStatus } from './lib/outcomeLetter';
-import { partitionImportRows, describeSkippedImport } from './lib/caseIdentity';
+import { partitionImportRows, describeSkippedImport, countImportedOutcomes, describeSkippedOutcomes } from './lib/caseIdentity';
 import { askThreadKey, threadFor, appendFailure, turnsForModel } from './lib/askConversation';
 import { useBuildStaleness } from './hooks/useBuildStaleness';
 import { CaseViewScreen } from './screens/CaseViewScreen';
@@ -936,7 +936,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // inferred from cs.outcome already being set — an appeal can
   // legitimately re-open the normal issue flow on an already-decided
   // case too, which is not the same thing as completing missing metadata.
-  const [completingOutcomeDetails, setCompletingOutcomeDetails] = useState(false);
   const [editJobTitle, setEditJobTitle] = useState("");
   const [editStartDate, setEditStartDate] = useState("");
   const [reconcilingCaseId, setReconcilingCaseId] = useState(null);
@@ -1329,6 +1328,24 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // counted, never imported as name-only cases to be reconciled later.
       const { accepted, skipped: unidentified } = partitionImportRows(named, employeeRecords, { orgId: org?.id || null });
       const skipped = unnamed + unidentified.length;
+      // WAVE D4.2b (NEW-48) — the historical importer does not issue decisions.
+      //
+      // `outcome: o['outcome']||""` used to be here. It let a CSV manufacture an
+      // operational case outcome with none of the controls a decision carries:
+      // no HR sign-off gate for dismissal-grade outcomes, no decision-quality
+      // check, no 'Outcome issued' audit coupling, and — because
+      // protect_case_hr_only_columns was BEFORE UPDATE only — no database check
+      // at all on insert. It was also the only production route that could
+      // create a warning with no duration.
+      //
+      // The outcome column is now read ONLY to count it, so the user is told
+      // plainly rather than the value disappearing. STAGE IS PRESERVED: the
+      // inspection established that closed-without-outcome is already a
+      // legitimate production state (37 of 106 closed cases), getCaseStage
+      // returns "closed" before any outcome branch, and protect_case_closure
+      // requires HR authority rather than an outcome — so there is no
+      // stage/outcome coupling to invent here.
+      const skippedOutcomeCount = countImportedOutcomes(accepted.map(a => ({ outcome: a.row['outcome'] })));
       const imported = accepted.map(({ row: o, employeeId }) => ({
         id: crypto.randomUUID(),
         employeeId,
@@ -1338,7 +1355,6 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         description: o['description']||"",
         dateReceived: o['date received']||new Date().toISOString().split("T")[0],
         stage: (o['stage']||"").trim().toLowerCase()==="closed" ? "closed" : "open",
-        outcome: o['outcome']||"",
         meetings: [],
         evidence: [],
         urgency: "normal",
@@ -1347,6 +1363,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       audit("Case history imported", `${imported.length} case${imported.length===1?"":"s"}`);
       const identityNotice = describeSkippedImport(unidentified);
       if(identityNotice) showToast(identityNotice, "error");
+      // A skipped FIELD on an imported row, not a skipped row — said separately
+      // from the identity notice so the two cannot be read as one count.
+      const outcomeNotice = describeSkippedOutcomes(skippedOutcomeCount);
+      if(outcomeNotice) showToast(outcomeNotice, "info");
       showToast(`Imported ${imported.length} case${imported.length===1?"":"s"}${skipped>0?`, skipped ${skipped} row${skipped===1?"":"s"} with no employee name`:""}`);
     } catch(err) {
       console.error("Case CSV import error:", err);
@@ -1357,9 +1377,18 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   };
 
   const downloadCaseCsvTemplate = () => {
+    // WAVE D4.2b (NEW-48) — the Outcome column is gone from the template.
+    //
+    // It used to carry the worked example "First written warning issued", which
+    // D4.1 traced as the origin of the single non-canonical outcome string in
+    // production: the template taught customers to write a sanction Compass does
+    // not recognise, and the importer wrote it verbatim. The importer no longer
+    // persists outcomes at all, so advertising the column would promise an
+    // import that does not happen. A file that still has the column imports
+    // fine — the value is counted and reported, not silently dropped.
     const rows = [
-      ["Employee name","Case type","Stage","Date received","Description","Outcome"],
-      ["Jane Smith","misconduct","closed","2025-03-10","Repeated lateness following two informal warnings","First written warning issued"],
+      ["Employee name","Case type","Stage","Date received","Description"],
+      ["Jane Smith","misconduct","closed","2025-03-10","Repeated lateness following two informal warnings"],
     ];
     const csv = toCsv(rows);
     const blob = new Blob([csv],{type:"text/csv"});
@@ -11789,7 +11818,7 @@ Please produce:
             showAppealInput, setShowAppealInput, appealText, setAppealText, recordAppealReceived, setShowReassignModal,
             setShowAssignInvestigatorModal, setShowOutcomeModal, setShowSignModal, letterOutput,
             letterValidationIssues,
-            setOutcomeType, setCompletingOutcomeDetails,
+            setOutcomeType,
             aiProcessing, aiError, toggleNextStepDone, concludingInvestigation, investigationReportDraft, attemptSubmitInvestigation,
             openEscalateModal, openHrInterventionModal, generateNextBestAction, nextActionLoading,
             changesSinceView: changesSinceView[activeCaseId], changesSummary: changesSummary[activeCaseId],
@@ -12308,8 +12337,6 @@ Please produce:
           
           
           audit={audit}
-          completingOutcomeDetails={completingOutcomeDetails}
-          setCompletingOutcomeDetails={setCompletingOutcomeDetails}
           currentUserId={user?.id || null}
         />
       )}

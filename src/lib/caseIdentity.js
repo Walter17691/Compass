@@ -106,6 +106,54 @@ export function partitionImportRows(rows = [], employees = [], opts = {}) {
   return { accepted, skipped };
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// WAVE D4.2b — the historical importer does not issue decisions (NEW-48).
+//
+// The case-history importer wrote `outcome: o['outcome'] || ""` straight into
+// cases.outcome. That meant a CSV could manufacture an operational case outcome
+// while bypassing every control the product puts around a decision:
+//
+//   approvalActionForOutcome / requestHrReview   never called, so an imported
+//                                                "Dismissal with notice" never
+//                                                hit the HR sign-off gate
+//   computeDecisionQualityGaps                   never called
+//   log_audit_event's 'Outcome issued' check     never applies (it audits
+//                                                "Case history imported")
+//   protect_case_hr_only_columns                 BEFORE UPDATE only, so an
+//                                                INSERT carrying an outcome was
+//                                                unchecked at database level
+//
+// It is also the only production route that manufactures a warning with no
+// duration — the shape that made the "Complete outcome details" path exist.
+//
+// So the importer now imports case HISTORY and refuses to issue decisions. The
+// outcome column is read only to COUNT it, so the user is told plainly rather
+// than the value vanishing silently.
+// ─────────────────────────────────────────────────────────────────────────
+
+// How many rows carried an outcome value we are declining to import. Counted
+// from the rows that were actually accepted, because a row skipped for identity
+// reasons is already reported by describeSkippedImport and must not be counted
+// twice.
+export function countImportedOutcomes(rows = []) {
+  return (Array.isArray(rows) ? rows : [])
+    .filter(row => norm(row?.outcome) || norm(row?.Outcome) || norm(row?.["outcome"]))
+    .length;
+}
+
+// FIELD skipped, not ROW skipped — and the wording has to carry that
+// distinction, because "4 skipped" next to a successful import reads as four
+// lost cases. The case history imported; the decision did not.
+export function describeSkippedOutcomes(count = 0) {
+  if (!count) return null;
+  const n = count;
+  return `${n} imported case${n === 1 ? "" : "s"} had an outcome value in the file — `
+    + `the case${n === 1 ? " was" : "s were"} imported, but the outcome ${n === 1 ? "was" : "were"} not. `
+    + `A case decision has to be recorded through Compass's own decision process so it carries `
+    + `authority, sign-off where required, and a dated decision record. Record ${n === 1 ? "it" : "them"} `
+    + `on the case when you are ready.`;
+}
+
 // What to tell the user about the rows that were not imported. One line, plain,
 // and it says what to do about it.
 export function describeSkippedImport(skipped = []) {

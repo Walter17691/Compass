@@ -48,7 +48,7 @@ function needsOutcomeDetailsCompletion(cs) {
   return isWarningOutcome(cs.outcome) && !cs.warningDurationMonths;
 }
 
-export function OutcomeTab({ cs, stage, fmtDate, setShowOutcomeModal, setOutcomeType, setCompletingOutcomeDetails, canDecide, onDraftOutcomeLetter }) {
+export function OutcomeTab({ cs, stage, fmtDate, setShowOutcomeModal, canDecide, onDraftOutcomeLetter }) {
   const grievance = isGrievanceCase(cs);
   const reached = isOutcomeReachable(cs, stage);
   // Defect #17 remediation — a durable, always-available route to the
@@ -89,15 +89,18 @@ export function OutcomeTab({ cs, stage, fmtDate, setShowOutcomeModal, setOutcome
         {cs.warningDurationMonths&&(
           <div style={{fontSize:12,color:"#4A4E63",marginTop:2}}>Warning duration: {cs.warningDurationMonths} month{cs.warningDurationMonths===1?"":"s"}{cs.warningExpiresAt?` · Expires ${fmtDate(cs.warningExpiresAt)}`:""}</div>
         )}
+        {/* WAVE D4.2b — the "Complete outcome details" action is retired.
+            A warning's duration is SUBSTANTIVE decision data: it sets how long
+            the sanction is live, therefore whether it is a Current Warning,
+            therefore the escalation position. Supplying it after the fact was
+            editing the sanction through a metadata route, so it is no longer
+            offered to anyone — not merely hidden from non-deciders.
+            The read-only notice is PRESERVED (it already existed for the
+            non-canDecide case) because a historical record being incomplete is
+            worth seeing; what has gone is the ability to rewrite it here. A
+            deliberate correction/variation workflow is future work. */}
         {needsCompletion&&(
-          canDecide ? (
-            <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #A8D5B5"}}>
-              <div style={{fontSize:12,color:"#1A7A4A",marginBottom:8}}>This warning is missing its duration — complete the outcome details to ground the formal letter and appeal/expiry tracking correctly.</div>
-              <button onClick={()=>{setOutcomeType(cs.outcome);setCompletingOutcomeDetails(true);setShowOutcomeModal(true);}} style={{fontSize:12,background:"none",border:"1px solid #1A7A4A",borderRadius:8,padding:"8px 16px",color:"#1A7A4A",fontWeight:600,cursor:"pointer",fontFamily:FONT.sans}}>Complete outcome details</button>
-            </div>
-          ) : (
-            <div style={{fontSize:12,color:"#4A4E63",marginTop:10}}>This warning is missing its duration — only HR or this case's Hearing Manager can complete it.</div>
-          )
+          <div style={{fontSize:12,color:"#4A4E63",marginTop:10}}>This warning has no recorded duration, so its expiry and currency cannot be calculated. Historical records are kept as they were recorded.</div>
         )}
         {onDraftOutcomeLetter&&(
           <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #A8D5B5"}}>

@@ -105,7 +105,6 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
     showAppealInput, setShowAppealInput, appealText, setAppealText, recordAppealReceived, setShowReassignModal,
     setShowAssignInvestigatorModal, setShowOutcomeModal, setShowSignModal, letterOutput,
     letterValidationIssues = [],
-    setOutcomeType, setCompletingOutcomeDetails,
     aiProcessing, aiError, toggleNextStepDone, concludingInvestigation, investigationReportDraft, attemptSubmitInvestigation,
     openEscalateModal, openHrInterventionModal, generateNextBestAction, nextActionLoading,
     changesSinceView, changesSummary, changesSummaryLoading,
@@ -1405,7 +1404,7 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
             </>
             ),
                       outcome: (
-            <OutcomeTab cs={cs} stage={stage} fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} setOutcomeType={setOutcomeType} setCompletingOutcomeDetails={setCompletingOutcomeDetails} canDecide={canDecide} onDraftOutcomeLetter={draftOutcomeLetter}/>
+            <OutcomeTab cs={cs} stage={stage} fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} canDecide={canDecide} onDraftOutcomeLetter={draftOutcomeLetter}/>
             ),
                       record: (
             <TimelinePanel cs={cs} allegations={allegations} auditLog={auditLog} fmtDate={fmtDate} onOpenSource={openTimelineSource} onToggleExclude={timeline.toggleTimelineExclude} onEditDescription={timeline.editTimelineDescription} onGenerateRelevance={timeline.generateTimelineRelevance} relevanceLoading={timeline.timelineRelevanceLoading?.[cs.id]} loadJsPDF={timeline.loadJsPDF}/>

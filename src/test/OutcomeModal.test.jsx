@@ -379,118 +379,69 @@ describe('OutcomeModal — persists the authoritative decision-maker (Appeal Ind
 // when it was decided. This must complete the missing metadata WITHOUT
 // re-issuing the outcome — no letter drafted, no "Outcome issued" audit
 // entry, cs.outcome itself never touched by the save.
-describe('OutcomeModal — historical outcome completion (Defect #12/#14, Golden Path shape)', () => {
-  const historicalGoldenPathCase = {
-    id: 'c1',
-    employeeName: 'UAT - Test Employee (Golden Path)',
-    manager: 'Walter Carta',
-    outcome: 'First written warning',
-    outcomeIssuedAt: null,
-    warningDurationMonths: null,
-    warningExpiresAt: null,
-    meetings: [
-      { id: 'm1', type: 'Investigation', date: '2026-09-07', record: 'Investigation record.' },
-      { id: 'm2', type: 'Disciplinary', date: '2026-09-07', record: 'The panel decided a first written warning, to remain on file for six months.' },
-    ],
-  };
-  const completionProps = {
-    cases: [historicalGoldenPathCase], activeCaseId: 'c1', outcomeType: 'First written warning', setOutcomeType: noop,
-    outcomeNotes: '', setOutcomeNotes: noop, showToast: noop, handleLetter: vi.fn(), requestHrReview: noop,
-    allegations: [], caseSignals: [], requestOverrideReason: noop, createCaseTask: noop,
-    setCaseInfo: noop, setReviewOutput: noop, audit: vi.fn(), setShowOutcomeModal: noop,
-    completingOutcomeDetails: true, setCompletingOutcomeDetails: noop,
+describe('WAVE D4.2b — the historical outcome-completion route is retired', () => {
+  // This block replaces the Defect #12/#14 completion tests. Those asserted a
+  // route that intentionally no longer exists: warning duration is SUBSTANTIVE
+  // decision data (it sets how long the sanction is live, therefore whether it
+  // is a Current Warning, therefore the escalation position), so supplying it
+  // after the fact was editing the sanction through a metadata route.
+  //
+  // The coverage is not deleted — it is inverted. These tests prove the
+  // mutation path is GONE from the component, not merely hidden.
+  const historicalIncompleteCase = {
+    id: 'c-hist', employeeName: 'Sam Historical', outcome: 'First written warning',
+    outcomeIssuedAt: null, warningDurationMonths: null, warningExpiresAt: null,
+    stage: 'disciplinary', meetings: [], caseType: 'misconduct',
   };
 
-  it('loads the case normally and shows the title as completion, not issuance', () => {
-    render(<OutcomeModal {...completionProps} />);
-    expect(screen.getByText('Complete outcome details')).toBeInTheDocument();
-    expect(screen.queryByText('Issue disciplinary outcome')).not.toBeInTheDocument();
-  });
-
-  it('the existing outcome remains visible and its select is disabled — this path never changes what was decided', () => {
-    render(<OutcomeModal {...completionProps} />);
-    const select = screen.getByLabelText('Outcome decision');
-    expect(select).toHaveValue('First written warning');
-    expect(select).toBeDisabled();
-  });
-
-  it('does not invent an issue date — pre-fills the confirmable field from the case\'s own hearing meeting date, not from "now"', () => {
-    render(<OutcomeModal {...completionProps} />);
-    expect(screen.getByLabelText('Original outcome issue date')).toHaveValue('2026-09-07');
-  });
-
-  it('does not invent a warning duration — the field starts empty and is required', async () => {
-    render(<OutcomeModal {...completionProps} />);
-    expect(screen.getByLabelText('Warning duration')).toHaveValue(null);
-    expect(screen.getByRole('button', { name: 'Save outcome details' })).toBeDisabled();
-  });
-
-  it('does not show the "starts the appeal window" banner — this isn\'t a new decision', () => {
-    render(<OutcomeModal {...completionProps} />);
-    expect(screen.queryByText(/starts the employee's 5 working day appeal window/)).not.toBeInTheDocument();
-  });
-
-  it('requires the issue date to be confirmed — clearing it disables Save even with a valid duration', async () => {
-    const user = userEvent.setup();
-    render(<OutcomeModal {...completionProps} />);
-    await user.type(screen.getByLabelText('Warning duration'), '6');
-    await user.clear(screen.getByLabelText('Original outcome issue date'));
-    expect(screen.getByRole('button', { name: 'Save outcome details' })).toBeDisabled();
-  });
-
-  it('saving completes the metadata without re-issuing: cs.outcome is unchanged, no letter is drafted, and the audit reads "amended", not "issued"', async () => {
-    const user = userEvent.setup();
+  const renderModal = (overrides = {}) => {
     const saveCases = vi.fn().mockResolvedValue({ ok: true });
-    const handleLetter = vi.fn();
     const audit = vi.fn();
-    render(<OutcomeModal {...completionProps} saveCases={saveCases} handleLetter={handleLetter} audit={audit} />);
-    await user.type(screen.getByLabelText('Warning duration'), '6');
-    await user.click(screen.getByRole('button', { name: 'Save outcome details' }));
-    await waitFor(() => expect(saveCases).toHaveBeenCalled());
+    render(
+      <OutcomeModal
+        cases={[historicalIncompleteCase]} activeCaseId="c-hist"
+        setShowOutcomeModal={vi.fn()} outcomeType="" setOutcomeType={vi.fn()}
+        outcomeNotes="" setOutcomeNotes={vi.fn()} saveCases={saveCases}
+        showToast={vi.fn()} requestHrReview={vi.fn()} allegations={[]} caseSignals={[]}
+        requestOverrideReason={vi.fn()} createCaseTask={vi.fn()} audit={audit}
+        currentUserId="u-1" {...overrides}
+      />,
+    );
+    return { saveCases, audit };
+  };
 
-    const [savedCases] = saveCases.mock.calls[0];
-    const saved = savedCases.find(c => c.id === 'c1');
-    expect(saved.outcome).toBe('First written warning'); // untouched — preserved from the original case object
-    expect(saved.outcomeIssuedAt).toContain('2026-09-07');
-    expect(saved.warningDurationMonths).toBe(6);
-    expect(saved.warningExpiresAt).toBe('2027-03-07'); // 2026-09-07 + 6 calendar months
-
-    expect(handleLetter).not.toHaveBeenCalled();
-    expect(audit).toHaveBeenCalledWith('Outcome details amended', expect.any(String), 'c1');
-    expect(audit).not.toHaveBeenCalledWith('Outcome issued', expect.anything(), expect.anything());
+  it('no longer offers a "Complete outcome details" mode', () => {
+    renderModal();
+    expect(screen.queryByText('Complete outcome details')).not.toBeInTheDocument();
+    // The title and the submit button both read "Record outcome" — assert the
+    // title specifically, so this cannot pass on the button alone.
+    expect(document.getElementById('outcome-modal-title')).toHaveTextContent('Record outcome');
   });
 
-  it('lets HR correct the pre-filled date if it does not match their own knowledge of when the outcome was actually decided', async () => {
-    const user = userEvent.setup();
-    const saveCases = vi.fn().mockResolvedValue({ ok: true });
-    render(<OutcomeModal {...completionProps} saveCases={saveCases} />);
-    const dateInput = screen.getByLabelText('Original outcome issue date');
-    await user.clear(dateInput);
-    await user.type(dateInput, '2026-09-08');
-    await user.type(screen.getByLabelText('Warning duration'), '6');
-    await user.click(screen.getByRole('button', { name: 'Save outcome details' }));
-    await waitFor(() => expect(saveCases).toHaveBeenCalled());
-    const [savedCases] = saveCases.mock.calls[0];
-    const saved = savedCases.find(c => c.id === 'c1');
-    expect(saved.outcomeIssuedAt).toContain('2026-09-08');
-    expect(saved.warningExpiresAt).toBe('2027-03-08');
+  it('no longer renders a confirmable original-issue-date input', () => {
+    renderModal();
+    expect(screen.queryByLabelText(/Original outcome issue date/i)).not.toBeInTheDocument();
   });
 
-  // Appeal Independence P1 (2026-09-18) — completeOutcomeDetails is
-  // deliberately NOT one of the write sites for disciplinaryDecidedBy:
-  // it fills in structured facts a decision already made is missing, it
-  // is not itself a new decision, so it must never retroactively assign
-  // a decision-maker to a legacy case (which would misrepresent who
-  // actually decided it back when it happened).
-  it('completing historical metadata does not set disciplinaryDecidedBy, even when currentUserId is supplied', async () => {
-    const user = userEvent.setup();
-    const saveCases = vi.fn().mockResolvedValue({ ok: true });
-    render(<OutcomeModal {...completionProps} saveCases={saveCases} currentUserId="hr-walter" />);
-    await user.type(screen.getByLabelText('Warning duration'), '6');
-    await user.click(screen.getByRole('button', { name: 'Save outcome details' }));
-    await waitFor(() => expect(saveCases).toHaveBeenCalled());
-    const [savedCases] = saveCases.mock.calls[0];
-    const saved = savedCases.find(c => c.id === 'c1');
-    expect(saved.disciplinaryDecidedBy).toBeUndefined();
+  it('no longer renders a "Save outcome details" action', () => {
+    renderModal();
+    expect(screen.queryByRole('button', { name: 'Save outcome details' })).not.toBeInTheDocument();
+  });
+
+  it('accepts no completion props — passing them cannot re-enable the route', () => {
+    // Adversarial: a caller that still passes the retired props must not get the
+    // retired behaviour back. The component no longer reads them at all.
+    renderModal({ completingOutcomeDetails: true, setCompletingOutcomeDetails: vi.fn() });
+    expect(screen.queryByText('Complete outcome details')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save outcome details' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Original outcome issue date/i)).not.toBeInTheDocument();
+    // and the outcome select is NOT disabled, because there is no mode that disables it
+    expect(screen.getByLabelText('Outcome decision')).not.toBeDisabled();
+  });
+
+  it('the component source no longer contains an amendment write path', () => {
+    const src = readFileSync('src/screens/OutcomeModal.jsx', 'utf8');
+    expect(src).not.toContain('completeOutcomeDetails');
+    expect(src).not.toMatch(/Outcome details amended/);
   });
 });

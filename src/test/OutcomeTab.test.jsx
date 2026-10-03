@@ -121,25 +121,23 @@ describe('OutcomeTab — Defect #8: a directly-started Disciplinary meeting must
 // that's missing its structured duration — the historical-case path,
 // never a re-issue.
 describe('OutcomeTab — outcome date/duration/expiry display and completion path (Defect #12/#14)', () => {
-  const setOutcomeType = () => {};
-  const setCompletingOutcomeDetails = () => {};
   const setShowOutcomeModal = () => {};
 
   it('shows the persisted issue date once outcomeIssuedAt is set', () => {
     const decided = { ...reachedCase, outcome: 'First written warning', outcomeIssuedAt: '2026-09-07', warningDurationMonths: 6, warningExpiresAt: '2027-03-07' };
-    render(<OutcomeTab cs={decided} stage="closed" fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} setOutcomeType={setOutcomeType} setCompletingOutcomeDetails={setCompletingOutcomeDetails} canDecide={true} />);
+    render(<OutcomeTab cs={decided} stage="closed" fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} canDecide={true} />);
     expect(screen.getByText(/Issued 2026-09-07/)).toBeInTheDocument();
   });
 
   it('says the date was not recorded, honestly, rather than inventing one, when outcomeIssuedAt is missing', () => {
     const decided = { ...reachedCase, outcome: 'First written warning' };
-    render(<OutcomeTab cs={decided} stage="closed" fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} setOutcomeType={setOutcomeType} setCompletingOutcomeDetails={setCompletingOutcomeDetails} canDecide={true} />);
+    render(<OutcomeTab cs={decided} stage="closed" fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} canDecide={true} />);
     expect(screen.getByText(/date not recorded/)).toBeInTheDocument();
   });
 
   it('shows warning duration and expiry when both are present', () => {
     const decided = { ...reachedCase, outcome: 'First written warning', outcomeIssuedAt: '2026-09-07', warningDurationMonths: 6, warningExpiresAt: '2027-03-07' };
-    render(<OutcomeTab cs={decided} stage="closed" fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} setOutcomeType={setOutcomeType} setCompletingOutcomeDetails={setCompletingOutcomeDetails} canDecide={true} />);
+    render(<OutcomeTab cs={decided} stage="closed" fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} canDecide={true} />);
     expect(screen.getByText(/Warning duration: 6 months/)).toBeInTheDocument();
     expect(screen.getByText(/Expires 2027-03-07/)).toBeInTheDocument();
   });
@@ -153,56 +151,51 @@ describe('OutcomeTab — outcome date/duration/expiry display and completion pat
       ...reachedCase, outcome: 'First written warning', outcomeIssuedAt: '2026-09-07',
       meetings: [{ id: 'm1', type: 'Disciplinary', date: '2026-09-07', savedAt: '2026-09-10T19:55:00.878Z', letterOutput: '...', letterType: 'outcome' }],
     };
-    render(<OutcomeTab cs={decided} stage="closed" fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} setOutcomeType={setOutcomeType} setCompletingOutcomeDetails={setCompletingOutcomeDetails} canDecide={true} />);
+    render(<OutcomeTab cs={decided} stage="closed" fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} canDecide={true} />);
     expect(screen.getByText(/Deadline/)).toBeInTheDocument();
   });
 
   it('does not show a deadline before any outcome letter has been saved — nothing real to anchor one to yet', () => {
     const decided = { ...reachedCase, outcome: 'First written warning', outcomeIssuedAt: '2026-09-07', meetings: [] };
-    render(<OutcomeTab cs={decided} stage="closed" fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} setOutcomeType={setOutcomeType} setCompletingOutcomeDetails={setCompletingOutcomeDetails} canDecide={true} />);
+    render(<OutcomeTab cs={decided} stage="closed" fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} canDecide={true} />);
     expect(screen.queryByText(/Deadline/)).not.toBeInTheDocument();
   });
 
-  it('offers "Complete outcome details" for a warning outcome missing its duration, when the caller can decide', () => {
-    const incomplete = { ...reachedCase, outcome: 'First written warning', outcomeIssuedAt: null, warningDurationMonths: null };
-    render(<OutcomeTab cs={incomplete} stage="closed" fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} setOutcomeType={setOutcomeType} setCompletingOutcomeDetails={setCompletingOutcomeDetails} canDecide={true} />);
-    expect(screen.getByRole('button', { name: 'Complete outcome details' })).toBeInTheDocument();
-  });
+  // WAVE D4.2b — the completion ACTION is retired; the read-only notice is kept.
+  //
+  // These three tests previously asserted the button existed, was HR-gated, and
+  // entered completion mode. Warning duration is substantive decision data, so
+  // the action is gone for everyone rather than hidden from non-deciders. The
+  // coverage is inverted, not dropped.
+  const warningMissingDuration = { ...reachedCase, outcome: 'First written warning', outcomeIssuedAt: '2026-09-07' };
+  const renderIncomplete = canDecide => render(
+    <OutcomeTab cs={warningMissingDuration} stage="closed" fmtDate={fmtDate}
+      setShowOutcomeModal={setShowOutcomeModal} canDecide={canDecide} />,
+  );
 
-  it('does not offer completion once warningDurationMonths is already set', () => {
-    const complete = { ...reachedCase, outcome: 'First written warning', outcomeIssuedAt: '2026-09-07', warningDurationMonths: 6, warningExpiresAt: '2027-03-07' };
-    render(<OutcomeTab cs={complete} stage="closed" fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} setOutcomeType={setOutcomeType} setCompletingOutcomeDetails={setCompletingOutcomeDetails} canDecide={true} />);
+  it('does NOT offer "Complete outcome details", even to a caller who can decide', () => {
+    renderIncomplete(true);
     expect(screen.queryByRole('button', { name: 'Complete outcome details' })).not.toBeInTheDocument();
   });
 
-  it('does not offer completion for a non-warning outcome, even with no structured metadata at all', () => {
-    const decided = { ...reachedCase, outcome: 'No further action' };
-    render(<OutcomeTab cs={decided} stage="closed" fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} setOutcomeType={setOutcomeType} setCompletingOutcomeDetails={setCompletingOutcomeDetails} canDecide={true} />);
+  it('does NOT offer it to a caller who cannot decide either', () => {
+    renderIncomplete(false);
     expect(screen.queryByRole('button', { name: 'Complete outcome details' })).not.toBeInTheDocument();
   });
 
-  it('explains, rather than offering the button, when the caller cannot decide', () => {
-    const incomplete = { ...reachedCase, outcome: 'Final written warning', warningDurationMonths: null };
-    render(<OutcomeTab cs={incomplete} stage="closed" fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} setOutcomeType={setOutcomeType} setCompletingOutcomeDetails={setCompletingOutcomeDetails} canDecide={false} />);
-    expect(screen.queryByRole('button', { name: 'Complete outcome details' })).not.toBeInTheDocument();
-    expect(screen.getByText(/only HR or this case's Hearing Manager can complete it/i)).toBeInTheDocument();
+  it('still SHOWS that the historical record is incomplete — read-only, for everyone', () => {
+    // Preserving the existing read-only indicator was explicit: an incomplete
+    // historical record is worth seeing. What has gone is rewriting it here.
+    renderIncomplete(true);
+    expect(screen.getByText(/no recorded duration/i)).toBeInTheDocument();
   });
 
-  it('clicking "Complete outcome details" pre-fills the outcome type, enters completion mode, and opens the modal — never re-issuing', async () => {
-    const user = userEvent.setup();
-    const calls = [];
-    const incomplete = { ...reachedCase, outcome: 'First written warning', warningDurationMonths: null };
-    render(<OutcomeTab
-      cs={incomplete} stage="closed" fmtDate={fmtDate}
-      setShowOutcomeModal={()=>calls.push('setShowOutcomeModal')}
-      setOutcomeType={(v)=>calls.push('setOutcomeType:'+v)}
-      setCompletingOutcomeDetails={()=>calls.push('setCompletingOutcomeDetails')}
-      canDecide={true}
-    />);
-    await user.click(screen.getByRole('button', { name: 'Complete outcome details' }));
-    expect(calls).toContain('setOutcomeType:First written warning');
-    expect(calls).toContain('setCompletingOutcomeDetails');
-    expect(calls).toContain('setShowOutcomeModal');
+  it('the historical incomplete case still renders its outcome and stays inspectable', () => {
+    // Section 4: viewing historical incomplete cases must remain safe.
+    renderIncomplete(true);
+    expect(screen.getByText('Outcome issued')).toBeInTheDocument();
+    expect(screen.getByText('First written warning')).toBeInTheDocument();
+    expect(screen.getByText(/Issued 2026-09-07/)).toBeInTheDocument();
   });
 });
 
