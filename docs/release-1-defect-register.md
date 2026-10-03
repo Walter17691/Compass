@@ -2089,6 +2089,52 @@ Verified: **38 new tests; 11 mutations, 11 caught** — including M9 re-run as
 Full suite 339/6669. Lint baseline 167. Build 0. 12/12 functions. No migration.
 No production data mutated; Delete all data never executed.
 
+#### NEW-44D (2026-10-03) — structural tenancy derived from the corpus
+
+The closure pass added a correct, mutation-proven `tenancyViolations()` and then
+fed it a **hand-maintained list of tables and foreign keys written inside the
+test**. The audit proved the consequence: a temporary `demo_unclassified_table`
+with `org_id` + `employee_id` and no composite FK made every other gate fire
+while **the tenancy gate stayed silent**. That is the forgotten-list dependency
+NEW-44 exists to remove, one level down.
+
+**There is now no manual tenancy list.** `declaredTableShapes()` extends the
+existing migration replay to capture columns and foreign keys from the four DDL
+forms this corpus actually uses — `create table` bodies (inline `references` and
+table-level `foreign key (...)`), `alter table … add column`, `alter table … add
+constraint … foreign key`, and `drop column`. `orgScopedShapes()` narrows to
+tables carrying `org_id`. Verified against production: **37 org-scoped tables
+derived, 37 measured live.** Shape and name replays are asserted to agree on all
+43 tables.
+
+**A parser bug found and fixed during the slice, worth recording because the
+suite passed with it in place.** The first draft collected creates and applied
+renames afterwards, so `standalone_meetings_2026-09-25.sql`'s
+`rename to meetings_legacy_unused` moved the shape of the **new** `meetings`
+table into the fossil. `meetings` silently lost `org_id`, the tenancy rule
+stopped applying to it, and nothing failed. Events are now replayed in positional
+order, and a test pins both tables' shapes.
+
+**Live half added.** The drift command now reads live columns and
+**constraint-level** foreign keys (a composite would otherwise look
+single-column) and runs the same rule against production — the only detector for
+a table created directly in the dashboard, which NEW-44D does **not** eliminate.
+An unreadable shape reports `UNVERIFIED` and exits 2.
+
+**Proof:** on-disk temporary corpus artefact, never applied to any database —
+non-compliant form fails tenancy automatically with no fixture entry; compliant
+composite form satisfies tenancy while still failing the classification gates,
+which is the correct layering. The `case_decisions` shape is proven to fail as
+`case_id -> cases(id)` beside an unrelated `org_id`, and to pass as
+`(case_id, org_id) -> cases(id, org_id)`.
+
+**8 mutations, 8 caught:** parser stops reading `ALTER add column`; no org-scoped
+tables discovered; shape parser returns nothing; `isSameOrgComposite` always
+true; legacy allowlist swallows everything; live tenancy check removed; live
+columns query gutted; renames applied after creates. Full suite 339/6677. Lint
+baseline 167. 12/12 functions. **No migration. `cases_id_org_key` NOT added** —
+it remains D4.2's to own.
+
 ### NEW-47 — DSAR discloses the theme taxonomy but not the subject's own theme links — P3 — OPEN
 - **Severity** P3 · **Area** DSAR disclosure policy · **Raised** 2026-10-03
   (NEW-44 governance closure, §8 review)

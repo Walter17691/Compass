@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
+import {
+  declaredPublicTables, declaredTableShapes, orgScopedShapes,
+} from '../lib/schemaDeclarations.js';
 import {
   TABLE_CLASSIFICATION, DATA_CLASS, DSAR_DISPOSITION, SECURITY_POSTURE,
   RECORDED_RLS_2026_10_03, SERVICE_ROLE_ONLY_TABLES, postureFor, serviceRoleReasonFor,
@@ -231,70 +234,85 @@ describe('NEW-44 — customer-data tables cannot silently lose RLS', () => {
   });
 });
 
-// ── 4. structural same-org tenancy, for NEW tables ──
-describe('NEW-44 — structural tenancy rule', () => {
-  // The live schema shape, read 2026-10-03.
-  const liveTables = [
-    { name: 'cases', columns: ['id', 'org_id', 'employee_id', 'location_id'] },
-    { name: 'meetings', columns: ['id', 'org_id', 'employee_id', 'case_id'] },
-    { name: 'employee_activities', columns: ['id', 'org_id', 'employee_id', 'location_id'] },
-    { name: 'employee_employment_events', columns: ['id', 'org_id', 'employee_id'] },
-    { name: 'concern_referrals', columns: ['id', 'org_id', 'employee_id', 'linked_case_id'] },
-    { name: 'dsar_requests', columns: ['id', 'org_id', 'employee_id'] },
-    { name: 'wellbeing_notes', columns: ['id', 'org_id', 'employee_id'] },
-    { name: 'audit_log', columns: ['id', 'org_id', 'employee_id', 'case_id'] },
-    { name: 'allegations', columns: ['id', 'org_id', 'case_id'] },
-    { name: 'case_signals', columns: ['id', 'org_id', 'case_id'] },
-    { name: 'case_themes', columns: ['id', 'org_id', 'case_id', 'theme_id'] },
-    { name: 'case_tasks', columns: ['id', 'org_id', 'case_id'] },
-    { name: 'case_views', columns: ['id', 'org_id', 'case_id'] },
-    { name: 'case_access', columns: ['id', 'org_id', 'case_id'] },
-    { name: 'hr_review_requests', columns: ['id', 'org_id', 'case_id'] },
-    { name: 'employee_records', columns: ['id', 'org_id', 'location_id'] },
-  ];
-  const liveFks = [
-    { table: 'meetings', columns: ['employee_id', 'org_id'], parent: 'employee_records' },
-    { table: 'employee_activities', columns: ['employee_id', 'org_id'], parent: 'employee_records' },
-    { table: 'employee_employment_events', columns: ['employee_id', 'org_id'], parent: 'employee_records' },
-    { table: 'cases', columns: ['employee_id'], parent: 'employee_records' },
-    { table: 'concern_referrals', columns: ['employee_id'], parent: 'employee_records' },
-    { table: 'dsar_requests', columns: ['employee_id'], parent: 'employee_records' },
-    { table: 'wellbeing_notes', columns: ['employee_id'], parent: 'employee_records' },
-    { table: 'audit_log', columns: ['employee_id'], parent: 'employee_records' },
-    { table: 'audit_log', columns: ['case_id'], parent: 'cases' },
-    { table: 'allegations', columns: ['case_id'], parent: 'cases' },
-    { table: 'case_signals', columns: ['case_id'], parent: 'cases' },
-    { table: 'case_themes', columns: ['case_id'], parent: 'cases' },
-    { table: 'case_tasks', columns: ['case_id'], parent: 'cases' },
-    { table: 'case_access', columns: ['case_id'], parent: 'cases' },
-    { table: 'hr_review_requests', columns: ['case_id'], parent: 'cases' },
-    { table: 'concern_referrals', columns: ['linked_case_id'], parent: 'cases' },
-    { table: 'meetings', columns: ['case_id'], parent: 'cases' },
-  ];
+// ── 4. structural same-org tenancy — NOW CORPUS-DERIVED (NEW-44D) ──
+//
+// THE PRE-CHANGE WEAKNESS. tenancyViolations() was correct and mutation-proven,
+// and it was fed a HAND-MAINTAINED list of tables and foreign keys written out
+// in this file. So a table added to the corpus carrying org_id and an
+// employee_id/case_id was never evaluated unless somebody remembered to extend
+// that list. The NEW-44 closure audit proved this by introducing a temporary
+// `demo_unclassified_table` with org_id + employee_id and NO composite FK:
+// every other gate fired, and the tenancy gate stayed silent.
+//
+// There is now NO manually maintained table or FK list. Both sides come from
+// orgScopedShapes(), which replays the same corpus the name gate replays.
+describe('NEW-44D — structural tenancy is derived from the corpus', () => {
+  const corpus = () => readdirSync('supabase')
+    .filter(f => f.endsWith('.sql'))
+    .map(name => ({ name, sql: readFileSync(`supabase/${name}`, 'utf8') }));
 
-  it('the live schema has no UNACCEPTED tenancy violation', () => {
-    const violations = tenancyViolations(liveTables, liveFks);
+  it('the shape parser and the name parser agree on which tables exist', () => {
+    // The correspondence that stops the two replays diverging. If the shape
+    // parser ever loses a table, the tenancy rule would silently stop applying
+    // to it — which is exactly the failure this slice exists to remove.
+    const shapes = Object.keys(declaredTableShapes(corpus())).sort();
+    expect(shapes).toEqual(declaredPublicTables(corpus()));
+  });
+
+  it('discovers org-scoped tables from the corpus, matching the live count', () => {
+    const { tables } = orgScopedShapes(corpus());
+    // 37 org_id-bearing base tables, measured live against information_schema
+    // on 2026-10-03. The parser is checked against production, not against
+    // another list in this repository.
+    expect(tables).toHaveLength(37);
+    for (const t of tables) expect(t.columns, `${t.name}`).toContain('org_id');
+  });
+
+  it('finds columns added by ALTER, not just those in the create body', () => {
+    // cases.employee_id arrived via `alter table ... add column`, so a parser
+    // that only read create-table bodies would conclude cases is not
+    // employee-linked and skip it entirely.
+    const shapes = declaredTableShapes(corpus());
+    expect(shapes.cases.columns).toContain('employee_id');
+    expect(shapes.cases.columns).toContain('org_id');
+    expect(shapes.meetings.columns).toEqual(expect.arrayContaining(['org_id', 'employee_id', 'case_id']));
+  });
+
+  it('applies a rename at its own position, not after the creates in its file', () => {
+    // The bug this parser had on first run: standalone_meetings_2026-09-25.sql
+    // renames `meetings` away and then creates a NEW `meetings`. Collecting
+    // creates first and renaming afterwards moved the new table's shape into
+    // the fossil, and `meetings` silently lost org_id.
+    const shapes = declaredTableShapes(corpus());
+    expect(shapes.meetings.columns).toContain('org_id');
+    expect(shapes.meetings_legacy_unused.columns).not.toContain('org_id');
+  });
+
+  it('THE LIVE SCHEMA HAS NO UNACCEPTED TENANCY VIOLATION — from derived shapes', () => {
+    const { tables, foreignKeys } = orgScopedShapes(corpus());
+    const violations = tenancyViolations(tables, foreignKeys);
     expect(
       violations.map(v => `${v.table}.${v.column}`),
-      'Unaccepted single-column tenant reference(s) found',
+      'Unaccepted single-column tenant reference(s) discovered in the corpus',
     ).toEqual([]);
   });
 
-  it('recognises the three tables that already declare tenancy structurally', () => {
+  it('recognises the composite FKs that already declare tenancy structurally', () => {
+    const { foreignKeys } = orgScopedShapes(corpus());
     for (const table of ['meetings', 'employee_activities', 'employee_employment_events']) {
-      const fk = liveFks.find(f => f.table === table && f.columns.includes('employee_id'));
-      expect(isSameOrgComposite(fk), `${table} should be composite`).toBe(true);
+      const composite = foreignKeys.filter(f => f.table === table).some(isSameOrgComposite);
+      expect(composite, `${table} should declare a same-org composite FK`).toBe(true);
     }
   });
 
-  it('cases.employee_id is an ACCEPTED legacy exception with its compensating control recorded', () => {
+  it('cases.employee_id is an ACCEPTED legacy exception with its control recorded', () => {
     const reason = LEGACY_SINGLE_COLUMN_REFERENCES['cases.employee_id'];
     expect(reason).toBeTruthy();
     expect(reason).toMatch(/cases_employee_parentage_guard/);
-    expect(reason).toMatch(/out of\s+NEW-44 scope/i);
     // and it is genuinely still single-column — this slice did not retrofit it
-    const fk = liveFks.find(f => f.table === 'cases' && f.columns.includes('employee_id'));
-    expect(isSameOrgComposite(fk)).toBe(false);
+    const { foreignKeys } = orgScopedShapes(corpus());
+    const casesEmployeeFks = foreignKeys.filter(f => f.table === 'cases' && f.columns.includes('employee_id'));
+    expect(casesEmployeeFks.some(isSameOrgComposite)).toBe(false);
   });
 
   it('every accepted legacy exception states a non-empty reason', () => {
@@ -303,36 +321,104 @@ describe('NEW-44 — structural tenancy rule', () => {
     }
   });
 
-  it('CATCHES a new org_id + employee_id table with only a single-column FK', () => {
-    const tables = [...liveTables, { name: 'new_employee_thing', columns: ['id', 'org_id', 'employee_id'] }];
-    const fks = [...liveFks, { table: 'new_employee_thing', columns: ['employee_id'], parent: 'employee_records' }];
-    const v = tenancyViolations(tables, fks);
+  it('every accepted legacy exception names a table the corpus actually declares', () => {
+    // Stops the allowlist accumulating entries for tables that no longer exist,
+    // which would quietly widen it.
+    const declared = new Set(declaredPublicTables(corpus()));
+    for (const key of Object.keys(LEGACY_SINGLE_COLUMN_REFERENCES)) {
+      expect(declared.has(key.split('.')[0]), `${key} is not a declared table`).toBe(true);
+    }
+  });
+
+  // ── the proof: a NEW corpus table is evaluated WITHOUT being listed anywhere ──
+  it('AUTOMATICALLY fails a new org_id + employee_id table with a single-column FK', () => {
+    const synthetic = [...corpus(), {
+      name: 'demo_proof_2027-01-01.sql',
+      sql: `create table public.demo_unclassified_table (
+              id uuid primary key,
+              org_id uuid not null references public.organisations(id),
+              employee_id uuid not null references public.employee_records(id)
+            );`,
+    }];
+    const { tables, foreignKeys } = orgScopedShapes(synthetic);
+    expect(tables.map(t => t.name)).toContain('demo_unclassified_table');
+    const v = tenancyViolations(tables, foreignKeys);
     expect(v).toHaveLength(1);
-    expect(v[0].table).toBe('new_employee_thing');
+    expect(v[0].table).toBe('demo_unclassified_table');
+    expect(v[0].column).toBe('employee_id');
     expect(v[0].why).toMatch(/cross-organisation row/);
   });
 
-  it('CATCHES a new org_id + case_id table with only a single-column FK — the case_decisions shape', () => {
-    const tables = [...liveTables, { name: 'case_decisions', columns: ['id', 'org_id', 'case_id'] }];
-    const fks = [...liveFks, { table: 'case_decisions', columns: ['case_id'], parent: 'cases' }];
-    const v = tenancyViolations(tables, fks);
+  it('AUTOMATICALLY fails the case_decisions shape — org_id + case_id -> cases(id)', () => {
+    const synthetic = [...corpus(), {
+      name: 'case_decisions_2027-01-01.sql',
+      sql: `create table public.case_decisions (
+              id uuid primary key,
+              org_id uuid not null references public.organisations(id),
+              case_id uuid not null references public.cases(id) on delete cascade,
+              outcome text not null
+            );`,
+    }];
+    const { tables, foreignKeys } = orgScopedShapes(synthetic);
+    const v = tenancyViolations(tables, foreignKeys);
     expect(v).toHaveLength(1);
     expect(v[0].table).toBe('case_decisions');
     expect(v[0].expectedParent).toBe('cases');
-    // …and the composite form passes.
-    const fixed = [...liveFks, { table: 'case_decisions', columns: ['case_id', 'org_id'], parent: 'cases' }];
-    expect(tenancyViolations(tables, fixed)).toEqual([]);
   });
 
-  it('does not apply the rule to a table with no org_id', () => {
-    const tables = [...liveTables, { name: 'no_tenant_col', columns: ['id', 'case_id'] }];
-    expect(tenancyViolations(tables, liveFks)).toEqual([]);
+  it('PASSES the compliant case_decisions shape — composite (case_id, org_id)', () => {
+    const synthetic = [...corpus(), {
+      name: 'case_decisions_2027-01-01.sql',
+      sql: `create table public.case_decisions (
+              id uuid primary key,
+              org_id uuid not null,
+              case_id uuid not null,
+              outcome text not null,
+              constraint case_decisions_case_same_org_fkey
+                foreign key (case_id, org_id) references public.cases(id, org_id) on delete cascade
+            );`,
+    }];
+    const { tables, foreignKeys } = orgScopedShapes(synthetic);
+    expect(tables.map(t => t.name)).toContain('case_decisions');
+    expect(tenancyViolations(tables, foreignKeys)).toEqual([]);
+  });
+
+  it('does not apply the rule to a new table with no org_id', () => {
+    const synthetic = [...corpus(), {
+      name: 'no_tenant_2027-01-01.sql',
+      sql: 'create table public.no_tenant_col (id uuid primary key, case_id uuid references public.cases(id));',
+    }];
+    const { tables, foreignKeys } = orgScopedShapes(synthetic);
+    expect(tables.map(t => t.name)).not.toContain('no_tenant_col');
+    expect(tenancyViolations(tables, foreignKeys)).toEqual([]);
   });
 
   it('every tenancy parent is a real classified table', () => {
     for (const parent of Object.values(TENANCY_PARENTS)) {
       expect(classificationFor(parent), `${parent} is not classified`).toBeTruthy();
     }
+  });
+
+  // The corpus gate is blind to a table created directly in the Supabase
+  // dashboard — NEW-44D does not change that, and the drift command remains the
+  // only detector. Asserted here so removing the live tenancy check from that
+  // command is a test failure rather than a silent loss of the only coverage
+  // for that condition.
+  it('the drift command checks tenancy against the LIVE schema too', () => {
+    const src = readFileSync('scripts/schema-drift-check.mjs', 'utf8');
+    const code = src.split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+    expect(code).toMatch(/import \{ tenancyViolations \}/);
+    expect(code).toMatch(/tenancyViolations\(liveTenancyTables, liveTenancyFks\)/);
+    expect(code).toMatch(/STRUCTURAL TENANCY/);
+    // it must read live COLUMNS, not infer them from the corpus
+    expect(code).toMatch(/columns: `select c\.relname as table_name, a\.attname/);
+    // and constraint-LEVEL foreign keys, or a composite would look single-column
+    expect(code).toMatch(/array_agg\(att\.attname order by att\.attname\) as columns/);
+  });
+
+  it('an unreadable live shape is UNVERIFIED, never a pass', () => {
+    const src = readFileSync('scripts/schema-drift-check.mjs', 'utf8');
+    expect(src).toMatch(/unverified\.push\('structural tenancy against the live column\/FK shape'\)/);
   });
 });
 

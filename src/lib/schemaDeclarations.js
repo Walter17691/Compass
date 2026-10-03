@@ -103,6 +103,197 @@ export function schemaEventsIn(sql) {
   return events.sort((a, b) => a.at - b.at);
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// NEW-44D — table SHAPES, not just names.
+//
+// The governance audit found that tenancyViolations() was correct and
+// mutation-proven, but the set of tables fed to it was a hand-maintained
+// fixture inside a test. So a table added to the corpus with org_id and an
+// employee_id/case_id was never evaluated unless somebody remembered to extend
+// that fixture — the exact forgotten-list dependency NEW-44 exists to remove.
+//
+// This derives the shapes from the same corpus the name replay already uses. It
+// is deliberately NOT a general SQL parser: it answers two questions and no
+// others —
+//
+//   which columns does this table have?   which foreign keys cover them?
+//
+// Four DDL forms carry those answers in this corpus, verified by reading it:
+//
+//   create table public.x ( col type, ..., constraint n foreign key (a,b) references public.y(c,d) )
+//   alter table public.x add column if not exists col type[, add column ...]
+//   alter table public.x add constraint n foreign key (a, b) references public.y (c, d)
+//   alter table public.x drop constraint if exists n
+//
+// plus inline `col type references public.y(id)` inside a create-table body —
+// which is how every org_id -> organisations reference in this schema is
+// written.
+// ─────────────────────────────────────────────────────────────────────────
+
+// Function bodies are removed before any shape parsing. A trigger body can
+// legitimately contain the words "alter table" in an error message, and a
+// `do $$ ... $$` block could contain real DDL that is conditional — neither
+// should be read as a declaration. Verified safe: the table SET produced with
+// and without this strip is identical (asserted in the tests), so this removes
+// noise and never a table.
+export function stripDollarQuoted(sql) {
+  return String(sql || '').replace(/\$\$[\s\S]*?\$\$/g, ' ');
+}
+
+// Split a create-table body on TOP-LEVEL commas. A nested `(10, 2)` in a
+// numeric type, or a multi-column constraint, must not end an item.
+function splitTopLevel(body) {
+  const items = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of body) {
+    if (ch === '(') depth += 1;
+    if (ch === ')') depth -= 1;
+    if (ch === ',' && depth === 0) { items.push(current); current = ''; continue; }
+    current += ch;
+  }
+  if (current.trim()) items.push(current);
+  return items;
+}
+
+// The parenthesised body of a create-table, found by balancing parentheses from
+// the first `(` after the table name.
+function balancedBody(text, from) {
+  const open = text.indexOf('(', from);
+  if (open === -1) return null;
+  let depth = 0;
+  for (let i = open; i < text.length; i += 1) {
+    if (text[i] === '(') depth += 1;
+    else if (text[i] === ')') {
+      depth -= 1;
+      if (depth === 0) return { body: text.slice(open + 1, i), end: i };
+    }
+  }
+  return null;
+}
+
+const NOT_A_COLUMN = /^(constraint|primary|foreign|unique|check|exclude|like|using|partition)\b/i;
+const FK_CLAUSE = /foreign\s+key\s*\(([^)]*)\)\s*references\s+(?:public\s*\.\s*)?"?([a-z_][a-z0-9_]*)"?/gi;
+const INLINE_REF = /^\s*"?([a-z_][a-z0-9_]*)"?\s+[^,]*?\breferences\s+(?:public\s*\.\s*)?"?([a-z_][a-z0-9_]*)"?/i;
+
+const columnList = raw => raw.split(',').map(c => c.trim().replace(/^"|"$/g, '').toLowerCase()).filter(Boolean);
+
+function foreignKeysIn(text) {
+  const out = [];
+  FK_CLAUSE.lastIndex = 0;
+  for (let m = FK_CLAUSE.exec(text); m; m = FK_CLAUSE.exec(text)) {
+    out.push({ columns: columnList(m[1]), parent: m[2].toLowerCase() });
+  }
+  return out;
+}
+
+// Replay the corpus and return { table: { columns: [], foreignKeys: [] } }.
+// Renames move a shape; drops remove it — the same event model as the name
+// replay, so the two cannot disagree about which tables exist.
+export function declaredTableShapes(files = []) {
+  const shapes = new Map();
+  const ensure = name => {
+    if (!shapes.has(name)) shapes.set(name, { columns: new Set(), foreignKeys: [] });
+    return shapes.get(name);
+  };
+
+  for (const file of migrationOrder(files)) {
+    const sql = stripDollarQuoted(stripSqlComments(file.sql || ''));
+
+    // POSITION ORDER IS LOAD-BEARING, and getting this wrong is not theoretical
+    // — the first draft of this parser collected creates and then applied
+    // renames afterwards, so standalone_meetings_2026-09-25.sql's
+    // `rename to meetings_legacy_unused` moved the shape of the NEW `meetings`
+    // table into the fossil, and `meetings` was left holding only the columns
+    // later ALTERs added. org_id vanished from it, the tenancy rule stopped
+    // applying to it, and the suite still passed. So every shape-affecting
+    // event is collected with its offset and replayed in the order Postgres
+    // would execute it.
+    const events = [];
+
+    const CREATE_HEAD = /\bcreate\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\s*\.\s*)?"?([a-z_][a-z0-9_]*)"?/gi;
+    CREATE_HEAD.lastIndex = 0;
+    for (let m = CREATE_HEAD.exec(sql); m; m = CREATE_HEAD.exec(sql)) {
+      events.push({
+        at: m.index, kind: 'create', table: m[1].toLowerCase(),
+        found: balancedBody(sql, m.index + m[0].length),
+      });
+    }
+
+    const ALTER = /\balter\s+table\s+(?:if\s+exists\s+)?(?:public\s*\.\s*)?"?([a-z_][a-z0-9_]*)"?([\s\S]*?);/gi;
+    ALTER.lastIndex = 0;
+    for (let m = ALTER.exec(sql); m; m = ALTER.exec(sql)) {
+      events.push({ at: m.index, kind: 'alter', table: m[1].toLowerCase(), statement: m[2] || '' });
+    }
+
+    // Renames and drops come from the SAME event extractor the name replay
+    // uses, so the two can never disagree about which tables exist.
+    for (const ev of schemaEventsIn(file.sql || '')) {
+      if (ev.kind === 'drop' || ev.kind === 'rename') events.push(ev);
+    }
+
+    events.sort((a, b) => a.at - b.at);
+
+    for (const ev of events) {
+      if (ev.kind === 'create') {
+        const shape = ensure(ev.table);
+        if (!ev.found) continue;                  // e.g. `create table x as select`
+        for (const item of splitTopLevel(ev.found.body)) {
+          const trimmed = item.trim();
+          if (!trimmed) continue;
+          if (NOT_A_COLUMN.test(trimmed)) {
+            shape.foreignKeys.push(...foreignKeysIn(trimmed));
+            continue;
+          }
+          const name = trimmed.match(/^"?([a-z_][a-z0-9_]*)"?/i);
+          if (name) shape.columns.add(name[1].toLowerCase());
+          const inline = trimmed.match(INLINE_REF);
+          if (inline) shape.foreignKeys.push({ columns: [inline[1].toLowerCase()], parent: inline[2].toLowerCase() });
+        }
+      } else if (ev.kind === 'alter') {
+        if (/\brename\s+to\b/i.test(ev.statement)) continue;   // the rename event handles it
+        const shape = ensure(ev.table);
+        const ADD_COL = /\badd\s+column\s+(?:if\s+not\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?/gi;
+        for (let c = ADD_COL.exec(ev.statement); c; c = ADD_COL.exec(ev.statement)) {
+          shape.columns.add(c[1].toLowerCase());
+        }
+        const DROP_COL = /\bdrop\s+column\s+(?:if\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?/gi;
+        for (let c = DROP_COL.exec(ev.statement); c; c = DROP_COL.exec(ev.statement)) {
+          shape.columns.delete(c[1].toLowerCase());
+        }
+        shape.foreignKeys.push(...foreignKeysIn(ev.statement));
+      } else if (ev.kind === 'drop') {
+        shapes.delete(ev.table);
+      } else if (ev.kind === 'rename' && shapes.has(ev.table)) {
+        shapes.set(ev.to, shapes.get(ev.table));
+        shapes.delete(ev.table);
+      }
+    }
+  }
+
+  const out = {};
+  for (const [table, shape] of shapes) {
+    out[table] = { columns: [...shape.columns].sort(), foreignKeys: shape.foreignKeys };
+  }
+  return out;
+}
+
+// The shape of input tenancyViolations() expects, derived rather than typed.
+// Only tables carrying org_id are returned: the tenancy rule does not apply
+// without a tenant column, and narrowing here keeps the governance test's
+// intent legible.
+export function orgScopedShapes(files = []) {
+  const shapes = declaredTableShapes(files);
+  const tables = [];
+  const foreignKeys = [];
+  for (const [name, shape] of Object.entries(shapes)) {
+    if (!shape.columns.includes('org_id')) continue;
+    tables.push({ name, columns: shape.columns });
+    for (const fk of shape.foreignKeys) foreignKeys.push({ table: name, ...fk });
+  }
+  return { tables: tables.sort((a, b) => a.name.localeCompare(b.name)), foreignKeys };
+}
+
 // Replay the whole corpus and return the table names it leaves behind, sorted.
 // `files` is [{ name, sql }] — reading them from disk is the caller's job, so
 // this stays pure and can be driven by a synthetic corpus in tests.

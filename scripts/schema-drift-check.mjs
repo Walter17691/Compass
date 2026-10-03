@@ -60,6 +60,7 @@ import {
   classificationFor, DATA_CLASS, SECURITY_POSTURE, postureFor, serviceRoleReasonFor,
 } from '../src/lib/dataClassification.js';
 import { computeInventoryFingerprint, VERIFIED_INVENTORY_FINGERPRINT } from '../src/lib/inventoryFingerprint.js';
+import { tenancyViolations } from '../src/lib/schemaGovernance.js';
 
 const PROJECT_REF = process.env.SUPABASE_PROJECT_REF || 'npeegfsoijhdnnvuqjin';
 
@@ -103,6 +104,32 @@ order by child, column_name;`,
   legacyRowCounts: `select 'meetings_legacy_unused' as table_name, count(*) as row_count
 from public.meetings_legacy_unused;`,
 
+  // NEW-44D — the live column shape. The CI gate derives columns by replaying
+  // the migration corpus, which is blind to a table created in the dashboard.
+  // This is the only reading that is not.
+  columns: `select c.relname as table_name, a.attname as column_name
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+join pg_attribute a on a.attrelid = c.oid
+where n.nspname = 'public' and c.relkind = 'r' and a.attnum > 0 and not a.attisdropped
+order by c.relname, a.attname;`,
+
+  // Constraint-LEVEL foreign keys, so a composite (employee_id, org_id) arrives
+  // as one row with both columns rather than two rows the tenancy rule could
+  // not recognise as composite.
+  fkColumns: `select rel.relname as table_name, con.conname as constraint_name,
+       parent.relname as parent_table,
+       array_agg(att.attname order by att.attname) as columns
+from pg_constraint con
+join pg_class rel on rel.oid = con.conrelid
+join pg_class parent on parent.oid = con.confrelid
+join pg_namespace n on n.oid = rel.relnamespace
+join unnest(con.conkey) as k(attnum) on true
+join pg_attribute att on att.attrelid = rel.oid and att.attnum = k.attnum
+where n.nspname = 'public' and con.contype = 'f'
+group by rel.relname, con.conname, parent.relname
+order by rel.relname, con.conname;`,
+
   // NEW-44 governance closure — the live security posture. The CI test checks
   // the DECLARATION against a recorded reading; this is the half that notices
   // RLS being switched off, or a policy appearing on a table declared
@@ -131,6 +158,8 @@ async function fetchLiveSchema(token) {
     tables: await run(QUERIES.tables),
     foreignKeys: await run(QUERIES.foreignKeys),
     legacyRowCounts: await run(QUERIES.legacyRowCounts),
+    columns: await run(QUERIES.columns),
+    fkColumns: await run(QUERIES.fkColumns),
   };
 }
 
@@ -238,6 +267,32 @@ function compare(live) {
     }
   } else {
     unverified.push('live RLS state and security posture');
+  }
+
+  // NEW-44D — structural tenancy against the LIVE schema. The CI gate derives
+  // this from the migration corpus; this is the half that sees a table created
+  // outside it, and the half that notices a composite FK being dropped in
+  // production without any repository change.
+  if (Array.isArray(live.columns) && Array.isArray(live.fkColumns)) {
+    const byTable = new Map();
+    for (const row of live.columns) {
+      if (!byTable.has(row.table_name)) byTable.set(row.table_name, []);
+      byTable.get(row.table_name).push(String(row.column_name).toLowerCase());
+    }
+    const liveTenancyTables = [...byTable.entries()]
+      .filter(([, cols]) => cols.includes('org_id'))
+      .map(([name, columns]) => ({ name, columns }));
+    const liveTenancyFks = live.fkColumns.map(f => ({
+      table: f.table_name,
+      parent: f.parent_table,
+      columns: (Array.isArray(f.columns) ? f.columns : String(f.columns || '').replace(/[{}]/g, '').split(','))
+        .map(c => String(c).trim().toLowerCase()).filter(Boolean),
+    }));
+    for (const v of tenancyViolations(liveTenancyTables, liveTenancyFks)) {
+      findings.push(`STRUCTURAL TENANCY: ${v.why}`);
+    }
+  } else {
+    unverified.push('structural tenancy against the live column/FK shape');
   }
 
   // The attestation the destructive path depends on.
