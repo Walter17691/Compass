@@ -68,6 +68,82 @@ export const RETENTION = Object.freeze({
 
 export const RETENTION_ENFORCEMENT_IMPLEMENTED = false;
 
+// ┌─ SECURITY POSTURE ──────────────────────────────────────────────────────┐
+// │ RLS is enabled on 43/43 live tables. TEN of them have RLS enabled with   │
+// │ ZERO POLICIES, which denies every client outright and leaves the table    │
+// │ reachable only through the service-role key or a SECURITY DEFINER         │
+// │ function. That is frequently the CORRECT posture — it is strictly tighter │
+// │ than any policy — but "no policies" and "we forgot to write policies"     │
+// │ are indistinguishable by inspection.                                     │
+// │                                                                          │
+// │ Six were documented as deliberate in baseline_schema_2026-08-06.sql.      │
+// │ FOUR were not: customer_contracts, team_invites, platform_admins and      │
+// │ graph_mail_connections. Their posture is safe; the DECISION was unstated, │
+// │ which is NEW-44's own failure pattern one layer down.                    │
+// │                                                                          │
+// │ So posture is now declared, and a zero-policy table with no declaration   │
+// │ fails CI. NO CLIENT POLICY WAS ADDED to satisfy any test — that would     │
+// │ broaden access to satisfy a gate, which is backwards.                     │
+// └─────────────────────────────────────────────────────────────────────────┘
+export const SECURITY_POSTURE = Object.freeze({
+  // Reachable by clients under RLS policies.
+  POLICIES: 'rls_policies',
+  // RLS enabled, zero policies: all client access denied. Reached only via the
+  // service-role key or a SECURITY DEFINER function. Requires a reason.
+  SERVICE_ROLE_ONLY: 'service_role_only',
+});
+
+// An independent live reading of RLS state (pg_class.relrowsecurity and
+// pg_policies), taken 2026-10-03. Recorded so the posture test has something to
+// check that is not the declaration itself; re-verified against the live
+// database by scripts/schema-drift-check.mjs, which is the half that notices
+// RLS being switched off or a policy being dropped.
+export const RECORDED_RLS_2026_10_03 = Object.freeze({
+  allegations: { rls: true, policies: 1 },
+  api_rate_limits: { rls: true, policies: 0 },
+  audit_log: { rls: true, policies: 1 },
+  calendar_connections: { rls: true, policies: 0 },
+  calendar_synced_events: { rls: true, policies: 0 },
+  case_access: { rls: true, policies: 5 },
+  case_signals: { rls: true, policies: 1 },
+  case_tasks: { rls: true, policies: 1 },
+  case_themes: { rls: true, policies: 1 },
+  case_views: { rls: true, policies: 3 },
+  cases: { rls: true, policies: 7 },
+  concern_referrals: { rls: true, policies: 4 },
+  customer_contracts: { rls: true, policies: 0 },
+  dsar_requests: { rls: true, policies: 1 },
+  employee_activities: { rls: true, policies: 3 },
+  employee_activity_records: { rls: true, policies: 3 },
+  employee_employment_events: { rls: true, policies: 3 },
+  employee_portal_accounts: { rls: true, policies: 0 },
+  employee_portal_invites: { rls: true, policies: 0 },
+  employee_records: { rls: true, policies: 4 },
+  er_executive_briefs: { rls: true, policies: 2 },
+  graph_mail_connections: { rls: true, policies: 0 },
+  hr_review_requests: { rls: true, policies: 3 },
+  improvement_initiatives: { rls: true, policies: 4 },
+  integration_events: { rls: true, policies: 1 },
+  leaver_instances: { rls: true, policies: 4 },
+  locations: { rls: true, policies: 4 },
+  manager_capability_insights: { rls: true, policies: 1 },
+  meetings: { rls: true, policies: 6 },
+  meetings_legacy_unused: { rls: true, policies: 1 },
+  org_events: { rls: true, policies: 4 },
+  org_members: { rls: true, policies: 3 },
+  org_roles: { rls: true, policies: 4 },
+  organisation_themes: { rls: true, policies: 3 },
+  organisations: { rls: true, policies: 3 },
+  platform_admins: { rls: true, policies: 0 },
+  process_templates: { rls: true, policies: 4 },
+  profiles: { rls: true, policies: 1 },
+  redundancy_cases: { rls: true, policies: 1 },
+  signing_requests: { rls: true, policies: 0 },
+  starter_instances: { rls: true, policies: 4 },
+  team_invites: { rls: true, policies: 0 },
+  wellbeing_notes: { rls: true, policies: 1 },
+});
+
 const t = (purpose, dataClass, flags, dsar, extra = {}) => ({
   purpose, dataClass, dsar, retention: RETENTION.NOT_ENFORCED,
   orgScoped: !!flags.org, personRelated: !!flags.person, caseRelated: !!flags.case_,
@@ -159,8 +235,67 @@ export const TABLE_CLASSIFICATION = {
     { exclusionReason: 'A fossil holding 0 rows. It has case-content columns, no org_id and a NULLABLE cascade, so it could not be erased per-org if it ever filled — which is why scripts/schema-drift-check.mjs fails if its row count is not zero.' }),
 };
 
+// ── The declared service-role-only exceptions, each with its reason ────────
+//
+// A table named here asserts: RLS enabled, NO client policies, all access via
+// the service-role key or a SECURITY DEFINER function, DELIBERATELY. The reason
+// is required — the map's values ARE the declaration, so an entry cannot exist
+// without one.
+//
+// The first six were already documented as intentional in
+// baseline_schema_2026-08-06.sql; that prose is now machine-checkable. The last
+// four are the undocumented ones NEW-44's audit found. Their posture is
+// unchanged — only the record of the decision is new.
+export const SERVICE_ROLE_ONLY_TABLES = Object.freeze({
+  api_rate_limits:
+    'Touched only by the SECURITY DEFINER check_rate_limit function, which bypasses RLS as its owner. '
+    + 'Zero policies blocks any direct client read/write even if someone learns the table name.',
+  calendar_connections:
+    'Holds OAuth tokens for a tenant calendar integration. All reads/writes go through api/calendar/* '
+    + 'with the service-role key; a client must never be able to read a refresh token.',
+  calendar_synced_events:
+    'Written only by api/calendar/_sync.js. No client has any reason to read the deadline-to-event map, '
+    + 'and its parent calendar_connections is itself client-denied.',
+  employee_portal_accounts:
+    'An employee portal identity. Reached only via api/portal/*, which authenticates the employee '
+    + 'separately from the HR user session — an org member must not read portal credentials directly.',
+  employee_portal_invites:
+    'Carries an invitation token hash. Same boundary as employee_portal_accounts: api/portal/* only.',
+  signing_requests:
+    'Holds signature material and the document text sent for signature. api/signing.js owns every '
+    + 'transition; a client-side policy would expose a signing surface that the token flow controls.',
+  // ── NEW-44 governance closure: the four the audit found undeclared ──
+  graph_mail_connections:
+    'Microsoft Graph mail integration tokens. Identical boundary to calendar_connections — service-role '
+    + 'only, because a client-readable policy would expose a mail refresh token.',
+  customer_contracts:
+    'Compass\'s own commercial record OF the customer. No tenant user — including an HR Director — has '
+    + 'any product reason to read or write their own contract row, so no policy is the correct posture '
+    + 'rather than a missing one.',
+  team_invites:
+    'Carries an invitation token_hash. Invites are created and accepted through api/team/* with the '
+    + 'service-role key; a client-readable policy would expose a token that grants organisation access.',
+  platform_admins:
+    'Compass operator grants. Client-denied BY DESIGN and load-bearing for platform-admin isolation: '
+    + 'membership is read only through SECURITY DEFINER helpers, never by a tenant query, so no tenant '
+    + 'can enumerate or infer who operates the platform.',
+});
+
+export function postureFor(table) {
+  const name = String(table || '').toLowerCase();
+  return SERVICE_ROLE_ONLY_TABLES[name]
+    ? SECURITY_POSTURE.SERVICE_ROLE_ONLY
+    : SECURITY_POSTURE.POLICIES;
+}
+
+export function serviceRoleReasonFor(table) {
+  return SERVICE_ROLE_ONLY_TABLES[String(table || '').toLowerCase()] || null;
+}
+
 export function classificationFor(table) {
-  return TABLE_CLASSIFICATION[String(table || '').toLowerCase()] || null;
+  const meta = TABLE_CLASSIFICATION[String(table || '').toLowerCase()];
+  if (!meta) return null;
+  return { ...meta, securityPosture: postureFor(table), serviceRoleReason: serviceRoleReasonFor(table) };
 }
 
 export function classifiedTableNames() {

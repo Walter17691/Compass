@@ -65,6 +65,67 @@ import { disclosableCase, summariseCaseDisclosure, MEETING_WITHHELD_INTERNAL } f
 //    regardless of whose case it was on) is folded into the existing
 //    subjectAuditLog filter directly rather than a separate section,
 //    since it's the same shape of record either way.
+// ─────────────────────────────────────────────────────────────────────────
+// NEW-44 governance closure — THE DSAR SOURCE MANIFEST.
+//
+// Maps every data input this compiler declares to the public table it comes
+// from. It exists because the correspondence between "a table is classified
+// dsar: included" and "this function actually reads it" was true but unproven:
+// the NEW-44 audit verified 28 ⟺ 28 BY HAND, which means it could drift in
+// either direction the moment someone edited one side.
+//
+// src/test/governanceClosure.test.js locks three things together:
+//
+//   1. the parameter names PARSED OUT OF THIS FUNCTION'S OWN SIGNATURE
+//   2. the keys of this manifest
+//   3. the tables classified `dsar: included` in dataClassification.js
+//
+// Forgetting any one of the three fails CI, and (1) is read from the source
+// rather than restated, so this manifest cannot quietly describe a signature
+// that no longer exists.
+//
+// NOT INCLUDED HERE, DELIBERATELY: `canonicalEmployeeId` and
+// `meetingFetchFailed` are not data sources — the first is the subject's
+// identity and the second is a failure flag. They are named in the test's own
+// exclusion list so that adding a third non-source parameter is a decision
+// somebody has to make explicitly.
+//
+// This manifest changes NO disclosure behaviour. Whether a given table's rows
+// reach the subject, and whether internal material is withheld, is decided
+// exactly where it was before — disclosableCase, summariseCaseDisclosure,
+// splitMeetingRecord and MEETING_WITHHELD_INTERNAL are untouched.
+// ─────────────────────────────────────────────────────────────────────────
+export const DSAR_SUBJECT_SOURCES = Object.freeze({
+  cases: 'cases',
+  employeeRecords: 'employee_records',
+  starterInstances: 'starter_instances',
+  leaverInstances: 'leaver_instances',
+  wellbeingNotes: 'wellbeing_notes',
+  concernReferrals: 'concern_referrals',
+  allegations: 'allegations',
+  caseSignals: 'case_signals',
+  caseTasks: 'case_tasks',
+  hrReviewRequests: 'hr_review_requests',
+  auditLog: 'audit_log',
+  signingRequests: 'signing_requests',
+  portalAccounts: 'employee_portal_accounts',
+  dsarRequests: 'dsar_requests',
+  orgMembers: 'org_members',
+  profiles: 'profiles',
+  caseViews: 'case_views',
+  portalInvites: 'employee_portal_invites',
+  orgEvents: 'org_events',
+  improvementInitiatives: 'improvement_initiatives',
+  managerCapabilityInsights: 'manager_capability_insights',
+  organisationThemes: 'organisation_themes',
+  caseAccess: 'case_access',
+  redundancyCases: 'redundancy_cases',
+  standaloneMeetings: 'meetings',
+  employeeActivities: 'employee_activities',
+  employeeActivityRecords: 'employee_activity_records',
+  employmentEvents: 'employee_employment_events',
+});
+
 export function compileSubjectData(employeeName, { canonicalEmployeeId = null, cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [], wellbeingNotes = [], concernReferrals = [], allegations = [], caseSignals = [], caseTasks = [], hrReviewRequests = [], auditLog = [], signingRequests = [], portalAccounts = [], dsarRequests = [], orgMembers = [], profiles = [], caseViews = [], portalInvites = [], orgEvents = [], improvementInitiatives = [], managerCapabilityInsights = [], organisationThemes = [], caseAccess = [], redundancyCases = [], standaloneMeetings = [], meetingFetchFailed = false,
     employeeActivities = [], employeeActivityRecords = [], employmentEvents = [],
   } = {}) {

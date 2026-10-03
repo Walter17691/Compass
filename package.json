@@ -15,7 +15,8 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "node --env-file=.env node_modules/.bin/playwright test",
     "check-env": "node scripts/check-env.js",
-    "schema:drift": "node --env-file=.env scripts/schema-drift-check.mjs"
+    "schema:drift": "node --env-file=.env scripts/schema-drift-check.mjs",
+    "inventory:fingerprint": "node scripts/inventory-fingerprint.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.1",

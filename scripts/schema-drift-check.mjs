@@ -56,7 +56,10 @@ import {
   PARENT_EXCLUDED_TABLES, UNUSED_LEGACY_TABLES, NON_RELEVANT_SCHEMAS,
   ORG_SCOPED_TABLES, deletionOrderViolations,
 } from '../src/lib/dataInventory.js';
-import { classificationFor } from '../src/lib/dataClassification.js';
+import {
+  classificationFor, DATA_CLASS, SECURITY_POSTURE, postureFor, serviceRoleReasonFor,
+} from '../src/lib/dataClassification.js';
+import { computeInventoryFingerprint, VERIFIED_INVENTORY_FINGERPRINT } from '../src/lib/inventoryFingerprint.js';
 
 const PROJECT_REF = process.env.SUPABASE_PROJECT_REF || 'npeegfsoijhdnnvuqjin';
 
@@ -99,6 +102,17 @@ order by child, column_name;`,
   // making its classification safe, so emptiness is measured, not assumed.
   legacyRowCounts: `select 'meetings_legacy_unused' as table_name, count(*) as row_count
 from public.meetings_legacy_unused;`,
+
+  // NEW-44 governance closure — the live security posture. The CI test checks
+  // the DECLARATION against a recorded reading; this is the half that notices
+  // RLS being switched off, or a policy appearing on a table declared
+  // service-role-only, or disappearing from one that relies on policies.
+  rls: `select c.relname as table_name,
+       c.relrowsecurity as rls_enabled,
+       (select count(*) from pg_policies p where p.schemaname = 'public' and p.tablename = c.relname) as policies
+from pg_class c join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public' and c.relkind = 'r'
+order by c.relname;`,
 };
 
 async function fetchLiveSchema(token) {
@@ -202,6 +216,33 @@ function compare(live) {
   const unclassifiedMeta = relevant.filter(t => !classificationFor(t));
   if (unclassifiedMeta.length) {
     findings.push(`Live with no entry in dataClassification.js: ${unclassifiedMeta.join(', ')} — say what each table is and what DSAR owes it.`);
+  }
+
+  // NEW-44 governance closure — live security posture vs the declaration.
+  if (Array.isArray(live.rls)) {
+    for (const row of live.rls) {
+      const meta = classificationFor(row.table_name);
+      if (!meta) continue;                       // already reported as unclassified
+      const policies = Number(row.policies);
+      const enabled = row.rls_enabled === true || row.rls_enabled === 't';
+      if (!enabled && meta.dataClass === DATA_CLASS.CUSTOMER) {
+        findings.push(`RLS is DISABLED on ${row.table_name}, which holds customer data.`);
+      }
+      const declared = postureFor(row.table_name);
+      if (enabled && policies === 0 && declared !== SECURITY_POSTURE.SERVICE_ROLE_ONLY) {
+        findings.push(`${row.table_name} has RLS enabled with ZERO policies but does not declare service-role-only intent — declare it in SERVICE_ROLE_ONLY_TABLES with a reason (do not add a client policy to silence this).`);
+      }
+      if (declared === SECURITY_POSTURE.SERVICE_ROLE_ONLY && policies > 0) {
+        findings.push(`${row.table_name} is declared service-role-only but now has ${policies} polic${policies === 1 ? 'y' : 'ies'} — client access was broadened; re-check the reason: "${(serviceRoleReasonFor(row.table_name) || '').slice(0, 80)}…"`);
+      }
+    }
+  } else {
+    unverified.push('live RLS state and security posture');
+  }
+
+  // The attestation the destructive path depends on.
+  if (computeInventoryFingerprint() !== VERIFIED_INVENTORY_FINGERPRINT) {
+    findings.push('The inventory fingerprint does not match the committed attestation — "Delete all data" will refuse to run from this build. Run the suite, then `node scripts/inventory-fingerprint.mjs --write`.');
   }
 
   // The fossil invariant.

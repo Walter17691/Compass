@@ -2010,6 +2010,101 @@ marked DSAR not-applicable. No migration. No production data mutated — the
 `meetings` rows were counted, never touched, and "Delete all data" was never
 executed.
 
+#### Third pass (2026-10-03) — governance closure
+
+The second pass made deletion and classification complete. Three properties were
+still **true but unenforced**, and one was a genuine hole.
+
+**1. The DSAR classification was verified BY HAND.** The audit confirmed 28
+tables classified `dsar: included` ⟺ 28 inputs to `compileSubjectData`, zero
+discrepancies. Correct — and nothing stopped either side drifting. Now locked
+three ways: the parameter names are **parsed out of the function's own
+signature**, compared to a new `DSAR_SUBJECT_SOURCES` manifest, compared to the
+classification. Forgetting any one fails CI. `team_invites` stays
+`included_not_wired` and is asserted to satisfy *neither* direction, so NEW-45
+keeps ownership. **No disclosure behaviour changed** — the manifest is a frozen
+constant the compiler does not consult, asserted as such.
+
+**2. Ten tables had RLS enabled with zero policies; four were undeclared**
+(`customer_contracts`, `team_invites`, `platform_admins`,
+`graph_mail_connections`). Posture is now declared per table with a required
+reason, and a zero-policy table without one fails CI. **No client policy was
+added to satisfy a test** — that would broaden access to pass a gate.
+
+**3. A forward-looking structural tenancy rule** now requires any *new* table
+carrying `org_id` plus `employee_id`/`case_id` to use the composite same-org FK
+pattern. Legacy single-column references are accepted **by name with their
+compensating control recorded**; `cases.employee_id` is explicitly not
+retrofitted. **Running the rule for the first time found a second instance of the
+asymmetry: `meetings.case_id`** — composite for its employee parent, single-column
+for its case parent. Accepted after reading the control live:
+`meetings_parentage_guard` raises on `target_org <> new.org_id`, and additionally
+forbids creating a meeting already case-linked, moving organisations, moving
+cases, un-linking, and linking a meeting about one employee to a case about
+another. A composite FK would enforce *less*.
+
+**4. The hole: Delete all data had no runtime fail-closed behaviour.** CI stopped
+an unclassified table landing; a build from a tree where somebody edited the
+inventory without running the gate would have deleted that list and reported
+success. `src/lib/inventoryFingerprint.js` computes a digest over the deletion
+**order**, every category, and each table's data class / DSAR disposition /
+retention / exclusion state; the handler **refuses before deleting anything** if
+it does not match the committed attestation. Placed after authorisation so an
+unauthenticated caller still gets 401 and learns nothing about build state.
+**No schema query was added to the destructive path**, scope is unchanged, and
+nothing iterates dynamically — all three asserted.
+
+*What the attestation honestly proves:* the governance inputs the running code
+will act on are byte-for-byte those the gate passed against. *What it does not:*
+that nobody edited the inventory and the fingerprint together. It is an integrity
+check against **accident and omission** — the actual NEW-44 failure mode both
+previous times — not a signature against a motivated insider, and nothing in a
+repository the deployer controls could be.
+
+**`_dsar-lookup.js` keeps its own 6-table list, deliberately.** It is *not*
+derivable: three of the six (`org_members`, `case_views`, `profiles`) have
+policies — ones scoping a user to their own row, which is precisely why another
+subject's row must be fetched server-side. The criterion is "no client-reachable
+path to another subject's row", which policy count cannot express. Pinned with a
+correspondence test instead, including that it must not fetch `team_invites`.
+
+**`case_themes` reviewed, classification UNCHANGED.** The join row holds
+`id, org_id, case_id, theme_id, suggested_by, confirmed_by, confirmed_at` — no
+personal data of its own. But `organisation_themes` **is** disclosed while the
+join is not, which means a DSAR currently discloses the organisation's generic
+54-theme taxonomy and *not* which themes were applied to the subject's own case —
+and the join is the part that is about them. Changing that is a **disclosure-policy
+decision** (is an AI-suggested thematic categorisation of someone's case their
+personal data?), so per instruction this **STOPS here and is reported**, not
+changed. Recorded as **NEW-47**.
+
+**Audit-log ambiguity: documented, unchanged.** An organisation's audit history
+is erased and one deletion-proof event written. **No retention period is encoded
+anywhere.** A defensible reading of Art. 17 against Art. 5(2) accountability —
+but an undocumented product decision, not an encoded policy. E3/policy work. No
+speculative period was added.
+
+Verified: **38 new tests; 11 mutations, 11 caught** — including M9 re-run as
+*valid* code after its first form failed only because the mutant did not resolve.
+Full suite 339/6669. Lint baseline 167. Build 0. 12/12 functions. No migration.
+No production data mutated; Delete all data never executed.
+
+### NEW-47 — DSAR discloses the theme taxonomy but not the subject's own theme links — P3 — OPEN
+- **Severity** P3 · **Area** DSAR disclosure policy · **Raised** 2026-10-03
+  (NEW-44 governance closure, §8 review)
+- **Observed.** `organisation_themes` is classified and wired `dsar: included`;
+  `case_themes` — the join recording which themes were applied to a specific
+  case — is `internal_withheld`. So a subject receives the organisation's generic
+  taxonomy (54 rows) and not the categorisation of their own case (63 rows).
+- **Why it was not changed.** The join row contains no personal data in itself,
+  so this is not a technical inconsistency to correct — it is a decision about
+  whether an AI-suggested thematic categorisation of a person's case constitutes
+  their personal data. It very likely does under UK GDPR (an opinion about them),
+  but that is a controller policy call, and NEW-44 was instructed not to invent
+  DSAR policy.
+- **Also noted:** `er_executive_briefs` and `integration_events` are
+  `internal_withheld` with stated reasons and were left alone for the same reason.
+
 ### NEW-45 — `team_invites` and `customer_contracts` are absent from DSAR disclosure — P2 (GDPR) — OPEN
 - **Severity** P2 · **Area** DSAR completeness · **Raised** 2026-10-02 (found
   while auditing the erasure inventory for NEW-44)

@@ -1,5 +1,6 @@
 import { verifyCaller } from './_auth.js';
 import { ORG_SCOPED_TABLES } from '../src/lib/dataInventory.js';
+import { inventoryVerified, INVENTORY_UNVERIFIED_MESSAGE } from '../src/lib/inventoryFingerprint.js';
 
 // Phase 7 (Controlled Beta Infrastructure Gate 3) — see api/_supabase.js
 // for why this is now configurable via env var with a production fallback.
@@ -98,6 +99,26 @@ export default async function handler(req, res) {
     // returned; a single failed table makes the whole response an honest
     // failure, since a partial erasure is not the "all data deleted"
     // guarantee this endpoint exists to make.
+    // NEW-44 governance closure — FAIL CLOSED BEFORE DELETING ANYTHING.
+    //
+    // This endpoint's whole promise is completeness, and the only thing making
+    // ORG_SCOPED_TABLES complete is that a gate checked it against the real
+    // schema. If this build's inventory is not the one that passed that gate,
+    // the honest answer is to refuse rather than to delete a list nobody
+    // verified and report success — which is precisely how NEW-44 arose twice.
+    //
+    // It is a pure comparison over imported constants: NO schema query is added
+    // to this destructive path, the deletion scope is unchanged, and nothing
+    // here iterates tables dynamically. See src/lib/inventoryFingerprint.js for
+    // what the attestation does and does not prove.
+    //
+    // Placed after authentication and authorisation so an unauthenticated
+    // caller still gets 401 and learns nothing about build state.
+    if (!inventoryVerified()) {
+      console.error('delete-org-data: REFUSED — inventory fingerprint mismatch; erasure not attempted.');
+      return res.status(500).json({ success: false, error: INVENTORY_UNVERIFIED_MESSAGE, inventoryVerified: false });
+    }
+
     const failedTables = [];
     for (const table of ORG_SCOPED_TABLES) {
       const r = await supabaseRequest(`${table}?org_id=eq.${encodeURIComponent(orgId)}`, { method: 'DELETE' });
