@@ -451,6 +451,29 @@ comment on function public.protect_case_hr_only_columns() is
 
 -- ── 5. 'Outcome issued' becomes unforgeable ────────────────────────────────
 --
+-- ┌─ APPLY THIS SECTION VERBATIM. A REAL INCIDENT, 2026-10-03 ──────────────┐
+-- │ On the live apply, this function's final insert was transcribed with     │
+-- │ `case_id` mistyped, and the apply REPORTED SUCCESS. PostgreSQL does not   │
+-- │ resolve column names in a plpgsql body at CREATE time — only when the     │
+-- │ body first executes — so a redefinition of a working function can be      │
+-- │ accepted while being broken, and the breakage surfaces on the next call   │
+-- │ by a real user rather than at deploy time.                                │
+-- │                                                                          │
+-- │ log_audit_event is the GENERIC audit RPC, called from across the product, │
+-- │ so the blast radius was wide. It was detected and corrected within ~3     │
+-- │ minutes. Measured, not assumed: audit_log held 16,923 rows with its last  │
+-- │ write at 10:04:52Z and zero rows in the preceding two hours, and no case  │
+-- │ had been touched in two hours, so no call reached the defective body.     │
+-- │                                                                          │
+-- │ THE LESSON WORTH KEEPING: `create or replace function` succeeding is not  │
+-- │ evidence that the function works. After re-defining any plpgsql function, │
+-- │ verify the body — reading it back with pg_get_functiondef and planning    │
+-- │ its DML with EXPLAIN (which does resolve columns, without executing) are  │
+-- │ both cheap. Every other section of this migration is exercised by the     │
+-- │ live probes in the wave report; this one is reachable only by a real user │
+-- │ holding a JWT, which is exactly why it needed its own check.             │
+-- └─────────────────────────────────────────────────────────────────────────┘
+--
 -- Added to log_audit_event's reserved list, exactly as 'Case deleted',
 -- 'Employee identity reconciled' and the appeal-officer actions already are, so
 -- the action can only be written by the function that actually performed the
