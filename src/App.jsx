@@ -8,7 +8,8 @@ import { addCalendarMonth, toISODateLocal } from './lib/dates';
 import { addWorkingDays } from './lib/dateMath';
 import { fetchAllPages } from './lib/paginatedFetch';
 import { ls, lsSet, orgScopedKey, clearAllOrgScopedData } from './lib/storage';
-import { findEmployeeByName, findEmployeeById, EMPLOYMENT_STATUSES } from './lib/employeeRecords';
+import { findEmployeeByName, findEmployeeById, EMPLOYMENT_STATUSES, mapEmployeeRow } from './lib/employeeRecords';
+import { createEmployeeWrite, describeEmployeeCreateOutcome, EMPLOYEE_CREATE_RESULT } from './lib/employeeWrites';
 import { planEmployeeImport, describeImportPlan } from './lib/employeeImportIdentity';
 import { computeDueSoon, computeAuthoritativeAppealDeadline } from './lib/deadlines';
 import { mapCaseRow } from './lib/caseMapping';
@@ -168,6 +169,7 @@ import { ReassignCaseModal } from './screens/ReassignCaseModal';
 import { AssignInvestigatorModal } from './screens/AssignInvestigatorModal';
 import { HrInterventionModal } from './screens/HrInterventionModal';
 import { OutcomeModal } from './screens/OutcomeModal';
+import { EmployeeCreateInline } from './components/EmployeeCreateInline';
 
 // Manager Enablement (Phase 4, MP4) — shared by concernForm's initial
 // state and its post-submit reset, so the two can't silently drift apart.
@@ -913,7 +915,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     const name = typeof nameOrId === "string" ? nameOrId.trim() : "";
     if(!name) return null;
     saveEmployeeRecords([...employeeRecords,{name,...fields,createdAt:new Date().toISOString()}]);
-    createEmployeeRecord(name, fields);
+    // Routed to the canonical INSERT rather than the old upsert. This branch is
+    // unreachable from the one live caller (it passes an employee id and so
+    // takes the UPDATE branch above), but leaving a second persistence path
+    // here is how the two implementations diverged in the first place.
+    createEmployee(name, fields.locationId || null, fields);
     return null;   // the canonical id arrives on the next load
   };
   const [newCaseJobTitle, setNewCaseJobTitle] = useState("");
@@ -925,6 +931,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [newCaseOwnerId, setNewCaseOwnerId] = useState("");
   const [newCasePriority, setNewCasePriority] = useState("normal");
   const [newCaseEvidence, setNewCaseEvidence] = useState([]);
+  // The inline employee-creation panel inside the "+ New case" modal. Holding
+  // only the typed name means every other value in this modal — type, owner,
+  // priority, description, evidence — is untouched by opening or closing it.
+  const [casePromptCreateName, setCasePromptCreateName] = useState(null);
   const [editingEmployeeRecord, setEditingEmployeeRecord] = useState(false);
   const [showOutcomeModal, setShowOutcomeModal] = useState(false);
   const [outcomeType, setOutcomeType] = useState("");
@@ -970,7 +980,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // display and historical context, and deliberately never used to decide
       // access. updatedAt is carried so an employee write can be conditional on
       // it, which no employee write previously was.
-      setEmployeeRecords(data.map(r=>({id:r.id,name:r.name,jobTitle:r.job_title,startDate:r.start_date,endDate:r.end_date||"",location:r.location,locationId:r.location_id||null,updatedAt:r.updated_at||null,employeeNumber:r.employee_number||"",workEmail:r.work_email||"",department:r.department||"",manager:r.manager||"",status:r.status||"",employmentStatus:r.employment_status||"unknown",workingPattern:r.working_pattern||"",probationEndDate:r.probation_end_date||""})));
+      setEmployeeRecords(data.map(mapEmployeeRow));
     } catch(e) {
       console.error('loadEmployeeRecords', e);
       markLoadIssue('employee records');
@@ -1060,42 +1070,31 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // supported until the duplicate-name safety gate is complete. What has changed
   // is that the application no longer treats the name as the identity AFTER
   // creation: the canonical id arrives on the next load and is used from then on.
-  const createEmployeeRecord = async (name, fields) => {
-    if(!org?.id || !name) return;
-    const { error } = await supabase.from('employee_records')
-      .upsert({ org_id: org.id, name, ...employeeRecordPayload(fields) }, { onConflict: 'org_id,name' });
-    if(error) { console.error('createEmployeeRecord', error); showToast("Couldn't save the employee record — "+error.message, "error"); }
-  };
-
-  // Phase E1.5 — create an employee AT a canonical location.
+  // ── THE ONE manual employee-creation operation ───────────────────────────
   //
-  // Deliberately an INSERT, not the upsert above. The upsert's conflict target is
-  // (org_id, name), so re-submitting an existing name silently UPDATES that
-  // person — and if location_id were in that payload it would move an existing
-  // employee between permission scopes with no audit row, which is exactly what
-  // set_employee_location exists to prevent. An insert instead fails on
-  // UNIQUE(org_id, name), which is the correct answer: a matching name is not a
-  // reason to merge two people.
+  // Replaces the previous pair: createEmployeeRecord (an UPSERT on
+  // (org_id, name), which silently UPDATED an existing same-named person) and
+  // createEmployeeAtLocation (an INSERT). Every remaining caller was traced
+  // first and every one of them genuinely means CREATE, so there is no merge
+  // semantic to preserve — see the wave report.
   //
-  // location_id is mandatory for a Location Manager and enforced by RLS, not
-  // here; this passes what the user chose and lets the database decide.
-  const createEmployeeAtLocation = async (name, locationId, fields = {}) => {
+  // org_id comes from session context here and is re-checked by RLS. The write,
+  // its result codes and its wording live in lib/employeeWrites.js so they are
+  // directly testable and so this component gains as little as possible.
+  const createEmployee = async (name, locationId, fields = {}) => {
     const trimmed = (name||"").trim();
-    if(!org?.id || !trimmed) return { ok: false };
-    const { error } = await supabase.from('employee_records')
-      .insert({ org_id: org.id, name: trimmed, location_id: locationId || null, ...employeeRecordPayload(fields) });
-    if(error) {
-      console.error('createEmployeeAtLocation', error);
-      // 23505 = unique violation on (org_id, name). Said in words, because
-      // "duplicate key value violates unique constraint" is not an answer.
-      const msg = error.code === '23505'
-        ? `There is already an employee called ${trimmed}. Compass won't merge two people with the same name — check whether this is the same person first.`
-        : "Couldn't add the employee — "+error.message;
-      showToast(msg, "error");
-      return { ok: false, error };
+    if(!org?.id || !trimmed) return { ok: false, result: EMPLOYEE_CREATE_RESULT.INVALID };
+    const res = await createEmployeeWrite({
+      supabase, orgId: org.id, name: trimmed, locationId: locationId || null, fields,
+    });
+    if(res.result !== EMPLOYEE_CREATE_RESULT.OK) {
+      showToast(describeEmployeeCreateOutcome(res.result, trimmed), "error");
+      return { ok: false, result: res.result };
     }
+    // Re-read the roster so every surface sees the new person, and return the
+    // mapped row so a caller can select them immediately without guessing an id.
     await loadEmployeeRecords();
-    return { ok: true };
+    return { ok: true, result: res.result, employee: mapEmployeeRow(res.row) };
   };
 
   // Phase E1.5 — assign, change or clear an employee's canonical location.
@@ -1141,9 +1140,36 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       cancelLabel: "Cancel",
     });
     if(!ok) return;
-    await createEmployeeRecord(trimmed, {});
-    await loadEmployeeRecords();
+    // Canonical INSERT. Previously an UPSERT on (org_id, name), which meant
+    // "create" could silently UPDATE a different person who happened to share
+    // the name. Traced before changing: this is the only live caller of that
+    // upsert and it genuinely means create — it explicitly tells the user it
+    // links no case. A duplicate name is now refused and said out loud by
+    // createEmployee, so no toast is claimed here on failure.
+    const res = await createEmployee(trimmed, null, {});
+    if(!res.ok) return;
     showToast(`Added ${trimmed}. Now confirm which cases belong to them.`);
+  };
+
+  // Surfaces that offer EmployeeSelect's create affordance but have no inline
+  // panel of their own (Concerns triage, Wellbeing). Confirm-then-create, on the
+  // same canonical operation — so there is no third persistence path and no
+  // journey still pointing at Settings.
+  //
+  // Created unassigned, which only HR may do; both callers gate the affordance
+  // on isHR, and RLS refuses anyone else regardless of what this client offers.
+  const createEmployeeByName = async (name) => {
+    const trimmed = (name||"").trim();
+    if(!trimmed) return;
+    const ok = await confirmDialog({
+      title: "Add a new employee?",
+      message: `This creates a new employee record for “${trimmed}” with no location yet. It does not open a case or link any existing one.`,
+      confirmLabel: "Add employee",
+      cancelLabel: "Cancel",
+    });
+    if(!ok) return;
+    const res = await createEmployee(trimmed, null, {});
+    if(res.ok) showToast(`Added ${trimmed} — now selectable.`);
   };
 
   // ── Phase E0.6 — correct an ALREADY-established employee identity ─────────
@@ -11266,7 +11292,7 @@ Please produce:
                 employeeRecords={employeeRecords}
                 value={casePromptEmployeeId}
                 canCreateEmployee={isHR}
-                onRequestCreate={()=>{ setScreen(SCREENS.SETTINGS); showToast("Add the employee in Settings → Employee records, then create the case."); }}
+                onRequestCreate={(typed)=>setCasePromptCreateName(typed||"")}
                 onChange={(id, employee)=>{
                   setCasePromptEmployeeId(id);
                   if(employee) {
@@ -11276,6 +11302,34 @@ Please produce:
                   }
                 }}
               />
+              {/* No redirect to Settings. Rendering here is what preserves the
+                  rest of the form: it is the same component instance, so no case
+                  state is unmounted, reset or re-fetched. */}
+              {casePromptCreateName !== null && (
+                <EmployeeCreateInline
+                  idPrefix="case-prompt-new-employee"
+                  initialName={casePromptCreateName}
+                  employeeRecords={employeeRecords}
+                  locations={locations}
+                  authorisedLocationIds={member?.role==='location_manager' ? (member?.location_ids||[]) : null}
+                  isHR={isHR}
+                  onCreate={(name, locationId)=>createEmployee(name, locationId)}
+                  onCreated={(employee)=>{
+                    setCasePromptCreateName(null);
+                    // The existing onChange contract, used deliberately rather
+                    // than setting the id directly, so selection behaves
+                    // identically however the employee arrived.
+                    setCasePromptEmployeeId(employee?.id || null);
+                    if(employee) {
+                      setNewCaseJobTitle(employee.jobTitle||"");
+                      setNewCaseStartDate(employee.startDate||"");
+                      setNewCaseLocation(employee.location||"");
+                    }
+                    showToast(`Added ${employee?.name||"employee"} — now selected for this case`);
+                  }}
+                  onCancel={()=>setCasePromptCreateName(null)}
+                />
+              )}
             </div>
 
             {/* Job title + start date */}
@@ -11746,7 +11800,7 @@ Please produce:
       )}
 
             {screen===SCREENS.PEOPLE&&(
-              <PeopleScreen cases={cases} employeeRecords={employeeRecords} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} dsarRequests={dsarRequests} setActiveEmployeeId={setActiveEmployeeId} setScreen={setScreen} setCaseInfo={setCaseInfo} setMeetingSetup={setMeetingSetup} locations={locations} isHR={isHR} authorisedLocationIds={member?.role==='location_manager' ? (member?.location_ids||[]) : null} onCreateEmployee={(name, locationId)=>createEmployeeAtLocation(name, locationId)} employeeRecordsLoading={employeeRecordsLoading} onStartActivity={()=>setEmployeeFileTab("activity")} employmentEvents={employmentEvents} />
+              <PeopleScreen cases={cases} employeeRecords={employeeRecords} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} dsarRequests={dsarRequests} setActiveEmployeeId={setActiveEmployeeId} setScreen={setScreen} setCaseInfo={setCaseInfo} setMeetingSetup={setMeetingSetup} locations={locations} isHR={isHR} authorisedLocationIds={member?.role==='location_manager' ? (member?.location_ids||[]) : null} onCreateEmployee={(name, locationId, fields)=>createEmployee(name, locationId, fields)} employeeRecordsLoading={employeeRecordsLoading} onStartActivity={()=>setEmployeeFileTab("activity")} employmentEvents={employmentEvents} />
             )}
             {screen===SCREENS.ARCHIVE&&(
               /* Phase E1.7 — the same screen over the same canonical rows, in
@@ -11926,7 +11980,7 @@ Please produce:
       )}
 {/* ══ INTAKE ══ */}
       {screen===SCREENS.INTAKE&&(
-        <IntakeScreen setScreen={setScreen} intake={intake} setIntake={setIntake} cases={cases} saveCases={saveCases} employeeRecords={employeeRecords} isHR={isHR} showToast={showToast} audit={audit} />
+        <IntakeScreen setScreen={setScreen} intake={intake} setIntake={setIntake} cases={cases} saveCases={saveCases} employeeRecords={employeeRecords} isHR={isHR} showToast={showToast} audit={audit} locations={locations} authorisedLocationIds={member?.role==='location_manager' ? (member?.location_ids||[]) : null} onCreateEmployee={(name, locationId)=>createEmployee(name, locationId)} />
       )}
 
 {/* ══ PREP ══ */}
@@ -12089,7 +12143,7 @@ Please produce:
           setConcernSubmitted={setConcernSubmitted}
           triageReferral={triageReferral}
           employeeRecords={employeeRecords}
-          onRequestCreateEmployee={()=>{ setScreen(SCREENS.SETTINGS); showToast("Add the employee in Settings → Employee records, then open the case."); }}
+          onRequestCreateEmployee={createEmployeeByName}
           startInformalConversation={startInformalConversation}
           concernTriageLoading={concernTriageLoading}
           currentUser={currentUser}
@@ -12141,7 +12195,7 @@ Please produce:
         <WellbeingScreen
           employeeRecords={employeeRecords}
           isHR={isHR}
-          onRequestCreateEmployee={createEmployeeForReconciliation}
+          onRequestCreateEmployee={createEmployeeByName}
           wellbeingNotes={wellbeingNotes}
           activeWellbeing={activeWellbeing}
           wellbeingView={wellbeingView}

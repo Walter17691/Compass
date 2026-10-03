@@ -150,3 +150,33 @@ export function identityRequiresReconciliation(records, name, opts) {
   const status = classifyIdentityByName(records, name, opts);
   return status === IDENTITY.AMBIGUOUS || status === IDENTITY.UNRECONCILED;
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// The canonical employee_records row -> domain object mapping.
+//
+// Extracted so there is ONE definition. It was inline in App.jsx's
+// loadEmployeeRecords, which was fine while loading was the only way a row
+// reached the client — manual creation now returns its inserted row too, and a
+// second hand-written mapping is a second thing to drift.
+// ─────────────────────────────────────────────────────────────────────────
+export function mapEmployeeRow(r) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    name: r.name,
+    jobTitle: r.job_title,
+    startDate: r.start_date,
+    endDate: r.end_date || "",
+    location: r.location,
+    locationId: r.location_id || null,
+    updatedAt: r.updated_at || null,
+    employeeNumber: r.employee_number || "",
+    workEmail: r.work_email || "",
+    department: r.department || "",
+    manager: r.manager || "",
+    status: r.status || "",
+    employmentStatus: r.employment_status || "unknown",
+    workingPattern: r.working_pattern || "",
+    probationEndDate: r.probation_end_date || "",
+  };
+}

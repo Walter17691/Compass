@@ -95,7 +95,14 @@ export function PeopleScreen({ cases, employeeRecords = [], wellbeingNotes = [],
           <div style={{display:"flex",gap:SPACE.sm,alignItems:"center",flexWrap:"wrap"}}>
             <input aria-label="Search people" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search people…"
               style={{padding:"8px 12px",fontSize:13,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,background:COLOR.surface,color:COLOR.ink,fontFamily:FONT.sans,outline:"none",width:200}}/>
-            {!archived&&onCreateEmployee&&assignable.length>0&&(
+            {/* HR must reach this even with zero locations: the form below
+                deliberately offers HR "No location yet", so gating the entry
+                point on assignable.length>0 hid a supported case entirely —
+                an organisation with no locations configured had no way to add
+                an employee at all. A location manager is unaffected:
+                mayLeaveUnassigned is HR-only, so with no authorised locations
+                they still see nothing. */}
+            {!archived&&onCreateEmployee&&(assignable.length>0||mayLeaveUnassigned)&&(
               <button type="button" onClick={()=>setAdding(a=>!a)}
                 style={{padding:"8px 12px",fontSize:13,fontWeight:600,background:COLOR.purple,border:"none",borderRadius:RADIUS.button,color:COLOR.paper,cursor:"pointer",fontFamily:FONT.sans}}>
                 Add employee

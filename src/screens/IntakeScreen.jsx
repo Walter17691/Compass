@@ -1,13 +1,19 @@
+import { useState } from 'react';
 import { SCREENS } from '../constants';
 import { InfoIcon } from '../components/Icons';
 import { EmployeeSelect } from '../components/EmployeeSelect';
+import { EmployeeCreateInline } from '../components/EmployeeCreateInline';
 
 // Phase E0.5A — this path and the "+ New case" modal now share ONE employee
 // selection contract. They had diverged badly: the modal at least upserted an
 // employee record, while this screen created a case with no employee record at
 // all, no job title, no location and a different case-type vocabulary. A case
 // created here produced a People-screen "person" backed by nothing.
-export function IntakeScreen({ setScreen, intake, setIntake, cases, saveCases, employeeRecords = [], isHR = false, showToast, audit }) {
+export function IntakeScreen({ setScreen, intake, setIntake, cases, saveCases, employeeRecords = [], isHR = false, showToast, audit,
+                               locations = [], authorisedLocationIds = null, onCreateEmployee }) {
+  // The typed name awaiting inline creation, or null. Held here so opening
+  // the panel cannot disturb any value already entered on the intake form.
+  const [createName, setCreateName] = useState(null);
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
 
@@ -42,9 +48,29 @@ export function IntakeScreen({ setScreen, intake, setIntake, cases, saveCases, e
                 employeeRecords={employeeRecords}
                 value={intake.employeeId || null}
                 canCreateEmployee={isHR}
-                onRequestCreate={()=>{ setScreen(SCREENS.SETTINGS); showToast?.("Add the employee in Settings → Employee records, then create the case."); }}
+                onRequestCreate={(typed)=>setCreateName(typed||"")}
                 onChange={(id, employee)=>setIntake(p=>({...p, employeeId:id, employee:employee?.name || ""}))}
               />
+              {/* The SAME canonical capability the "+ New case" modal uses, so
+                  one journey is not fixed while the other redirects to Settings
+                  — the identical mistake Phase E0.5A corrected for selection. */}
+              {createName !== null && onCreateEmployee && (
+                <EmployeeCreateInline
+                  idPrefix="intake-new-employee"
+                  initialName={createName}
+                  employeeRecords={employeeRecords}
+                  locations={locations}
+                  authorisedLocationIds={authorisedLocationIds}
+                  isHR={isHR}
+                  onCreate={onCreateEmployee}
+                  onCreated={(employee)=>{
+                    setCreateName(null);
+                    setIntake(p=>({...p, employeeId:employee?.id || null, employee:employee?.name || ""}));
+                    showToast?.(`Added ${employee?.name||"employee"} — now selected for this case`);
+                  }}
+                  onCancel={()=>setCreateName(null)}
+                />
+              )}
             </div>
             <div>
               <label htmlFor="intake-manager" style={{display:"block",fontSize:13,fontWeight:500,color:"#1A1535",marginBottom:6}}>HR manager (you)</label>

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { mapEmployeeRow } from '../lib/employeeRecords.js';
 import { readFileSync } from 'node:fs';
 import {
   EMPLOYMENT_STATUSES, IDENTITY,
@@ -264,9 +265,17 @@ describe('client + security wiring', () => {
   it('the canonical id now reaches client state', () => {
     // It was previously discarded, which is why nothing could reference an
     // employee by anything but their name.
-    expect(app).toContain('setEmployeeRecords(data.map(r=>({id:r.id,name:r.name');
-    expect(app).toContain('employmentStatus:r.employment_status||"unknown"');
-    expect(app).toContain('workEmail:r.work_email||""');
+    //
+    // The mapping moved out of App.jsx into lib/employeeRecords' mapEmployeeRow
+    // when manual creation started returning its inserted row — two hand-written
+    // mappings would have been two things to drift. So this now asserts the
+    // behaviour rather than the inline source text, which is a stronger claim.
+    expect(mapEmployeeRow({ id: 'e1', name: 'Ada', employment_status: 'active', work_email: 'a@b.c' }))
+      .toMatchObject({ id: 'e1', name: 'Ada', employmentStatus: 'active', workEmail: 'a@b.c' });
+    // absent values are reported truthfully, not invented
+    expect(mapEmployeeRow({ id: 'e2', name: 'Bob' }))
+      .toMatchObject({ employmentStatus: 'unknown', workEmail: '', locationId: null });
+    expect(app).toContain('data.map(mapEmployeeRow)');
   });
 
   it('the upsert cannot write an invalid employment status into a NOT NULL column', () => {

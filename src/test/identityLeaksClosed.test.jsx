@@ -270,11 +270,21 @@ describe('9-11. employee update and delete use the canonical id', () => {
     expect(app).not.toContain('deleteEmployeeRecord(employee.name)');
   });
 
-  it('creation still uses the name conflict target, because the constraint remains', () => {
+  it('UNIQUE(org_id, name) is still the boundary — but creation no longer MERGES onto it', () => {
     // Honest about the transition: duplicate names are not production-supported
-    // yet, so CREATE still meets UNIQUE(org_id, name).
-    expect(appCode).toContain("{ onConflict: 'org_id,name' }");
+    // yet, so the constraint remains and CREATE still meets it.
+    //
+    // WHAT CHANGED. Manual creation used to UPSERT with that conflict target,
+    // which meant meeting the constraint SILENTLY UPDATED the existing person —
+    // and with location_id in the payload it could move them between permission
+    // scopes with no audit row. Manual creation now INSERTs and is refused.
+    // The only surviving upsert is the bulk CSV importer, where merging by name
+    // is what an import legitimately means.
+    const app = readFileSync('src/App.jsx', 'utf8');
     expect(app).toContain('UNIQUE(org_id, name) is still in place');
+    expect(app).toMatch(/onConflict: 'org_id,name'/);          // the CSV importer
+    const w = readFileSync('src/lib/employeeWrites.js', 'utf8');
+    expect(w).not.toMatch(/onConflict/);                        // manual creation
   });
 });
 

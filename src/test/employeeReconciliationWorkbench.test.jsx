@@ -292,7 +292,10 @@ describe('7. employee creation is explicit and never automatic', () => {
     expect(fn.length).toBeGreaterThan(100);
     expect(fn).toContain('await confirmDialog(');
     expect(fn).toContain('if(!ok) return;');
-    expect(fn).toContain('createEmployeeRecord(trimmed, {})');
+    // Migrated onto the canonical INSERT. It was an UPSERT on (org_id, name),
+    // so "create" could silently UPDATE a different person of the same name.
+    expect(fn).toContain('createEmployee(trimmed, null, {})');
+    expect(fn).not.toContain('createEmployeeRecord');
     // Creating does NOT link any case — that stays a separate decision.
     expect(fn).toContain('It does not link any case to them');
     expect(fn).not.toContain('reconcileCaseEmployee');

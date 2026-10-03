@@ -257,11 +257,18 @@ describe('E1.5 adversarial — security decisions that must not be undone', () =
   });
 
   it('creating an employee at a location is an INSERT, so a duplicate name cannot merge', () => {
-    const fn = appCode.slice(appCode.indexOf('const createEmployeeAtLocation'));
-    const body = fn.slice(0, fn.indexOf('\n  };'));
-    expect(body).toMatch(/\.insert\(/);
-    expect(body).not.toMatch(/\.upsert\(/);
-    expect(body).toMatch(/23505/);
+    // E1.5 proved this for createEmployeeAtLocation. That function has since
+    // become THE one manual creation operation for every surface (New Case,
+    // Intake, People, Concerns, Wellbeing, reconciliation) and moved into
+    // lib/employeeWrites.js, so the guarantee is asserted where it now lives.
+    // The behavioural half — a duplicate name is refused and the existing
+    // person is untouched — is in employeeCreation.test.jsx.
+    const w = readFileSync('src/lib/employeeWrites.js', 'utf8')
+      .split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+    expect(w).toMatch(/\.insert\(/);
+    expect(w).not.toMatch(/\.upsert\(/);
+    expect(w).not.toMatch(/onConflict/);
+    expect(w).toMatch(/23505/);
   });
 
   it('the new audit actions cannot be forged through the generic audit RPC', () => {
