@@ -2242,7 +2242,47 @@ branch itself is now asserted.
   stage is preserved.
 - **UPDATE deliberately NOT hardened** — see the D4.3 handoff obligation below.
 
-### NEW-49 — the D4.2 append-only guard's privileged-path test is always true — P2 — OPEN
+### NEW-50 — HR users could create authoritative decisions directly, bypassing `record_case_decision` — P2 — OPEN
+- **Severity** P2 · **Area** decision-history integrity / authoritative-write
+  contract · **Raised** 2026-10-03 (found by D4.3's own production verification,
+  not by a test)
+- **Observed.** After D4.3, ordinary HR users could directly insert authoritative
+  `case_decisions` rows under the existing D4.2 INSERT RLS policy
+  (`"Only HR or the case's disciplinary officer may record a decisio"`), bypassing
+  the transactional `record_case_decision` operation and therefore creating
+  decision history without the `cases.*` compatibility projection, the correlated
+  audit event, or the required HR approval request.
+- **Measured live as the `authenticated` role, not inferred.** A same-org
+  `hr_director` direct INSERT was **ACCEPTED**, and the resulting state was
+  `projection_outcome=''`, `audit_rows=0`, `approval_rows=0`. A direct INSERT
+  carrying `decided_at = '1999-01-01'` was **accepted as submitted**, so the
+  sanction date was the caller's to choose.
+- **Why it matters more after D4.3 than before it.** D4.3 made this table
+  authoritative: `deriveCurrentWarnings` resolves live warnings from the decision
+  head, and `compileSubjectData` discloses the decision chain to the data
+  subject. A row inserted outside the controlled transaction is therefore trusted
+  by both the product's sanction display and its GDPR disclosure.
+- **This is NOT a cross-tenant or tenancy defect, and is deliberately not
+  described as one.** The policy always required the actor to be a member of the
+  case's own organisation, and that held under test: a wrong-organisation HR
+  direct INSERT was refused `42501` and saw **0 rows**. It is a bypass of the
+  authoritative transaction by somebody already entitled to decide that case.
+- **What already constrained the bypass** (so the exposure is scoped honestly):
+  provenance forcing applied (`decided_by` was overwritten with the caller),
+  `legacy_unmapped` was refused, a second original per case was refused `23505`,
+  and the same-org composite foreign key made a cross-organisation row
+  unrepresentable. The gap was the missing projection/audit/approval and the
+  caller-chosen date — not unconstrained writes.
+- **Fix: Wave D4.3b** (`supabase/decision_insert_boundary_2026-10-03.sql`). Two
+  independent locks: the permissive INSERT policy is replaced with a
+  **RESTRICTIVE `with check (false)`** policy so no application actor may insert
+  and a later permissive policy cannot re-open it alone; and the append-only
+  trigger now requires `record_case_decision`'s transaction-local marker for that
+  exact case id on INSERT, with `decided_at` **forced** from `now()` rather than
+  merely required. No application code change — the only client reference to the
+  table is a SELECT.
+
+### NEW-49 — the D4.2 append-only guard's privileged-path test is always true — P2 — RESOLVED (D4.3, 2026-10-03)
 - **Severity** P2 · **Area** decision-history integrity (defence in depth) ·
   **Raised** 2026-10-03 (found while implementing D4.2b's own guard)
 - **Observed.** `case_decisions_append_only_guard` (Wave D4.2) exempts
@@ -2272,6 +2312,25 @@ branch itself is now asserted.
   in D4.2b: D4.2 is approved and frozen, and silently altering a deployed
   security guard outside the agreed slice is the wrong move even when the change
   is a one-line improvement.
+- **RESOLVED in D4.3** (`5fecd20`, migration applied 2026-10-03). The privileged
+  test is now `coalesce(auth.role(),'') = 'service_role'` and nothing else.
+- **Verified in production, behaviourally, as the real `authenticated` role** —
+  not from the function text. A submitted `decided_by` of
+  `11111111-2222-3333-4444-555555555555` was **stored as the caller**
+  (`forced_to_caller=true`, `forgery_persisted=false`); an omitted `decided_at`
+  was refused `23502`; `legacy_unmapped` was refused `23514`; a second original
+  for one case was refused `23505`. `current_user` appears **0 times** in the
+  deployed function's code (comment-stripped — the string survives only in the
+  comment explaining why it must never be used).
+- **On UPDATE/DELETE, which lock is doing the work:** for an ordinary client RLS
+  is operative and the statement is **inert** (0 rows, history unchanged, count
+  121 -> 121) because `case_decisions` has no UPDATE or DELETE policy; the
+  corrected trigger is the independent second lock and raises `23514` on any path
+  that bypasses RLS. That is exactly why NEW-49 was dormant defence-in-depth
+  rather than a live breach, as recorded above.
+- **Closing NEW-49 is what exposed NEW-50.** Fixing provenance forcing made the
+  INSERT side genuinely enforced, and verifying it end-to-end revealed that the
+  INSERT *policy* still admitted a second writer. See NEW-50.
 
 ### NEW-47 — DSAR discloses the theme taxonomy but not the subject's own theme links — P3 — OPEN
 - **Severity** P3 · **Area** DSAR disclosure policy · **Raised** 2026-10-03
