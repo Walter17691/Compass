@@ -562,8 +562,28 @@ describe('E1.1 — current formal warnings', () => {
     stage: 'closed',
     ...over,
   });
-  const build = (cases, allegations = [], now = NOW, viewer = { isHR: true }) =>
-    buildEmployeeFile('u-a', { ...DATA, cases, allegations, now }, viewer);
+  // WAVE D4.3 — Current Warnings derives from AUTHORITATIVE DECISION HISTORY.
+  //
+  // cases.* is now a compatibility projection of the decision, so the fixture
+  // mirrors that: a decision row is derived from each case's own outcome fields.
+  // Every existing override therefore keeps its meaning while the assertion now
+  // exercises the decision path. Tests that need a chain (supersession,
+  // legacy_unmapped) pass explicit decisions instead.
+  const decisionsFor = cases => (cases || [])
+    .filter(cs => cs && cs.outcome)
+    .map(cs => ({
+      id: `d-${cs.id}`, caseId: cs.id, decisionType: 'original', outcome: cs.outcome,
+      outcomeNotes: cs.outcomeNotes || null,
+      warningDurationMonths: cs.warningDurationMonths || null,
+      warningExpiresAt: cs.warningExpiresAt || null,
+      decidedAt: cs.outcomeIssuedAt || null,
+      supersedesDecisionId: null,
+    }));
+  const build = (cases, allegations = [], now = NOW, viewer = { isHR: true }, caseDecisions) =>
+    buildEmployeeFile('u-a', {
+      ...DATA, cases, allegations, now,
+      caseDecisions: caseDecisions ?? decisionsFor(cases),
+    }, viewer);
 
   it('1/3/4. a live first written warning appears with its issue and recorded expiry', () => {
     const w = build([warned('c1')]).currentWarnings;
@@ -598,7 +618,10 @@ describe('E1.1 — current formal warnings', () => {
     // "Expires 11 Mar 2027" means the warning still stands ON 11 March and is
     // gone on the 12th — the plain reading of the letter, and the clearer
     // reading of ACAS (disregarded AFTER the period, not on its last day).
-    const at = d => deriveCurrentWarnings([warned('c1', { warningExpiresAt: '2027-03-11' })], [], new Date(d)).length;
+    const at = d => {
+      const cs = [warned('c1', { warningExpiresAt: '2027-03-11' })];
+      return deriveCurrentWarnings(cs, [], new Date(d), decisionsFor(cs)).length;
+    };
     expect(at('2027-03-10T23:00:00Z')).toBe(1);  // day before expiry → CURRENT
     expect(at('2027-03-11T00:00:00Z')).toBe(1);  // ON expiry         → CURRENT
     expect(at('2027-03-12T00:00:00Z')).toBe(0);  // day after expiry  → EXPIRED
@@ -721,13 +744,16 @@ describe('E1.1 — current formal warnings', () => {
                              libCode.indexOf('// ── Employment details'));
     ['includes("warning")', 'toLowerCase', 'outcomeNotes', 'letterOutput', 'description', '/api/chat']
       .forEach(t => expect(fn).not.toContain(t));
-    // Warning-ness comes from the shared list, not from the case type.
-    expect(libCode).toContain('isWarningOutcome(cs.outcome)');
+    // Warning-ness comes from the shared list, not from the case type — and in
+    // D4.3 it is read from the authoritative decision head, not from the
+    // cases.* compatibility projection.
+    expect(libCode).toContain('isWarningOutcome(head.outcome)');
+    expect(fn).toContain('currentDecision(');
     expect(fn).not.toContain('caseType ===');
   });
 
   it('renders calmly: no alarm language, no red banner', () => {
-    render(<EmployeeFileScreen {...baseProps} cases={[warned('c1')]} allegations={[]} />);
+    render(<EmployeeFileScreen {...baseProps} cases={[warned('c1')]} caseDecisions={decisionsFor([warned('c1')])} allegations={[]} />);
     expect(screen.getByText('First written warning')).toBeInTheDocument();
     // en-GB abbreviates September as "Sept", not "Sep" — asserted against what
     // the locale actually produces rather than what I assumed it would.
@@ -744,7 +770,7 @@ describe('E1.1 — current formal warnings', () => {
     const user = userEvent.setup();
     const setScreen = vi.fn();
     const setActiveCaseId = vi.fn();
-    render(<EmployeeFileScreen {...baseProps} cases={[warned('c1')]} allegations={[]}
+    render(<EmployeeFileScreen {...baseProps} cases={[warned('c1')]} caseDecisions={decisionsFor([warned('c1')])} allegations={[]}
       setScreen={setScreen} setActiveCaseId={setActiveCaseId} />);
     await user.click(screen.getByRole('button', { name: 'View case' }));
     expect(setActiveCaseId).toHaveBeenCalledWith('c1');

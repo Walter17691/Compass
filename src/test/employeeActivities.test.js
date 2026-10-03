@@ -12,6 +12,7 @@ import {
   mapActivityRow, mapActivityRecordRow,
 } from '../lib/employeeActivityWrites.js';
 import { buildEmployeeFile, EMPLOYEE_FILE_TABS, deriveCurrentWarnings } from '../lib/employeeFile.js';
+import { decisionsFromCases } from './helpers/decisionsFromCases.js';
 import { compileSubjectData } from '../lib/dsarCompile.js';
 import { ORG_SCOPED_TABLES } from '../lib/dataInventory.js';
 
@@ -209,11 +210,20 @@ describe('Current Warnings regression — no activity can populate it', () => {
     warningExpiresAt: '2027-03-11', meetings: [],
   };
 
-  it('derives warnings from cases only — activities are not an input', () => {
-    // deriveCurrentWarnings' signature takes cases and allegations. There is no
-    // parameter an activity could arrive through.
-    expect(deriveCurrentWarnings.length).toBeLessThanOrEqual(3);
-    const warnings = deriveCurrentWarnings([warningCase], [], new Date('2026-09-27'));
+  it('derives warnings from the decision head — activities are not an input', () => {
+    // UPDATED BY D4.3, which moved the authority from cases.outcome to the
+    // case_decisions head. The POINT of this test is unchanged and is what the
+    // arity pin was really protecting: there is no parameter an activity could
+    // arrive through. So the parameters are named rather than counted — an arity
+    // bound would have had to be relaxed again on the next legitimate argument,
+    // and a count never said which parameters were allowed.
+    const signature = read('src/lib/employeeFile.js')
+      .match(/export function deriveCurrentWarnings\(([^{]*)\)/)[1];
+    expect(signature).toBe('cases = [], allegations = [], now = new Date(), decisions = []');
+    expect(signature).not.toMatch(/activit/i);
+
+    const warnings = deriveCurrentWarnings([warningCase], [], new Date('2026-09-27'),
+      decisionsFromCases([warningCase]));
     expect(warnings).toHaveLength(1);
   });
 
@@ -234,7 +244,7 @@ describe('Current Warnings regression — no activity can populate it', () => {
   });
 
   it('a Letter of Concern does not change an existing warning list', () => {
-    const base = { employeeRecords: [{ id: EMP, name: 'Sam', orgId: ORG }], cases: [warningCase], allegations: [], now: new Date('2026-09-27') };
+    const base = { employeeRecords: [{ id: EMP, name: 'Sam', orgId: ORG }], cases: [warningCase], allegations: [], now: new Date('2026-09-27'), caseDecisions: decisionsFromCases([warningCase]) };
     const without = buildEmployeeFile(EMP, base, { isHR: true }).currentWarnings;
     const withLetter = buildEmployeeFile(EMP, {
       ...base,

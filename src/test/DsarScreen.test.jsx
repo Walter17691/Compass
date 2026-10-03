@@ -155,3 +155,58 @@ describe('DsarScreen — audits DSAR compile and download (Phase 6.5)', () => {
     await waitFor(() => expect(screen.getByText(/0 signing requests/)).toBeInTheDocument(), { timeout: 5000 });
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// WAVE D4.3 — the decision history has to reach the package THROUGH THE SCREEN.
+//
+// WHY THIS TEST EXISTS, SPECIFICALLY. D4.3's own unit tests call
+// compileSubjectData directly, which proves the compiler and proves nothing
+// about the wiring. The first cut of this wave added `caseDecisions` to
+// DsarScreen's signature — but the compile call lives in RequestDetail, so the
+// handler threw `ReferenceError: caseDecisions is not defined`, the async
+// rejection went unhandled, React never re-rendered, and all seven tests above
+// died of waitFor timeouts rather than of a readable failure. It looked exactly
+// like machine-load flakiness and was very nearly dismissed as such.
+//
+// A timeout is a terrible failure message for a missing prop, so this asserts
+// the end state that matters: the decision is IN the downloaded package.
+// ─────────────────────────────────────────────────────────────────────────
+describe('DsarScreen — carries the authoritative decision into the package (D4.3)', () => {
+  const subjectCase = { id: 'c1', employeeName: 'Sam Employee', employeeEmail: 'sam@acme.com', caseType: 'Misconduct', meetings: [] };
+  const decision = {
+    id: 'd1', caseId: 'c1', decisionType: 'original', outcome: 'First written warning',
+    decidedAt: '2026-06-01T00:00:00Z', warningDurationMonths: 12, warningExpiresAt: '2027-06-01',
+    appealEffect: null, supersedesDecisionId: null,
+    decidedBy: 'user-hr-secret', outcomeNotes: 'internal HR reasoning',
+  };
+
+  it('includes the decision, and still withholds the actor and the reasoning', async () => {
+    authedFetch.mockResolvedValue({ ok: true, json: async () => ({ signingRequests: [], portalAccounts: [] }) });
+    const blobs = [];
+    const origCreate = URL.createObjectURL;
+    const origRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = (blob) => { blobs.push(blob); return 'blob:captured'; };
+    URL.revokeObjectURL = () => {};
+    try {
+      const user = userEvent.setup();
+      render(<DsarScreen {...baseProps} orgId="org-1" cases={[subjectCase]} caseDecisions={[decision]} />);
+      await user.click(screen.getByRole('button', { name: 'Compile data' }));
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Download response package' })).toBeInTheDocument(), { timeout: 5000 });
+      await user.click(screen.getByRole('button', { name: 'Download response package' }));
+
+      expect(blobs).toHaveLength(1);
+      const pkg = JSON.parse(await blobs[0].text());
+      expect(pkg.caseDecisions).toHaveLength(1);
+      expect(pkg.caseDecisions[0].outcome).toBe('First written warning');
+      expect(pkg.caseDecisions[0].warningExpiresAt).toBe('2027-06-01');
+      // the internal actor and HR's reasoning are not the subject's to receive
+      const asText = JSON.stringify(pkg.caseDecisions);
+      expect(asText).not.toContain('user-hr-secret');
+      expect(asText).not.toContain('internal HR reasoning');
+      expect(pkg.caseDecisions[0].reasoningRequiresReview).toBe(true);
+    } finally {
+      URL.createObjectURL = origCreate;
+      URL.revokeObjectURL = origRevoke;
+    }
+  });
+});

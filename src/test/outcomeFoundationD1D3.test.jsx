@@ -10,6 +10,7 @@ import {
 import {
   decisionAllegations, decisionMeeting, priorLiveWarnings, outcomeDecisionContext,
 } from '../lib/outcomeDecisionContext.js';
+import { decisionsFromCases } from './helpers/decisionsFromCases.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // WAVE D1–D3 — the decision, and the communication of the decision.
@@ -39,15 +40,22 @@ const baseCase = {
   meetings: [], outcome: null, outcomeIssuedAt: null,
 };
 
-const props = (over = {}) => ({
-  cases: [baseCase], activeCaseId: CASE_ID, setShowOutcomeModal: noop,
-  outcomeType: '', setOutcomeType: noop, outcomeNotes: '', setOutcomeNotes: noop,
-  saveCases: noop, showToast: noop, requestHrReview: noop,
-  allegations: [], caseSignals: [], requestOverrideReason: noop, createCaseTask: noop,
-  audit: noop, completingOutcomeDetails: false, setCompletingOutcomeDetails: noop,
-  currentUserId: 'user-1',
-  ...over,
-});
+// D4.3 — the modal now issues through recordCaseDecision and reads prior live
+// warnings from the decision head, so the fixture supplies decisions derived
+// from whichever cases the test passes. saveCases/requestHrReview/currentUserId
+// are gone from the component's contract: the RPC owns the write, the approval
+// request and the actor.
+const props = (over = {}) => {
+  const cases = over.cases ?? [baseCase];
+  return {
+    cases, activeCaseId: CASE_ID, setShowOutcomeModal: noop,
+    outcomeType: '', setOutcomeType: noop, outcomeNotes: '', setOutcomeNotes: noop,
+    recordCaseDecision: async () => ({ result: 'ok' }), showToast: noop,
+    allegations: [], caseSignals: [], requestOverrideReason: noop, createCaseTask: noop,
+    ...over,
+    caseDecisions: over.caseDecisions ?? decisionsFromCases(cases),
+  };
+};
 
 describe('D1 — recording a decision is not communicating it', () => {
   it('the primary action is Record outcome, not "Issue outcome & generate letter"', () => {
@@ -72,12 +80,20 @@ describe('D1 — recording a decision is not communicating it', () => {
     expect(tag).not.toContain('handleLetter={handleLetter}');
   });
 
-  it('keeps the authoritative decision fields exactly as they were', () => {
-    for (const field of ['outcome:outcomeType', 'outcomeIssuedAt:issuedAt.toISOString()',
-      'warningDurationMonths:durationMonths', 'warningExpiresAt:expiresAt',
-      'disciplinaryDecidedBy:currentUserId||null']) {
-      expect(outcomeSrc).toContain(field);
+  it('no longer writes the authoritative decision fields — D4.3 moved them server-side', () => {
+    // INVERTED BY D4.3, which is the whole point of the cutover. The modal used
+    // to build the authoritative record itself: outcomeIssuedAt from the
+    // browser clock, warningExpiresAt from a client calculation,
+    // disciplinaryDecidedBy from a prop. All three are provenance, and
+    // provenance a client supplies is provenance a client can forge — so they
+    // are now derived inside record_case_decision and the modal cannot set them.
+    for (const gone of ['outcomeIssuedAt:', 'warningExpiresAt:', 'disciplinaryDecidedBy:',
+      'issuedAt.toISOString()', 'currentUserId']) {
+      expect(outcomeSrc, `${gone} must no longer be written by the modal`).not.toContain(gone);
     }
+    // what it sends is the DECISION, not the record: the outcome, the reasoning
+    // and the duration, and nothing else.
+    expect(outcomeSrc).toContain('recordCaseDecision');
   });
 
   it('the workflow still offers the letter as the next step', () => {
@@ -155,9 +171,14 @@ describe('D2 — the record the decision is about', () => {
       warningExpiresAt: '2099-01-01', caseType: 'disciplinary',
     };
     const EMP = 'emp-1';
+    const priorCases = [
+      { ...live, employeeId: EMP },
+      { ...baseCase, employeeId: EMP, outcome: 'Final written warning', outcomeIssuedAt: '2026-02-01T00:00:00.000Z', warningExpiresAt: '2099-01-01' },
+    ];
     const warnings = priorLiveWarnings({
-      cases: [{ ...live, employeeId: EMP }, { ...baseCase, employeeId: EMP, outcome: 'Final written warning', outcomeIssuedAt: '2026-02-01T00:00:00.000Z', warningExpiresAt: '2099-01-01' }],
+      cases: priorCases,
       currentCase: { ...baseCase, employeeId: EMP },
+      caseDecisions: decisionsFromCases(priorCases),
     });
     expect(warnings.map(w => w.caseId)).toEqual(['prior']);
   });
@@ -169,7 +190,10 @@ describe('D2 — the record the decision is about', () => {
     ['an expired warning', { outcome: 'First written warning', outcomeIssuedAt: '2020-01-01T00:00:00.000Z', warningExpiresAt: '2021-01-01' }],
   ])('never shows %s as a live warning', (_label, over) => {
     const c = { id: 'p', employeeId: 'emp-1', warningExpiresAt: '2099-01-01', caseType: 'disciplinary', ...over };
-    expect(priorLiveWarnings({ cases: [c], currentCase: { ...baseCase, employeeId: 'emp-1' } })).toEqual([]);
+    expect(priorLiveWarnings({
+      cases: [c], currentCase: { ...baseCase, employeeId: 'emp-1' },
+      caseDecisions: decisionsFromCases([c]),
+    })).toEqual([]);
   });
 
   it('composes the three parts, and reports emptiness honestly', () => {
@@ -237,9 +261,14 @@ describe('UAT correction — prior warnings belong to THIS employee only', () =>
   });
 
   it('shows this employee\'s own prior warning', () => {
+    // The POSITIVE case, and the one that keeps every negative case above
+    // honest: if the fixture could not produce a warning at all, "shows
+    // nothing" would prove nothing. So this one must supply the decisions.
+    const mine = liveWarning({ id: 'mine-prior' });
     const warnings = priorLiveWarnings({
-      cases: [liveWarning({ id: 'mine-prior' })],
+      cases: [mine],
       currentCase: { id: 'mine', employeeId: EMP },
+      caseDecisions: decisionsFromCases([mine]),
     });
     expect(warnings.map(w => w.caseId)).toEqual(['mine-prior']);
   });
@@ -409,11 +438,16 @@ describe('regression — frozen architecture untouched', () => {
     expect(cv).toContain('nextStep?.action === "close_case"');
   });
 
-  it('Current Warnings derivation is unchanged', () => {
+  it('Current Warnings derivation now resolves the decision head, with the same three tests', () => {
+    // D4.3 changed WHERE the warning is read from, not WHAT counts as live. The
+    // three conditions are preserved exactly — a warning outcome, actually
+    // decided, and not yet expired — but they are applied to the authoritative
+    // decision rather than to the case's projection of it.
     const ef = readFileSync('src/lib/employeeFile.js', 'utf8');
-    expect(ef).toContain('.filter(cs => cs && isWarningOutcome(cs.outcome))');
-    expect(ef).toContain('.filter(cs => !!cs.outcomeIssuedAt)');
-    expect(ef).toContain('isWarningLive(cs.warningExpiresAt, now)');
+    expect(ef).toContain('currentDecision(');
+    expect(ef).toContain('isWarningOutcome(head.outcome)');
+    expect(ef).toContain('head.decidedAt');
+    expect(ef).toContain('isWarningLive(head.warningExpiresAt, now)');
   });
 
   it('No further action remains a first-class outcome', () => {
@@ -421,9 +455,14 @@ describe('regression — frozen architecture untouched', () => {
     expect(screen.getByRole('option', { name: 'No further action' })).toBeInTheDocument();
   });
 
-  it('warning expiry stays calculated, not entered', () => {
+  it('warning expiry stays calculated, not entered — and is now not even sent', () => {
+    // The guarantee is stronger after D4.3. The client still SHOWS a calculated
+    // preview so the decision-maker can see what a duration means, but the
+    // authoritative expiry is derived inside record_case_decision and the modal
+    // has no way to submit one.
     expect(outcomeSrc).toContain('(calculated, not editable)');
-    expect(outcomeSrc).toContain('addCalendarMonths(issuedAt, durationMonths)');
+    expect(outcomeSrc).toContain('addCalendarMonths(previewBaseDate, Number(warningDurationMonths))');
+    expect(outcomeSrc).not.toMatch(/warningExpiresAt\s*:/);
   });
 
   it('the outcome surface carries no legacy cream or serif styling', () => {

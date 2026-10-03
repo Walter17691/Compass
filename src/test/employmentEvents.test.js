@@ -11,6 +11,7 @@ import {
   cancelEmploymentEvent, setDocumentationStatus, describeEventOutcome, EVENT_RESULT,
 } from '../lib/employmentEventWrites.js';
 import { buildEmployeeFile, deriveCurrentWarnings } from '../lib/employeeFile.js';
+import { decisionsFromCases } from './helpers/decisionsFromCases.js';
 import { buildEmployeeRoster } from '../lib/employeeContext.js';
 import { compileSubjectData } from '../lib/dsarCompile.js';
 import { ORG_SCOPED_TABLES } from '../lib/dataInventory.js';
@@ -573,11 +574,22 @@ describe('Current Warnings regression', () => {
     expect(file.currentWarnings).toEqual([]);
   });
 
-  it('warnings still derive from cases and allegations only', () => {
-    expect(deriveCurrentWarnings.length).toBeLessThanOrEqual(3);
-    const warned = deriveCurrentWarnings([{ id: 'c1', employeeId: EMP, caseType: 'misconduct', stage: 'closed',
-      outcome: 'First written warning', outcomeIssuedAt: '2026-09-11T00:00:00.000Z', warningExpiresAt: '2027-03-11', meetings: [] }], [], TODAY);
+  it('warnings derive from cases, allegations and decisions — never from an employment event', () => {
+    // D4.3 moved the authority to the case_decisions head, so `decisions` is a
+    // fourth input. The guarantee this test defends is unchanged and is the one
+    // that matters here: an employment event is not one of the inputs, and no
+    // amount of employment history can manufacture a sanction.
+    const signature = read('src/lib/employeeFile.js')
+      .match(/export function deriveCurrentWarnings\(([^{]*)\)/)[1];
+    expect(signature).toBe('cases = [], allegations = [], now = new Date(), decisions = []');
+    expect(signature).not.toMatch(/employment|event/i);
+
+    const cs = { id: 'c1', employeeId: EMP, caseType: 'misconduct', stage: 'closed',
+      outcome: 'First written warning', outcomeIssuedAt: '2026-09-11T00:00:00.000Z', warningExpiresAt: '2027-03-11', meetings: [] };
+    const warned = deriveCurrentWarnings([cs], [], TODAY, decisionsFromCases([cs]));
     expect(warned).toHaveLength(1);
+    // and with no decision there is no warning, however the case reads
+    expect(deriveCurrentWarnings([cs], [], TODAY, [])).toHaveLength(0);
   });
 
   it('the event table has no warning or sanction column', () => {

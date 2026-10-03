@@ -223,8 +223,16 @@ describe('what D4.0C deliberately did NOT change', () => {
     expect(sql).toContain('create or replace function public.reconcile_case_employee');
   });
 
-  it('no case_decisions table was created', () => {
+  it('D4.0C created no case_decisions table — D4.2 did, and D4.3 wired it', () => {
+    // D4.0C's slice introduced no decision storage of its own, which is the
+    // claim this test was written to defend and which is still true: there is no
+    // supabase/case_decisions.sql from that wave.
     expect(() => readFileSync('supabase/case_decisions.sql', 'utf8')).toThrow();
-    expect(app).not.toContain('case_decisions');
+    // The second half asserted that App.jsx never mentioned the table. That was
+    // a holding assertion for the waves between, and D4.3 legitimately ends it
+    // by loading the decisions and calling record_case_decision. What must still
+    // hold is that D4.0C's OWN migration is unchanged by any of it.
+    expect(readFileSync('supabase/employee_reconciliation_2026-09-26.sql', 'utf8'))
+      .not.toContain('case_decisions');
   });
 });

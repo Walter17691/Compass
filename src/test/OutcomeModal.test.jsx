@@ -12,18 +12,19 @@ const cs = { id: 'c1', employeeName: 'Sam Employee' };
 
 describe('OutcomeModal — field labelling (Phase 6.5, Batch 13)', () => {
   it('labels the outcome decision select and the notes field', () => {
-    render(<OutcomeModal cases={[cs]} activeCaseId="c1" setShowOutcomeModal={noop} outcomeType="" setOutcomeType={noop} outcomeNotes="" setOutcomeNotes={noop} saveCases={noop} showToast={noop} handleLetter={noop} startOffboarding={noop} requestHrReview={noop} allegations={[]} caseSignals={[]} requestOverrideReason={noop} createCaseTask={noop} setCaseInfo={noop} setReviewOutput={noop} audit={noop} setCompletingOutcomeDetails={noop} />);
+    render(<OutcomeModal cases={[cs]} activeCaseId="c1" setShowOutcomeModal={noop} outcomeType="" setOutcomeType={noop} outcomeNotes="" setOutcomeNotes={noop} recordCaseDecision={noop} showToast={noop} handleLetter={noop} startOffboarding={noop} requestHrReview={noop} allegations={[]} caseSignals={[]} requestOverrideReason={noop} createCaseTask={noop} setCaseInfo={noop} setReviewOutput={noop} audit={noop} setCompletingOutcomeDetails={noop} />);
     expect(screen.getByLabelText('Outcome decision')).toBeInTheDocument();
     expect(screen.getByLabelText(/Outcome reasoning/)).toBeInTheDocument();
   });
 });
 
 // Phase 6.5 hardening (closes Prompt 16 audit finding H4, HIGH) — used to
-// call saveCases fire-and-forget, then immediately close the modal and
+// call the persistence path fire-and-forget, then immediately close the modal and
 // declare "Outcome recorded" before the write had actually been
 // confirmed. The single highest-stakes write in the app: cs.outcome
 // starts the real ACAS appeal-window clock, so success now only reports
-// once saveCases' own returned Promise<boolean> has resolved true.
+// once the authoritative operation has actually resolved. In D4.3 that is
+// record_case_decision(), one transaction, so there is nothing partial to undo.
 describe('OutcomeModal — does not report success until the save is confirmed (Prompt 16 audit, H4)', () => {
   // outcomeNotes must be non-empty — computeDecisionQualityGaps flags a
   // recorded outcome with no documented rationale as its own gap, which
@@ -36,15 +37,17 @@ describe('OutcomeModal — does not report success until the save is confirmed (
     audit: noop, setCompletingOutcomeDetails: noop,
   };
 
-  it('closes the modal and shows a success toast only once saveCases resolves { ok: true }', async () => {
+  it('closes the modal and shows a success toast only once the authoritative operation resolves ok', async () => {
     const user = userEvent.setup();
-    const saveCases = vi.fn().mockResolvedValue({ ok: true });
+    const recordCaseDecision = vi.fn().mockResolvedValue({ result: 'ok', data: { approval_requested: false } });
     const setShowOutcomeModal = vi.fn();
     const showToast = vi.fn();
     const handleLetter = vi.fn();
-    render(<OutcomeModal {...baseProps} outcomeType="No further action" saveCases={saveCases} setShowOutcomeModal={setShowOutcomeModal} showToast={showToast} handleLetter={handleLetter} />);
+    render(<OutcomeModal {...baseProps} outcomeType="No further action" recordCaseDecision={recordCaseDecision} setShowOutcomeModal={setShowOutcomeModal} showToast={showToast} handleLetter={handleLetter} />);
     await user.click(screen.getByRole('button', { name: /Record outcome/ }));
-    expect(saveCases).toHaveBeenCalledWith(expect.any(Array), 'c1');
+    // D4.3 — one authoritative call, carrying no provenance: decided_at,
+    // decided_by and the expiry are all derived server-side.
+    expect(recordCaseDecision).toHaveBeenCalledWith(expect.objectContaining({ caseId: 'c1', outcome: 'No further action' }));
     await waitFor(() => expect(setShowOutcomeModal).toHaveBeenCalledWith(false));
     expect(showToast).toHaveBeenCalledWith('Outcome recorded');
     // WAVE D1 — recording the decision no longer drafts the communication.
@@ -59,11 +62,11 @@ describe('OutcomeModal — does not report success until the save is confirmed (
 
   it('keeps the modal open and shows the generic error toast, without declaring success, on a genuine persistence failure (reason: "error")', async () => {
     const user = userEvent.setup();
-    const saveCases = vi.fn().mockResolvedValue({ ok: false, reason: 'error' });
+    const recordCaseDecision = vi.fn().mockResolvedValue({ result: 'error' });
     const setShowOutcomeModal = vi.fn();
     const showToast = vi.fn();
     const handleLetter = vi.fn();
-    render(<OutcomeModal {...baseProps} outcomeType="No further action" saveCases={saveCases} setShowOutcomeModal={setShowOutcomeModal} showToast={showToast} handleLetter={handleLetter} />);
+    render(<OutcomeModal {...baseProps} outcomeType="No further action" recordCaseDecision={recordCaseDecision} setShowOutcomeModal={setShowOutcomeModal} showToast={showToast} handleLetter={handleLetter} />);
     await user.click(screen.getByRole('button', { name: /Record outcome/ }));
     await waitFor(() => expect(showToast).toHaveBeenCalledWith("Couldn't record the outcome — please try again", 'error'));
     expect(setShowOutcomeModal).not.toHaveBeenCalled();
@@ -75,18 +78,18 @@ describe('OutcomeModal — does not report success until the save is confirmed (
   // guard had already recovered from a stale-version conflict (its own
   // "this case was updated... we've refreshed it" info toast already
   // fired, and it already called loadCasesFromDB — both happen inside
-  // saveCaseToDB itself, upstream of the mocked saveCases here) before
+  // the conflict branch, upstream of the mocked operation here) before
   // ever returning to this modal. finalizeOutcome must not compound that
   // with its own, wrongly-generic failure toast, must not treat it as a
   // reason to auto-retry, and must not create a second outcome.
   describe('distinguishes a recovered concurrency conflict from a genuine failure (outcome-recording P2 fix)', () => {
     it('does not show the generic failure toast on a conflict (reason: "conflict")', async () => {
       const user = userEvent.setup();
-      const saveCases = vi.fn().mockResolvedValue({ ok: false, reason: 'conflict' });
+      const recordCaseDecision = vi.fn().mockResolvedValue({ result: 'conflict' });
       const showToast = vi.fn();
-      render(<OutcomeModal {...baseProps} outcomeType="No further action" saveCases={saveCases} setShowOutcomeModal={noop} showToast={showToast} handleLetter={noop} />);
+      render(<OutcomeModal {...baseProps} outcomeType="No further action" recordCaseDecision={recordCaseDecision} setShowOutcomeModal={noop} showToast={showToast} handleLetter={noop} />);
       await user.click(screen.getByRole('button', { name: /Record outcome/ }));
-      await waitFor(() => expect(saveCases).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(recordCaseDecision).toHaveBeenCalledTimes(1));
       expect(showToast).not.toHaveBeenCalledWith("Couldn't record the outcome — please try again", 'error');
       // No success toast either — this genuinely didn't succeed yet.
       expect(showToast).not.toHaveBeenCalledWith('Outcome recorded');
@@ -94,44 +97,44 @@ describe('OutcomeModal — does not report success until the save is confirmed (
 
     it('does not close the modal, request HR review, or draft the outcome letter on a conflict — no duplicate outcome is created', async () => {
       const user = userEvent.setup();
-      const saveCases = vi.fn().mockResolvedValue({ ok: false, reason: 'conflict' });
+      const recordCaseDecision = vi.fn().mockResolvedValue({ result: 'conflict' });
       const setShowOutcomeModal = vi.fn();
       const requestHrReview = vi.fn();
       const handleLetter = vi.fn();
-      render(<OutcomeModal {...baseProps} outcomeType="Final written warning" saveCases={saveCases} setShowOutcomeModal={setShowOutcomeModal} showToast={noop} handleLetter={handleLetter} requestHrReview={requestHrReview} />);
+      render(<OutcomeModal {...baseProps} outcomeType="Final written warning" recordCaseDecision={recordCaseDecision} setShowOutcomeModal={setShowOutcomeModal} showToast={noop} handleLetter={handleLetter} requestHrReview={requestHrReview} />);
       await user.type(screen.getByLabelText('Warning duration'), '12');
       await user.click(screen.getByRole('button', { name: /Record outcome/ }));
-      await waitFor(() => expect(saveCases).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(recordCaseDecision).toHaveBeenCalledTimes(1));
       expect(setShowOutcomeModal).not.toHaveBeenCalled();
       expect(requestHrReview).not.toHaveBeenCalled();
       expect(handleLetter).not.toHaveBeenCalled();
     });
 
-    it('does not automatically retry — saveCases is called exactly once even after a conflict resolves', async () => {
+    it('does not automatically retry — the authoritative operation is called exactly once even after a conflict resolves', async () => {
       const user = userEvent.setup();
-      const saveCases = vi.fn().mockResolvedValue({ ok: false, reason: 'conflict' });
-      render(<OutcomeModal {...baseProps} outcomeType="No further action" saveCases={saveCases} setShowOutcomeModal={noop} showToast={noop} handleLetter={noop} />);
+      const recordCaseDecision = vi.fn().mockResolvedValue({ result: 'conflict' });
+      render(<OutcomeModal {...baseProps} outcomeType="No further action" recordCaseDecision={recordCaseDecision} setShowOutcomeModal={noop} showToast={noop} handleLetter={noop} />);
       await user.click(screen.getByRole('button', { name: /Record outcome/ }));
-      await waitFor(() => expect(saveCases).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(recordCaseDecision).toHaveBeenCalledTimes(1));
       // Give any stray microtask/retry a chance to fire, then confirm
       // the count never grows on its own.
       await new Promise(r => setTimeout(r, 50));
-      expect(saveCases).toHaveBeenCalledTimes(1);
+      expect(recordCaseDecision).toHaveBeenCalledTimes(1);
     });
 
     it('preserves the entered outcome/notes after a conflict, so a conscious retry against the refreshed case can subsequently succeed', async () => {
       const user = userEvent.setup();
-      const saveCases = vi.fn()
-        .mockResolvedValueOnce({ ok: false, reason: 'conflict' })
-        .mockResolvedValueOnce({ ok: true });
+      const recordCaseDecision = vi.fn()
+        .mockResolvedValueOnce({ result: 'conflict' })
+        .mockResolvedValueOnce({ result: 'ok', data: { approval_requested: false } });
       const setShowOutcomeModal = vi.fn();
       const showToast = vi.fn();
       const handleLetter = vi.fn();
-      render(<OutcomeModal {...baseProps} outcomeType="No further action" saveCases={saveCases} setShowOutcomeModal={setShowOutcomeModal} showToast={showToast} handleLetter={handleLetter} />);
+      render(<OutcomeModal {...baseProps} outcomeType="No further action" recordCaseDecision={recordCaseDecision} setShowOutcomeModal={setShowOutcomeModal} showToast={showToast} handleLetter={handleLetter} />);
 
       // First attempt: loses to a conflict — nothing declared, modal stays.
       await user.click(screen.getByRole('button', { name: /Record outcome/ }));
-      await waitFor(() => expect(saveCases).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(recordCaseDecision).toHaveBeenCalledTimes(1));
       expect(setShowOutcomeModal).not.toHaveBeenCalled();
 
       // The Issue outcome control is enabled again — the outcome/notes
@@ -141,7 +144,7 @@ describe('OutcomeModal — does not report success until the save is confirmed (
       const retryButton = screen.getByRole('button', { name: /Record outcome/ });
       await waitFor(() => expect(retryButton).toBeEnabled());
       await user.click(retryButton);
-      await waitFor(() => expect(saveCases).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(recordCaseDecision).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(setShowOutcomeModal).toHaveBeenCalledWith(false));
       expect(showToast).toHaveBeenCalledWith('Outcome recorded');
       // WAVE D1 — the retry records the decision and stops there. The
@@ -154,25 +157,25 @@ describe('OutcomeModal — does not report success until the save is confirmed (
   it('disables Record outcome and Cancel, and shows a pending label, while the save is in flight', async () => {
     const user = userEvent.setup();
     let resolveSave;
-    const saveCases = vi.fn(() => new Promise(r => { resolveSave = r; }));
-    render(<OutcomeModal {...baseProps} outcomeType="No further action" saveCases={saveCases} setShowOutcomeModal={noop} showToast={noop} handleLetter={noop} />);
+    const recordCaseDecision = vi.fn(() => new Promise(r => { resolveSave = r; }));
+    render(<OutcomeModal {...baseProps} outcomeType="No further action" recordCaseDecision={recordCaseDecision} setShowOutcomeModal={noop} showToast={noop} handleLetter={noop} />);
     await user.click(screen.getByRole('button', { name: /Record outcome/ }));
     expect(screen.getByRole('button', { name: 'Recording outcome…' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
-    resolveSave({ ok: true });
+    resolveSave({ result: 'ok', data: { approval_requested: false } });
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Recording outcome…' })).not.toBeInTheDocument());
   });
 
   it('does not close the modal on Escape while the save is in flight', async () => {
     const user = userEvent.setup();
     let resolveSave;
-    const saveCases = vi.fn(() => new Promise(r => { resolveSave = r; }));
+    const recordCaseDecision = vi.fn(() => new Promise(r => { resolveSave = r; }));
     const setShowOutcomeModal = vi.fn();
-    render(<OutcomeModal {...baseProps} outcomeType="No further action" saveCases={saveCases} setShowOutcomeModal={setShowOutcomeModal} showToast={noop} handleLetter={noop} />);
+    render(<OutcomeModal {...baseProps} outcomeType="No further action" recordCaseDecision={recordCaseDecision} setShowOutcomeModal={setShowOutcomeModal} showToast={noop} handleLetter={noop} />);
     await user.click(screen.getByRole('button', { name: /Record outcome/ }));
     await user.keyboard('{Escape}');
     expect(setShowOutcomeModal).not.toHaveBeenCalled();
-    resolveSave({ ok: true });
+    resolveSave({ result: 'ok', data: { approval_requested: false } });
     await waitFor(() => expect(setShowOutcomeModal).toHaveBeenCalledWith(false));
   });
 });
@@ -288,42 +291,40 @@ describe('OutcomeModal — warning duration field (Defect #12)', () => {
 
   it('persists outcomeIssuedAt, outcomeNotes, warningDurationMonths and warningExpiresAt together when a warning outcome is issued', async () => {
     const user = userEvent.setup();
-    const saveCases = vi.fn().mockResolvedValue({ ok: true });
-    render(<OutcomeModal {...durationProps} outcomeType="First written warning" saveCases={saveCases} />);
+    const recordCaseDecision = vi.fn().mockResolvedValue({ result: 'ok', data: { approval_requested: false } });
+    render(<OutcomeModal {...durationProps} outcomeType="First written warning" recordCaseDecision={recordCaseDecision} />);
     await user.type(screen.getByLabelText('Warning duration'), '6');
     await user.click(screen.getByRole('button', { name: /Record outcome/ }));
-    await waitFor(() => expect(saveCases).toHaveBeenCalled());
-    const [savedCases] = saveCases.mock.calls[0];
-    const saved = savedCases.find(c => c.id === 'c1');
-    expect(saved.outcome).toBe('First written warning');
-    expect(saved.warningDurationMonths).toBe(6);
-    expect(typeof saved.outcomeIssuedAt).toBe('string');
-    expect(new Date(saved.outcomeIssuedAt).toString()).not.toBe('Invalid Date');
-    expect(saved.outcomeNotes).toBe('Documented rationale for this test.');
-    expect(saved.warningExpiresAt).toBeTruthy();
-    // The expiry must be derivable from the same issuedAt this call used,
-    // not independently guessed — cross-check with the shared helper.
-    const { addCalendarMonths, toISODateLocal } = await import('../lib/dates.js');
-    expect(saved.warningExpiresAt).toBe(toISODateLocal(addCalendarMonths(new Date(saved.outcomeIssuedAt), 6)));
+    await waitFor(() => expect(recordCaseDecision).toHaveBeenCalled());
+    // D4.3 — the modal sends the DECISION INPUTS and nothing else. Issue date,
+    // decision-maker and expiry are derived inside record_case_decision(), so
+    // asserting they are absent from the payload is the stronger statement: the
+    // client cannot supply provenance even if it wanted to.
+    const payload = recordCaseDecision.mock.calls[0][0];
+    expect(payload).toEqual({
+      caseId: 'c1', outcome: 'First written warning',
+      outcomeNotes: durationProps.outcomeNotes, warningDurationMonths: 6,
+    });
+    expect(payload).not.toHaveProperty('outcomeIssuedAt');
+    expect(payload).not.toHaveProperty('warningExpiresAt');
+    expect(payload).not.toHaveProperty('disciplinaryDecidedBy');
   });
 
-  it('does not persist any warning duration/expiry for a non-warning outcome', async () => {
+  it('sends no warning duration for a non-warning outcome', async () => {
     const user = userEvent.setup();
-    const saveCases = vi.fn().mockResolvedValue({ ok: true });
-    render(<OutcomeModal {...durationProps} outcomeType="No further action" saveCases={saveCases} />);
+    const recordCaseDecision = vi.fn().mockResolvedValue({ result: 'ok', data: { approval_requested: false } });
+    render(<OutcomeModal {...durationProps} outcomeType="No further action" recordCaseDecision={recordCaseDecision} />);
     await user.click(screen.getByRole('button', { name: /Record outcome/ }));
-    await waitFor(() => expect(saveCases).toHaveBeenCalled());
-    const [savedCases] = saveCases.mock.calls[0];
-    const saved = savedCases.find(c => c.id === 'c1');
-    expect(saved.warningDurationMonths).toBeNull();
-    expect(saved.warningExpiresAt).toBeNull();
-    expect(typeof saved.outcomeIssuedAt).toBe('string');
+    await waitFor(() => expect(recordCaseDecision).toHaveBeenCalled());
+    // record_case_decision refuses a duration on a non-warning outcome, so the
+    // database would reject one even if the modal sent it.
+    expect(recordCaseDecision.mock.calls[0][0].warningDurationMonths).toBeNull();
   });
 });
 
 // Appeal Independence P1 (2026-09-18) — finalizeOutcome now stamps the
 // actually-authenticated user as cases.disciplinary_decided_by in the
-// same saveCases call as outcome/etc., so appoint_appeal_manager()'s
+// same transaction as the decision, so appoint_appeal_manager()'s
 // independence check has an authoritative decision-maker for this
 // pathway even on cases with no allegations rows at all.
 describe('OutcomeModal — persists the authoritative decision-maker (Appeal Independence P1)', () => {
@@ -335,39 +336,35 @@ describe('OutcomeModal — persists the authoritative decision-maker (Appeal Ind
     audit: noop, setCompletingOutcomeDetails: noop, setShowOutcomeModal: noop,
   };
 
-  it('issuing a fresh outcome persists disciplinaryDecidedBy as the actually-authenticated currentUserId prop', async () => {
+  // WAVE D4.3 — the SAME security property, moved where it cannot be bypassed.
+  //
+  // These tests asserted disciplinaryDecidedBy came from the currentUserId PROP
+  // rather than from the case's manager/owner. That mattered because
+  // appoint_appeal_manager()'s independence check reads that column, so a wrong
+  // value would let a decision-maker hear their own appeal.
+  //
+  // It is now stronger than a prop contract. record_case_decision() sets both
+  // decided_by and disciplinary_decided_by from auth.uid(), and
+  // case_decisions_append_only_guard OVERWRITES decided_by on insert whatever was
+  // passed — so a client cannot supply an actor at all. The assertion is
+  // therefore that the modal sends none, plus that the database establishes it.
+  it('sends NO decision-maker — provenance comes from the authenticated session', async () => {
     const user = userEvent.setup();
-    const saveCases = vi.fn().mockResolvedValue({ ok: true });
-    render(<OutcomeModal {...decidedByProps} outcomeType="No further action" saveCases={saveCases} currentUserId="hr-walter" />);
-    await user.click(screen.getByRole('button', { name: /Record outcome/ }));
-    await waitFor(() => expect(saveCases).toHaveBeenCalled());
-    const [savedCases] = saveCases.mock.calls[0];
-    const saved = savedCases.find(c => c.id === 'c1');
-    expect(saved.disciplinaryDecidedBy).toBe('hr-walter');
-  });
-
-  it('never infers the decision-maker from the case\'s manager/owner — only the currentUserId prop is used', async () => {
-    const user = userEvent.setup();
-    const saveCases = vi.fn().mockResolvedValue({ ok: true });
+    const recordCaseDecision = vi.fn().mockResolvedValue({ result: 'ok', data: { approval_requested: false } });
     const caseWithManager = { ...cs, manager: 'Someone Else Entirely', ownerId: 'owner-not-decider' };
-    render(<OutcomeModal {...decidedByProps} cases={[caseWithManager]} outcomeType="No further action" saveCases={saveCases} currentUserId="hr-walter" />);
+    render(<OutcomeModal {...decidedByProps} cases={[caseWithManager]} outcomeType="No further action" recordCaseDecision={recordCaseDecision} />);
     await user.click(screen.getByRole('button', { name: /Record outcome/ }));
-    await waitFor(() => expect(saveCases).toHaveBeenCalled());
-    const [savedCases] = saveCases.mock.calls[0];
-    const saved = savedCases.find(c => c.id === 'c1');
-    expect(saved.disciplinaryDecidedBy).toBe('hr-walter');
-    expect(saved.disciplinaryDecidedBy).not.toBe('owner-not-decider');
+    await waitFor(() => expect(recordCaseDecision).toHaveBeenCalled());
+    const payload = recordCaseDecision.mock.calls[0][0];
+    expect(Object.keys(payload).sort()).toEqual(['caseId', 'outcome', 'outcomeNotes', 'warningDurationMonths']);
+    expect(JSON.stringify(payload)).not.toContain('owner-not-decider');
+    expect(JSON.stringify(payload)).not.toContain('Someone Else Entirely');
   });
 
-  it('falls back to null (not a crash) when currentUserId is not supplied', async () => {
-    const user = userEvent.setup();
-    const saveCases = vi.fn().mockResolvedValue({ ok: true });
-    render(<OutcomeModal {...decidedByProps} outcomeType="No further action" saveCases={saveCases} />);
-    await user.click(screen.getByRole('button', { name: /Record outcome/ }));
-    await waitFor(() => expect(saveCases).toHaveBeenCalled());
-    const [savedCases] = saveCases.mock.calls[0];
-    const saved = savedCases.find(c => c.id === 'c1');
-    expect(saved.disciplinaryDecidedBy).toBeNull();
+  it('the database, not the client, establishes who decided', () => {
+    const sql = readFileSync('supabase/case_decision_cutover_2026-10-03.sql', 'utf8');
+    expect(sql).toMatch(/disciplinary_decided_by = auth\.uid\(\)/);
+    expect(sql).toMatch(/new\.decided_by := auth\.uid\(\)/);
   });
 });
 
@@ -395,19 +392,19 @@ describe('WAVE D4.2b — the historical outcome-completion route is retired', ()
   };
 
   const renderModal = (overrides = {}) => {
-    const saveCases = vi.fn().mockResolvedValue({ ok: true });
+    const recordCaseDecision = vi.fn().mockResolvedValue({ result: 'ok', data: { approval_requested: false } });
     const audit = vi.fn();
     render(
       <OutcomeModal
         cases={[historicalIncompleteCase]} activeCaseId="c-hist"
         setShowOutcomeModal={vi.fn()} outcomeType="" setOutcomeType={vi.fn()}
-        outcomeNotes="" setOutcomeNotes={vi.fn()} saveCases={saveCases}
+        outcomeNotes="" setOutcomeNotes={vi.fn()} recordCaseDecision={recordCaseDecision}
         showToast={vi.fn()} requestHrReview={vi.fn()} allegations={[]} caseSignals={[]}
         requestOverrideReason={vi.fn()} createCaseTask={vi.fn()} audit={audit}
         currentUserId="u-1" {...overrides}
       />,
     );
-    return { saveCases, audit };
+    return { recordCaseDecision, audit };
   };
 
   it('no longer offers a "Complete outcome details" mode', () => {

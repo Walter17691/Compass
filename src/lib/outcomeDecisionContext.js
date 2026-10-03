@@ -72,20 +72,30 @@ export function decisionMeeting(caseObj) {
 // │ warnings" when it cannot establish who this person is, and guessing by   │
 // │ name is exactly how two people who share one get merged.                  │
 // └─────────────────────────────────────────────────────────────────────────┘
-export function priorLiveWarnings({ cases = [], allegations = [], currentCase = null, now = new Date() } = {}) {
+// WAVE D4.3 — `caseDecisions` must be threaded through, because
+// deriveCurrentWarnings now reads the authoritative decision head rather than
+// the cases.* projection. Omitting it would make this panel silently empty,
+// which is the worst possible failure for a surface whose whole job is to show
+// a decision-maker what warnings the person already has.
+export function priorLiveWarnings({ cases = [], allegations = [], currentCase = null, now = new Date(), caseDecisions = [] } = {}) {
   const employeeId = currentCase?.employeeId || null;
   if (!employeeId) return [];
   const sameEmployee = (Array.isArray(cases) ? cases : [])
     .filter(c => c && c.employeeId === employeeId);
-  return deriveCurrentWarnings(sameEmployee, allegations, now)
+  // Narrow the decisions to that authorised slice too, so a decision belonging
+  // to a case this viewer never received cannot reach the derivation.
+  const sameEmployeeIds = new Set(sameEmployee.map(c => c.id));
+  const theirDecisions = (Array.isArray(caseDecisions) ? caseDecisions : [])
+    .filter(d => d && sameEmployeeIds.has(d.caseId));
+  return deriveCurrentWarnings(sameEmployee, allegations, now, theirDecisions)
     .filter(w => w.caseId !== currentCase?.id);
 }
 
-export function outcomeDecisionContext({ caseObj = null, cases = [], allegations = [], now = new Date() } = {}) {
+export function outcomeDecisionContext({ caseObj = null, cases = [], allegations = [], now = new Date(), caseDecisions = [] } = {}) {
   const caseId = caseObj?.id || null;
   const allegationList = decisionAllegations(allegations, caseId);
   const meeting = decisionMeeting(caseObj);
-  const warnings = priorLiveWarnings({ cases, allegations, currentCase: caseObj, now });
+  const warnings = priorLiveWarnings({ cases, allegations, currentCase: caseObj, now, caseDecisions });
   return {
     allegations: allegationList,
     meeting,

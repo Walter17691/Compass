@@ -102,6 +102,7 @@ export const DSAR_SUBJECT_SOURCES = Object.freeze({
   leaverInstances: 'leaver_instances',
   wellbeingNotes: 'wellbeing_notes',
   concernReferrals: 'concern_referrals',
+  caseDecisions: 'case_decisions',
   allegations: 'allegations',
   caseSignals: 'case_signals',
   caseTasks: 'case_tasks',
@@ -128,6 +129,7 @@ export const DSAR_SUBJECT_SOURCES = Object.freeze({
 
 export function compileSubjectData(employeeName, { canonicalEmployeeId = null, cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [], wellbeingNotes = [], concernReferrals = [], allegations = [], caseSignals = [], caseTasks = [], hrReviewRequests = [], auditLog = [], signingRequests = [], portalAccounts = [], dsarRequests = [], orgMembers = [], profiles = [], caseViews = [], portalInvites = [], orgEvents = [], improvementInitiatives = [], managerCapabilityInsights = [], organisationThemes = [], caseAccess = [], redundancyCases = [], standaloneMeetings = [], meetingFetchFailed = false,
     employeeActivities = [], employeeActivityRecords = [], employmentEvents = [],
+    caseDecisions = [],
   } = {}) {
   // ── Phase E0.5B — CANONICAL IDENTITY TAKES PRECEDENCE OVER THE NAME ───────
   //
@@ -334,6 +336,50 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
     r => ({ id: r.id, concernType: r.concernType, status: r.status, createdAt: r.createdAt, employeeName: r.employeeName })
   );
   const subjectAllegations = allegations.filter(a => subjectCaseIds.has(a.caseId));
+
+  // ── WAVE D4.3 — authoritative decision history ──────────────────────────
+  //
+  // Derived through the case, which is the authoritative parent — the same
+  // boundary subjectCases already draws, so a decision on a case this subject
+  // does not own cannot appear, and nor can one from another organisation.
+  //
+  // WHAT THIS ADDS, AND WHAT IT DELIBERATELY DOES NOT DUPLICATE. The case
+  // disclosure already carries the CURRENT position (outcome, outcomeIssuedAt,
+  // warning duration and expiry, with outcomeNotes review-required). Repeating
+  // the head here would make a subject read the same sanction twice and wonder
+  // whether they were sanctioned twice. So this is the CHAIN: each decision
+  // event, in order, with whether it has since been superseded.
+  //
+  // decided_by is NOT disclosed. It identifies an internal actor, and no
+  // existing DSAR policy requires naming the decision-maker to the subject —
+  // the same reasoning that keeps internal attribution out of the rest of this
+  // compilation.
+  //
+  // Unknown provenance stays unknown: decidedAt is null on 135 of the 137
+  // backfilled decisions and is reported as null, never inferred from
+  // created_at or from the case.
+  //
+  // legacy_unmapped is presented as the string that was actually recorded, with
+  // no interpretation. It is the subject's own record; reading it as one of the
+  // six sanctions would be Compass deciding what their employer meant.
+  const decisionsForSubject = (Array.isArray(caseDecisions) ? caseDecisions : [])
+    .filter(d => d && subjectCaseIds.has(d.caseId));
+  const supersededIds = new Set(decisionsForSubject.map(d => d.supersedesDecisionId).filter(Boolean));
+  const subjectCaseDecisions = decisionsForSubject.map(d => ({
+    caseId: d.caseId,
+    decisionType: d.decisionType,
+    outcome: d.outcome === 'legacy_unmapped' ? null : d.outcome,
+    recordedAs: d.outcome === 'legacy_unmapped' ? (d.outcomeSourceText || null) : null,
+    decidedAt: d.decidedAt || null,
+    appealEffect: d.appealEffect || null,
+    warningDurationMonths: d.warningDurationMonths || null,
+    warningExpiresAt: d.warningExpiresAt || null,
+    superseded: supersededIds.has(d.id),
+    // Review-required, exactly as cases.outcomeNotes already is: this is HR's
+    // own reasoning, and a decision row must not become a side door around the
+    // human review that the case-level field requires.
+    reasoningRequiresReview: !!d.outcomeNotes,
+  }));
   const subjectCaseSignals = caseSignals.filter(s => subjectCaseIds.has(s.caseId));
   const subjectCaseTasks = caseTasks.filter(t => subjectCaseIds.has(t.caseId));
   // hr_review_requests isn't remapped to camelCase at load time
@@ -645,6 +691,7 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
       concernReferrals: canonicalEmployeeId ? "employee_id" : "employee_name",
       // Derived through their case, which is the authoritative parent.
       allegations: "case_id", caseTasks: "case_id", caseSignals: "case_id", hrReviewRequests: "case_id",
+      caseDecisions: "case_id",
       // No employee column exists on these tables at all.
       onboarding: "employee_name", offboarding: "employee_name",
       signingRequests: "employee_name", portalAccounts: "employee_name",
@@ -741,6 +788,7 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
     employeeActivityRecords: subjectActivityRecords,
     employmentEvents: subjectEmploymentEvents,
     concernReferrals: subjectConcernReferrals,
+    caseDecisions: subjectCaseDecisions,
     allegations: subjectAllegations,
     caseSignals: subjectCaseSignals,
     caseTasks: subjectCaseTasks,

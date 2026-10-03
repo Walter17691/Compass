@@ -231,8 +231,9 @@ describe('NEW-44 — a future durable table cannot ship unclassified', () => {
     expect(meta).toBeTruthy();
     expect(meta.dataClass).toBe(DATA_CLASS.CUSTOMER);
     expect(classifyTable('case_decisions')).toBe('cascade_covered');
-    expect(meta.dsar).toBe(DSAR_DISPOSITION.INCLUDED_NOT_WIRED);
-    expect(meta.dsarDefect).toBe('D4.3');
+    // D4.3 discharged the DSAR obligation by genuinely compiling the table.
+    expect(meta.dsar).toBe(DSAR_DISPOSITION.INCLUDED);
+    expect(meta.dsarDefect).toBeFalsy();
     expect(meta.retention).toBe(RETENTION.NOT_ENFORCED);
   });
 
@@ -279,13 +280,9 @@ describe('NEW-44 — retention is recorded as unenforced, not invented', () => {
 
   it('names the unwired DSAR obligations rather than hiding them', () => {
     const unwired = unwiredDsarObligations();
-    expect(unwired).toEqual([
-      // D4.2: a decision about a person IS their personal data and is owed to
-      // them, but D4.2 is behaviour-preserving and nothing reads the table yet.
-      // D4.3 owns the cutover, at which point this becomes `included`.
-      { table: 'case_decisions', defect: 'D4.3' },
-      { table: 'team_invites', defect: 'NEW-45' },
-    ]);
+    // D4.3 discharged case_decisions' obligation by wiring it into
+    // compileSubjectData, so only NEW-45's remains.
+    expect(unwired).toEqual([{ table: 'team_invites', defect: 'NEW-45' }]);
     for (const row of unwired) {
       expect(row.defect, `${row.table} claims an unwired DSAR obligation with no defect reference`).toBeTruthy();
     }

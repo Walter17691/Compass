@@ -103,8 +103,10 @@ describe('NEW-44 — the DSAR invariant', () => {
   it('the counts the audit verified by hand are now locked', () => {
     const included = Object.values(TABLE_CLASSIFICATION)
       .filter(m => m.dsar === DSAR_DISPOSITION.INCLUDED).length;
-    expect(included).toBe(28);
-    expect(new Set(Object.values(DSAR_SUBJECT_SOURCES)).size).toBe(28);
+    // 28 before D4.3; case_decisions brings it to 29, flipped only once the
+    // compiler genuinely read it.
+    expect(included).toBe(29);
+    expect(new Set(Object.values(DSAR_SUBJECT_SOURCES)).size).toBe(29);
   });
 });
 

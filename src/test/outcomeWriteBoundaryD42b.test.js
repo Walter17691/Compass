@@ -231,16 +231,23 @@ describe('D4.2b/B — the database refuses an outcome-bearing case INSERT', () =
 
 // ── C. the UPDATE transition is untouched, and no new authority exists ──
 describe('D4.2b/C — legitimate issuance is untouched, and no marker was added', () => {
-  it('finalizeOutcome still writes the outcome through saveCases — unchanged', () => {
+  it('finalizeOutcome issued through saveCases in D4.2b, and D4.3 moved it to the RPC', () => {
+    // THE HANDOVER THIS TEST WAS WRITTEN TO ANTICIPATE. D4.2b hardened INSERT
+    // only, and recorded WHY it could not harden UPDATE: finalizeOutcome was a
+    // direct client UPDATE through saveCases, already authorised by
+    // protect_case_hr_only_columns, and no client can set a transaction-local
+    // marker. D4.2b's obligation on D4.3 was that the RPC and the removal of the
+    // direct allowance ship as ONE unit.
+    //
+    // D4.3 did that, so the assertion is inverted rather than deleted: the modal
+    // must no longer be able to write a case field at all.
     const src = readFileSync('src/screens/OutcomeModal.jsx', 'utf8');
-    const fn = src.slice(src.indexOf('const finalizeOutcome'), src.indexOf('const issueOutcome'));
-    expect(fn).toContain('outcome:outcomeType');
-    expect(fn).toContain('outcomeIssuedAt:issuedAt.toISOString()');
-    expect(fn).toContain('disciplinaryDecidedBy:currentUserId||null');
-    expect(fn).toContain('await saveCases(');
-    // it is an UPDATE of an existing case, which is why the INSERT guard cannot
-    // affect it
-    expect(fn).toContain('cases.map(');
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+    expect(code).not.toContain('saveCases');
+    expect(code).not.toContain('outcomeIssuedAt:');
+    expect(code).not.toContain('disciplinaryDecidedBy:');
+    expect(code).toContain('recordCaseDecision');
   });
 
   it('adds NO transaction-local marker infrastructure — that is D4.3\'s, with the RPC', () => {
@@ -325,10 +332,16 @@ describe('D4.2b/E — the D4.2 decision foundation is untouched', () => {
     expect(d42).toMatch(/case_decisions_append_only_guard/);
   });
 
-  it('no application path writes case_decisions yet — D4.3 owns that', () => {
-    for (const file of ['src/App.jsx', 'src/screens/OutcomeModal.jsx',
-      'src/lib/employeeFile.js', 'src/lib/caseStage.js']) {
-      expect(readFileSync(file, 'utf8'), file).not.toContain('case_decisions');
-    }
+  it('D4.3 took ownership: the decision table is now read and written, and caseStage still is not', () => {
+    // D4.2b asserted the negative because nothing had cut over yet. D4.3 owns the
+    // cutover, so the meaningful residue is WHICH files may touch the table.
+    //
+    // App.jsx loads the decisions under RLS and calls the RPC; employeeFile
+    // derives live warnings from the decision head. caseStage.js deliberately
+    // still reads cases.outcome — that is the compatibility projection doing its
+    // job, and it is why existing readers did not have to be rewritten.
+    expect(readFileSync('src/App.jsx', 'utf8')).toContain('case_decisions');
+    expect(readFileSync('src/lib/employeeFile.js', 'utf8')).toContain('caseDecisions');
+    expect(readFileSync('src/lib/caseStage.js', 'utf8')).not.toContain('case_decisions');
   });
 });

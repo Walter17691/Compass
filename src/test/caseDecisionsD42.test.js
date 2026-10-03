@@ -21,6 +21,10 @@ import { DSAR_SUBJECT_SOURCES } from '../lib/dsarCompile.js';
 
 const migration = () => readFileSync('supabase/case_decisions_2026-10-03.sql', 'utf8');
 const stripSql = t => t.split('\n').filter(l => !l.trim().startsWith('--')).join('\n');
+// Comments are prose, not behaviour. Asserting against un-stripped source is
+// how a file that merely DESCRIBES a removed call reads as still making it.
+const stripJs = t => t.replace(/\/\*[\s\S]*?\*\//g, '')
+  .split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
 
 // ── the domain boundary: legacy_unmapped is not a sanction anyone may choose ──
 describe('D4.2 — legacy_unmapped cannot be chosen as an outcome', () => {
@@ -355,50 +359,126 @@ describe('D4.2 — governance registration', () => {
     expect(meta.retention).toBe(RETENTION.NOT_ENFORCED);
   });
 
-  it('declares its DSAR obligation as owed-but-not-wired, owned by D4.3', () => {
+  // D4.3 DISCHARGED THIS. The obligation was `included_not_wired` with defect
+  // 'D4.3' for exactly as long as nothing read the table. It flipped to
+  // `included` only once compileSubjectData genuinely compiled it — which is
+  // why the second half of this test is the one that matters: the disposition
+  // and the manifest have to agree, so the flip cannot be a bare edit to a
+  // classification file.
+  it('its DSAR obligation is now discharged, not merely declared', () => {
     const meta = classificationFor('case_decisions');
-    expect(meta.dsar).toBe(DSAR_DISPOSITION.INCLUDED_NOT_WIRED);
-    expect(meta.dsarDefect).toBe('D4.3');
-    // and it is genuinely NOT wired — D4.2 must not change Wave 0 disclosure
-    expect(Object.values(DSAR_SUBJECT_SOURCES)).not.toContain('case_decisions');
+    expect(meta.dsar).toBe(DSAR_DISPOSITION.INCLUDED);
+    expect(meta.dsarDefect).toBeFalsy();
+    expect(Object.values(DSAR_SUBJECT_SOURCES)).toContain('case_decisions');
   });
 });
 
-// ── nothing was switched over ──
-describe('D4.2 — additive and behaviour-preserving, asserted', () => {
-  it('Current Warnings still reads cases.*, not case_decisions', () => {
+// ─────────────────────────────────────────────────────────────────────────
+// WAVE D4.3 INVERTED THE BLOCK THAT USED TO LIVE HERE.
+//
+// D4.2 asserted the negative — Current Warnings still read cases.*, the modal
+// still wrote cases.*, nothing touched the new table — because "additive" is a
+// claim that needs proving, and the holding pattern had to be enforced rather
+// than trusted.
+//
+// D4.3 is the wave that owns the cutover, so those assertions are now false BY
+// DESIGN. They are inverted rather than deleted: each one still asserts
+// something, and what it asserts is the stronger property. The negative
+// "nothing reads the table" has become the positive "the decision is the
+// authority and the projection is maintained with it" — plus the invariant that
+// outlives both waves, that there is never more than ONE writable truth.
+// ─────────────────────────────────────────────────────────────────────────
+describe('D4.3 — the cutover happened, and only one writable truth exists', () => {
+  it('Current Warnings now reads the decision head, not cases.outcome', () => {
     const employeeFile = readFileSync('src/lib/employeeFile.js', 'utf8');
     expect(employeeFile).toContain('export function deriveCurrentWarnings');
-    expect(employeeFile).toMatch(/isWarningOutcome\(cs\.outcome\)/);
-    expect(employeeFile).not.toContain('case_decisions');
-    expect(employeeFile).not.toContain('caseDecisions');
+    // resolved through the decision chain's head, not the case's projection
+    expect(employeeFile).toMatch(/currentDecision\(/);
+    expect(employeeFile).toMatch(/isWarningOutcome\(head\.outcome\)/);
+    expect(employeeFile).toContain('caseDecisions');
   });
 
-  it('caseStage and nextStep still read cases.outcome', () => {
+  it('caseStage and nextStep still read cases.outcome — the projection is for readers', () => {
+    // UNCHANGED BY D4.3, AND DELIBERATELY SO. The whole purpose of keeping
+    // cases.* as a transactionally maintained projection is that existing
+    // readers do not have to be rewritten to resolve a chain. Stage and next
+    // step are the proof that the compatibility half of the contract is real.
     expect(readFileSync('src/lib/caseStage.js', 'utf8')).not.toContain('case_decisions');
     expect(readFileSync('src/lib/nextStep.js', 'utf8')).not.toContain('case_decisions');
   });
 
-  it('OutcomeModal still writes the case fields and is NOT routed to the new table', () => {
-    const modal = readFileSync('src/screens/OutcomeModal.jsx', 'utf8');
-    expect(modal).not.toContain('case_decisions');
-    expect(modal).not.toContain('caseDecisions');
+  it('OutcomeModal issues through the RPC and writes no case field itself', () => {
+    const raw = readFileSync('src/screens/OutcomeModal.jsx', 'utf8');
+    expect(raw).toContain('recordCaseDecision');
+    // COMMENTS STRIPPED BEFORE ASSERTING. The file still SAYS "saveCases" four
+    // times, in comments explaining what it no longer does — and an assertion
+    // that reads prose as if it were code is the single most repeated mistake in
+    // this engagement. The claim is about executable code, so strip to code.
+    const code = stripJs(raw);
+    expect(code).not.toContain('saveCases');
+    expect(code).not.toMatch(/outcomeIssuedAt\s*:/);
+    expect(code).not.toMatch(/warningExpiresAt\s*:/);
+    expect(code).not.toMatch(/disciplinaryDecidedBy\s*:/);
   });
 
-  it('the appeal workflow is untouched — no D4 rows are written from it', () => {
-    const app = readFileSync('src/App.jsx', 'utf8');
-    expect(app).not.toContain('case_decisions');
+  it('the appeal workflow is STILL untouched — D4.3 writes no appeal state', () => {
+    // The appeal model is a later wave and D4.3 is forbidden from beginning it.
+    // appeal_effect exists on a decision row but nothing in the appeal path
+    // writes a decision, and the appeal derivation is unchanged.
     const employeeFile = readFileSync('src/lib/employeeFile.js', 'utf8');
     expect(employeeFile).toContain('export function appealEffectOnCase');
     expect(employeeFile).toMatch(/appealOutcomeMeta\(a\.appealOutcome\)/);
+    const cutover = readFileSync('supabase/case_decision_cutover_2026-10-03.sql', 'utf8');
+    expect(stripSql(cutover)).not.toMatch(/update public\.appeals|insert into public\.appeals/);
   });
 
-  it('NO dual write exists — nothing in the product reads or writes the table', () => {
-    for (const file of ['src/App.jsx', 'src/lib/employeeFile.js', 'src/lib/caseStage.js',
-      'src/lib/nextStep.js', 'src/lib/outcomeDecisionContext.js', 'src/lib/dsarCompile.js']) {
-      expect(readFileSync(file, 'utf8'), `${file} must not touch case_decisions yet`)
-        .not.toContain('case_decisions');
+  it('NO dual write exists — the projection is only ever written beside the decision', () => {
+    // The point D4.2 made with "nothing touches the table" is now made the
+    // other way round: the ONLY place cases' six outcome columns are written is
+    // inside record_case_decision, in the same transaction as the decision row.
+    // No client file writes them, so there is no second writable truth.
+    // THE MODAL AND THE WRITE WRAPPER MUST NOT NAME THESE COLUMNS AT ALL.
+    for (const file of ['src/screens/OutcomeModal.jsx', 'src/lib/caseDecisionWrites.js']) {
+      const src = stripJs(readFileSync(file, 'utf8'));
+      expect(src, `${file} must not write the outcome projection directly`)
+        .not.toMatch(/outcome_issued_at|warning_expires_at|disciplinary_decided_by/);
     }
+
+    // APP.JSX IS DIFFERENT, AND BLUNTLY FORBIDDING THE NAMES THERE WOULD BE A
+    // FALSE ASSERTION. saveCaseToDB's payload still carries the six columns and
+    // must keep carrying them: it is a whole-row update, and every value is read
+    // straight back from the row it loaded (mapCaseRow maps all six), so the
+    // write is an exact echo. `is distinct from` in protect_case_hr_only_columns
+    // therefore sees no change and the guard never fires on an ordinary edit.
+    // Verified against production rather than reasoned about: 0 of 2,960 cases
+    // hold outcome IS NULL (2,823 hold ''), which is exactly what the client's
+    // `|| ""` produces, and outcome_notes is NULL on all 2,960 against the
+    // client's `|| null`. A stale echo cannot slip through either, because
+    // saveCaseToDB is a conditional update on updated_at and the RPC bumps it.
+    //
+    // What MUST hold is that App.jsx never MANUFACTURES provenance: each of the
+    // three provenance columns may only ever be a pass-through of the loaded
+    // case object, never a computed timestamp or a user id.
+    const app = stripJs(readFileSync('src/App.jsx', 'utf8'));
+    for (const [col, prop] of [
+      ['outcome_issued_at', 'outcomeIssuedAt'],
+      ['warning_expires_at', 'warningExpiresAt'],
+      ['disciplinary_decided_by', 'disciplinaryDecidedBy'],
+    ]) {
+      // every assignment of the column is `col: caseObj.<prop> || null`
+      const assignments = app.match(new RegExp(`${col}\\s*:[^,\n]*`, 'g')) || [];
+      for (const a of assignments) {
+        expect(a, `${col} must be an echo, never manufactured`)
+          .toMatch(new RegExp(`${col}\\s*:\\s*caseObj\\.${prop}\\s*\\|\\|\\s*null`));
+      }
+      expect(assignments.length, `${col} is written in exactly one place`).toBe(1);
+      // and the client never derives them
+      expect(app).not.toMatch(new RegExp(`${prop}\\s*:\\s*new Date\\(`));
+      expect(app).not.toMatch(new RegExp(`${prop}\\s*:\\s*(currentUserId|user\\?\\.id|session)`));
+    }
+    const sql = stripSql(readFileSync('supabase/case_decision_cutover_2026-10-03.sql', 'utf8'));
+    const updates = sql.match(/update public\.cases/g) || [];
+    expect(updates.length, 'exactly one projection write, inside the RPC').toBe(1);
   });
 
   it('no trigger copies cases.outcome into the new table, or the reverse', () => {

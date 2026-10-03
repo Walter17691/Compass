@@ -3,6 +3,7 @@ import { getCaseStage, isGenuineMeetingRecord } from './caseStage.js';
 import { getNextStep } from './nextStep.js';
 import { isMeetingComplete } from './meetingLifecycle.js';
 import { isWarningOutcome } from './outcomeTypes.js';
+import { currentDecision } from './caseDecisions.js';
 import { allegationsForCase, appealOutcomeMeta } from './allegations.js';
 import { buildActivityEntries, activityAttention, isOpenConcern } from './employeeActivities.js';
 import { resolveEffectiveEmployee, upcomingChanges, buildEmploymentEventEntries,
@@ -208,25 +209,63 @@ export function appealEffectOnCase(caseId, allegations) {
   return tags.length ? "unchanged" : "none";
 }
 
-// Returns display data, never JSX. `cases` must already be the AUTHORISED,
-// employee_id-linked slice — this function performs no permission logic and no
-// name matching, so a case the viewer cannot see simply never arrives.
-export function deriveCurrentWarnings(cases = [], allegations = [], now = new Date()) {
+// ─────────────────────────────────────────────────────────────────────────
+// WAVE D4.3 — Current Warnings now derives from AUTHORITATIVE DECISION HISTORY.
+//
+// It used to read cases.outcome / outcomeIssuedAt / warningExpiresAt directly.
+// Those fields are now a transactionally maintained compatibility projection, so
+// reading them would mean reading a copy when the original is available — and,
+// more importantly, a projection cannot express supersession. A warning varied on
+// appeal would still look current.
+//
+// The chain is: case → canonical current decision → effective warning state.
+//
+// The head is resolved by currentDecision() — the D4.2 supersession model, the
+// ONLY resolver. Never MAX(decided_at), never created_at order, never "whichever
+// row loaded last", and never cases.outcome.
+//
+// `cases` must already be the AUTHORISED, employee_id-linked slice, and
+// `decisions` the authorised decision rows (loaded once under RLS in App.jsx).
+// This function performs no permission logic and no name matching, so a case the
+// viewer cannot see simply never arrives — and nor do its decisions.
+//
+// WHAT IS STILL NOT INFERRED: a decision with no decided_at is not a warning
+// (the D4.2 backfill left 135 of them NULL and they stay excluded), and a
+// decision with no expiry is not live (85 historical warnings have none). Both
+// remain absent rather than being given a manufactured date.
+//
+// legacy_unmapped can never qualify: it is not in WARNING_OUTCOME_TYPES, so
+// isWarningOutcome rejects it. Asserted by test rather than left to inspection.
+//
+// APPEALS ARE OUT OF SCOPE in D4.3, so the existing allegation-level suppression
+// is preserved exactly: an overturned or varied appeal still removes the warning,
+// because Compass still does not record what a varied sanction became.
+export function deriveCurrentWarnings(cases = [], allegations = [], now = new Date(), decisions = []) {
+  const byCase = new Map();
+  (Array.isArray(decisions) ? decisions : []).forEach(d => {
+    if (!d || !d.caseId) return;
+    if (!byCase.has(d.caseId)) byCase.set(d.caseId, []);
+    byCase.get(d.caseId).push(d);
+  });
+
   return (Array.isArray(cases) ? cases : [])
-    .filter(cs => cs && isWarningOutcome(cs.outcome))
-    // An outcome that was never issued is a draft, not a warning.
-    .filter(cs => !!cs.outcomeIssuedAt)
-    .filter(cs => isWarningLive(cs.warningExpiresAt, now))
-    .filter(cs => {
+    .filter(cs => cs && cs.id)
+    .map(cs => ({ cs, head: currentDecision(byCase.get(cs.id) || []).decision }))
+    .filter(({ head }) => head && isWarningOutcome(head.outcome))
+    // A decision with no recorded date is not an issued warning.
+    .filter(({ head }) => !!head.decidedAt)
+    .filter(({ head }) => isWarningLive(head.warningExpiresAt, now))
+    .filter(({ cs }) => {
       const effect = appealEffectOnCase(cs.id, allegations);
       return effect === "none" || effect === "unchanged";
     })
-    .map(cs => ({
+    .map(({ cs, head }) => ({
       caseId: cs.id,
-      type: cs.outcome,
-      issuedAt: cs.outcomeIssuedAt,
-      expiresAt: cs.warningExpiresAt,
-      durationMonths: cs.warningDurationMonths || null,
+      decisionId: head.id,
+      type: head.outcome,
+      issuedAt: head.decidedAt,
+      expiresAt: head.warningExpiresAt,
+      durationMonths: head.warningDurationMonths || null,
       processLabel: processLabel(cs.caseType),
     }))
     .sort((a, b) => new Date(a.expiresAt) - new Date(b.expiresAt));
@@ -379,7 +418,7 @@ export function buildEmployeeFile(employeeId, authorisedData = {}, viewerInput =
     ],
     // From EVERY authorised case, not just open ones: a closed disciplinary
     // case can still hold a live warning.
-    currentWarnings: deriveCurrentWarnings(ctx.cases, authorisedData.allegations, authorisedData.now),
+    currentWarnings: deriveCurrentWarnings(ctx.cases, authorisedData.allegations, authorisedData.now, authorisedData.caseDecisions),
     // ── Wave A — ONE authoritative history ───────────────────────────────
     //
     // This was `buildRecentActivity(ctx, …)`, a SECOND independently assembled

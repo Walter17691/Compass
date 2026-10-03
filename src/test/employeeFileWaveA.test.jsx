@@ -256,8 +256,11 @@ describe('Wave A — Overview hierarchy', () => {
 
   it('Current Warnings semantics are untouched by Wave A', () => {
     // E1.1 derivation is not re-implemented here, and Wave A must not have
-    // changed what counts as live.
-    expect(libSrc).toContain('deriveCurrentWarnings(ctx.cases, authorisedData.allegations, authorisedData.now)');
+    // changed what counts as live. The call site gained a fourth argument in
+    // D4.3 (the authoritative decisions) — Wave A still has not touched it, and
+    // the guarantee this test exists for is that the derivation is called, not
+    // reimplemented.
+    expect(libSrc).toContain('deriveCurrentWarnings(ctx.cases, authorisedData.allegations, authorisedData.now, authorisedData.caseDecisions)');
     expect(libSrc).toContain('isWarningOutcome');
   });
 });

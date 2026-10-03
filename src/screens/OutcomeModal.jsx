@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
 import { approvalActionForOutcome, approvalActionLabel } from '../lib/approvals';
+import { describeDecisionOutcome } from '../lib/caseDecisionWrites';
 import { computeDecisionQualityGaps } from '../lib/decisionQuality';
 import { DecisionQualityCheckModal } from '../components/DecisionQualityCheckModal';
 import { useModalA11y } from '../hooks/useModalA11y';
 import { isWarningOutcome, isValidWarningDurationMonths } from '../lib/outcomeTypes';
-import { addCalendarMonths, toISODateLocal } from '../lib/dates';
+import { addCalendarMonths } from '../lib/dates';
 import { COLOR, FONT, TYPE, RADIUS, BUTTON } from '../styles/tokens';
 import { outcomeDecisionContext } from '../lib/outcomeDecisionContext';
 import { MDRenderer } from '../components/MDRenderer';
@@ -12,19 +13,11 @@ import { MDRenderer } from '../components/MDRenderer';
 // WAVE D4.2b — findOutcomeRelevantMeeting was removed with the completion
 // mode: it existed only to pre-fill that flow's issue-date input.
 
-// Audit-detail text for "Outcome issued" (finalizeOutcome) — structured,
-// non-sensitive (no free-text outcomeNotes rationale included, only the
-// facts a reader needs to establish what/when/duration/expiry), same
-// shape either way so the two audit actions read as clearly related.
-function describeOutcomeDetail(outcomeType, issuedAt, durationMonths, expiresAt, {amended}={}) {
-  const parts = [
-    outcomeType,
-    `${amended?"issue date confirmed as":"issued"} ${issuedAt.toLocaleDateString("en-GB")}`,
-  ];
-  if(durationMonths) parts.push(`duration: ${durationMonths} month${durationMonths===1?"":"s"}`);
-  if(expiresAt) parts.push(`expires ${new Date(expiresAt).toLocaleDateString("en-GB")}`);
-  return parts.join(" — ");
-}
+// WAVE D4.3 — describeOutcomeDetail was removed with the cutover: the audit
+// detail for "Outcome issued" is now composed inside record_case_decision(), in
+// the same transaction as the decision it describes, so a client can neither
+// shape it nor write it. 'Outcome issued' is also reserved in log_audit_event,
+// which is what makes that true rather than merely conventional.
 
 // Process Intelligence (P9) — issuing the outcome itself is unchanged
 // (case saved, letter drafted); for
@@ -43,12 +36,12 @@ function describeOutcomeDetail(outcomeType, issuedAt, durationMonths, expiresAt,
 // Intelligence's equivalent) since OutcomeModal is already a
 // self-contained modal, not a full screen orchestrated from App.jsx —
 // nothing else needs to know this check ran.
-export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcomeType, setOutcomeType, outcomeNotes, setOutcomeNotes, saveCases, showToast, requestHrReview, allegations, caseSignals, requestOverrideReason, createCaseTask, audit, currentUserId }) {
+export function OutcomeModal({ cases, caseDecisions = [], activeCaseId, setShowOutcomeModal, outcomeType, setOutcomeType, outcomeNotes, setOutcomeNotes, recordCaseDecision, showToast, allegations, caseSignals, requestOverrideReason, createCaseTask }) {
   const cs = cases.find(x=>x.id===activeCaseId);
   // WAVE D2 — the record this decision is about, assembled from data this
   // component was already given and already authorised to hold. No query, no
   // fetch, no permission logic: see outcomeDecisionContext.js.
-  const context = outcomeDecisionContext({ caseObj: cs, cases, allegations });
+  const context = outcomeDecisionContext({ caseObj: cs, cases, allegations, caseDecisions });
   const [showRecord, setShowRecord] = useState(false);
   const [showQualityCheck, setShowQualityCheck] = useState(false);
   const [qualityGaps, setQualityGaps] = useState([]);
@@ -109,53 +102,56 @@ export function OutcomeModal({ cases, activeCaseId, setShowOutcomeModal, outcome
   // re-renders with the refreshed data once loadCasesFromDB's own state
   // update lands), the modal simply stays open exactly as it already did
   // on any other failure, and nothing is auto-resubmitted.
+  // ── WAVE D4.3 — issuance is ONE authoritative database operation ──
+  //
+  // This used to build a mutated case object, await saveCases (a direct client
+  // UPDATE of the protected outcome columns), then separately call
+  // requestHrReview and audit(). Three transactions, so "outcome recorded,
+  // approval request failed" and "outcome recorded, no audit entry" were both
+  // reachable — and cases.outcome was an independently writable second truth.
+  //
+  // record_case_decision now does all of it in one transaction: authorize,
+  // concurrency check, insert exactly one case_decisions event, project
+  // transactionally into cases.*, write the Outcome issued audit event, and open
+  // the HR approval request where the existing rules require one. Either all of
+  // that committed, or none of it did.
+  //
+  // WHAT IS DELIBERATELY NOT SENT: decided_at, decided_by and the warning expiry.
+  // All three are derived server-side. Sending them would invite the database to
+  // trust client provenance, and the expiry in particular is now computed from
+  // the server's own clock rather than the browser's.
   const finalizeOutcome = async () => {
     if(isWarning && !isValidWarningDurationMonths(warningDurationMonths)) return;
     setSaving(true);
-    const issuedAt = new Date();
-    const durationMonths = isWarning ? Number(warningDurationMonths) : null;
-    const expiresAt = durationMonths ? toISODateLocal(addCalendarMonths(issuedAt, durationMonths)) : null;
-    const result = await saveCases(cases.map(x=>x.id===activeCaseId?{...x,
-      outcome:outcomeType,
-      outcomeIssuedAt:issuedAt.toISOString(),
-      outcomeNotes:outcomeNotes,
-      warningDurationMonths:durationMonths,
-      warningExpiresAt:expiresAt,
-      // Appeal Independence P1 (2026-09-18) — the authoritative decision-
-      // maker for appoint_appeal_manager()'s independence check on this
-      // pathway (see supabase/appeal_independence_decision_maker_2026-09-
-      // 18.sql). The actually-authenticated user issuing this outcome,
-      // never inferred from the case's manager/owner/created_by fields.
-      disciplinaryDecidedBy:currentUserId||null,
-    }:x), activeCaseId);
+    const res = await recordCaseDecision({
+      caseId: activeCaseId,
+      outcome: outcomeType,
+      outcomeNotes,
+      warningDurationMonths: isWarning ? Number(warningDurationMonths) : null,
+    });
     setSaving(false);
-    if(!result?.ok) {
-      if(result?.reason !== 'conflict') showToast("Couldn't record the outcome — please try again", "error");
+    // Success is reported ONLY once the database has committed. On any failure
+    // the modal stays open with what was typed intact, exactly as before — and
+    // because the operation is atomic, a failure means there is no decision, no
+    // compatibility outcome, no approval request and no audit entry to undo.
+    // recordCaseDecision has already shown the right message for each case
+    // (including staying silent on a recovered conflict, whose own refresh toast
+    // already spoke).
+    if(res?.result !== 'ok') {
+      // A recovered conflict already showed its own accurate "this case was
+      // updated… we've refreshed it" toast upstream, so adding a generic failure
+      // here would contradict it — the same distinction the P2 fix drew.
+      if(res?.result !== 'conflict') {
+        showToast(describeDecisionOutcome(res?.result) || "Couldn't record the outcome — please try again", "error");
+      }
       return;
     }
-    const approvalAction = approvalActionForOutcome(outcomeType);
-    if(approvalAction) requestHrReview(approvalAction, activeCaseId, null, outcomeType+(outcomeNotes?" — "+outcomeNotes:""), false);
-    // Defect #14 remediation — the only place a genuinely new outcome
-    // decision gets its own explicit audit entry; previously only the
-    // quality-check-override path (below) logged anything at all, so a
-    // clean issuance with no gaps left no record beyond the raw case row
-    // changing. This fires either way — the override path's own entry
-    // records HOW the decision was allowed through despite gaps, this one
-    // records WHAT was decided, which is worth keeping independently.
-    audit("Outcome issued", describeOutcomeDetail(outcomeType, issuedAt, durationMonths, expiresAt), activeCaseId);
-    setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");setWarningDurationMonths("");showToast(approvalAction?"Outcome recorded — approval requested":"Outcome recorded");
+    setShowOutcomeModal(false);setOutcomeType("");setOutcomeNotes("");setWarningDurationMonths("");
+    showToast(res?.data?.approval_requested ? "Outcome recorded — approval requested" : "Outcome recorded");
     // ── WAVE D1 — recording a decision is not communicating it ──
-    //
-    // This used to call handleLetter("outcome", …) here, so one click both
-    // recorded the authoritative employment decision AND started drafting the
-    // letter that announces it. The button said so: "Issue outcome & generate
-    // letter". Two different acts, one of which is a formal communication to
-    // the employee, taken on a single confirmation.
-    //
-    // The decision is now recorded and nothing else happens. nextStep.js
-    // already returns "Draft outcome letter" while no outcome letter exists
-    // (its !hasDiscOutcome branch), so the workflow continues exactly as it
-    // did — the user simply takes the second step deliberately.
+    // Still no letter is drafted here. nextStep.js returns "Draft outcome
+    // letter" while no outcome letter exists, so the workflow continues exactly
+    // as it did; the user takes that second step deliberately.
   };
 
   const issueOutcome = () => {

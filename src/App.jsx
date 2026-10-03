@@ -128,6 +128,7 @@ import { UpdateAvailableNotice } from './components/UpdateAvailableNotice';
 import { groundingFromMeeting, groundingFromRecord, isAnalysisStale } from './lib/reviewGrounding';
 import { outcomeLetterStatus } from './lib/outcomeLetter';
 import { partitionImportRows, describeSkippedImport, countImportedOutcomes, describeSkippedOutcomes } from './lib/caseIdentity';
+import { recordCaseDecisionWrite, DECISION_RESULT } from './lib/caseDecisionWrites';
 import { askThreadKey, threadFor, appendFailure, turnsForModel } from './lib/askConversation';
 import { useBuildStaleness } from './hooks/useBuildStaleness';
 import { CaseViewScreen } from './screens/CaseViewScreen';
@@ -2697,6 +2698,68 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   };
 
   // ── HR Review Requests ──
+  // ── WAVE D4.3 — the ONE loading path for authoritative decision history ──
+  //
+  // One query under RLS, loaded alongside the other org-scoped collections and
+  // threaded through context exactly as `allegations` is. Deliberately NOT a
+  // per-case fetch scattered through screens: the brief's own requirement, and
+  // the reason currentDecision() can stay the single resolver.
+  const loadCaseDecisions = async () => {
+    if(!org?.id) return;
+    try {
+      const { data, error } = await fetchAllPages((from, to) => supabase.from('case_decisions').select('*').eq('org_id', org.id).order('created_at', {ascending: true}).range(from, to));
+      if(error) { console.error('loadCaseDecisions', error); markLoadIssue('case decisions'); return; }
+      if(data) setCaseDecisions(data.map(r=>({
+        id:r.id, orgId:r.org_id, caseId:r.case_id, decisionType:r.decision_type,
+        outcome:r.outcome, outcomeSourceText:r.outcome_source_text||null,
+        outcomeNotes:r.outcome_notes||null,
+        warningDurationMonths:r.warning_duration_months||null,
+        warningExpiresAt:r.warning_expires_at||null,
+        appealEffect:r.appeal_effect||null,
+        supersedesDecisionId:r.supersedes_decision_id||null,
+        decidedAt:r.decided_at||null, decidedBy:r.decided_by||null,
+        communicatedAt:r.communicated_at||null, communicatedVia:r.communicated_via||null,
+        createdAt:r.created_at,
+      })));
+    } catch(e) { console.error('loadCaseDecisions', e); markLoadIssue('case decisions'); }
+  };
+
+  // ── WAVE D4.3 — the authoritative issuance operation ──
+  //
+  // ONE call. The database does authorization, the concurrency check, the
+  // decision insert, the compatibility projection into cases.*, the audit event
+  // and the HR approval request, all in one transaction. Nothing here writes a
+  // case field, calls audit() or calls requestHrReview() — doing any of those
+  // would reintroduce exactly the sequential dual write this wave removes.
+  const recordCaseDecision = async ({ caseId, outcome, outcomeNotes, warningDurationMonths }) => {
+    const current = casesRef.current.find(c => c.id === caseId);
+    const res = await recordCaseDecisionWrite({
+      supabase, caseId, outcome,
+      outcomeNotes: outcomeNotes || null,
+      warningDurationMonths: warningDurationMonths ?? null,
+      expectedUpdatedAt: current?.updatedAt || null,
+    });
+    if(res.result === DECISION_RESULT.OK) {
+      // Re-read rather than patch local state: the authoritative values
+      // (decided_at, expiry, the decision id) were derived server-side, so
+      // guessing them here would be a second, weaker copy of the truth.
+      await loadCasesFromDB();
+      await loadCaseDecisions();
+      await loadHrReviews();
+      return res;
+    }
+    if(res.result === DECISION_RESULT.CONFLICT) {
+      await loadCasesFromDB();
+      showToast("This case was updated — new information was added while you were working. We've refreshed it with the latest version.", "info");
+      return res;
+    }
+    // Generic failure messaging stays with the caller, exactly as it did before
+    // the cutover: saveCaseToDB owned the conflict toast, finalizeOutcome owned
+    // "Couldn't record the outcome". Moving it here would relocate UX that the
+    // modal's own tests pin.
+    return res;
+  };
+
   const loadHrReviews = async () => {
     if(!org?.id) return;
     try {
@@ -2824,7 +2887,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!org?.id) return;
     setDataLoadIssues([]);
     setCaseSignalsLoaded(false);
-    loadLocations(); loadOrganisationThemes(); loadCaseThemes(); loadOrgEvents(); loadImprovementInitiatives(); loadHrReviews(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadEmployeeActivities(); loadEmploymentEvents(); loadTeamMembers(); loadPendingInvites(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates();
+    loadLocations(); loadOrganisationThemes(); loadCaseThemes(); loadOrgEvents(); loadImprovementInitiatives(); loadHrReviews(); loadCaseDecisions(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadEmployeeActivities(); loadEmploymentEvents(); loadTeamMembers(); loadPendingInvites(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates();
     if(isHR) { loadWellbeingNotes(); loadManagerCapabilityInsights(); loadIntegrationEvents(); loadRedundancyCases(); }
   };
   useEffect(loadOrgData, [org?.id, isHR, user?.id]);
@@ -2870,6 +2933,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [resendingInviteId, setResendingInviteId] = useState(null);
   const [editingMember, setEditingMember] = useState(null);
   const [hrReviewRequests, setHrReviewRequests] = useState([]);
+  // WAVE D4.3 — authoritative decision history, org-scoped under RLS.
+  const [caseDecisions, setCaseDecisions] = useState([]);
   const [processTemplates, setProcessTemplates] = useState([]);
   const [acasData, setAcasData] = useState({});
   const [redundancyData, setRedundancyData] = useState({});
@@ -11699,6 +11764,7 @@ Please produce:
         <EmployeeFileScreen
           employeeId={activeEmployeeId}
           employeeRecords={employeeRecords}
+          caseDecisions={caseDecisions}
           employeeActivities={employeeActivities}
           employeeActivityRecords={employeeActivityRecords}
           onCreateActivity={(input)=>createActivityForEmployee(activeEmployeeId, input)}
@@ -12124,6 +12190,7 @@ Please produce:
           extendDsarRequest={extendDsarRequest}
           promptDialog={promptDialog}
           cases={cases}
+          caseDecisions={caseDecisions}
           employeeRecords={employeeRecords}
           starterInstances={starterInstances}
           leaverInstances={leaverInstances}
@@ -12320,24 +12387,19 @@ Please produce:
       {showOutcomeModal&&(
         <OutcomeModal
           cases={cases}
+          caseDecisions={caseDecisions}
           activeCaseId={activeCaseId}
           setShowOutcomeModal={setShowOutcomeModal}
           outcomeType={outcomeType}
           setOutcomeType={setOutcomeType}
           outcomeNotes={outcomeNotes}
           setOutcomeNotes={setOutcomeNotes}
-          saveCases={saveCases}
+          recordCaseDecision={recordCaseDecision}
           showToast={showToast}
-          
-          requestHrReview={requestHrReview}
           allegations={allegations}
           caseSignals={caseSignals}
           requestOverrideReason={requestOverrideReason}
           createCaseTask={createCaseTask}
-          
-          
-          audit={audit}
-          currentUserId={user?.id || null}
         />
       )}
       </div>

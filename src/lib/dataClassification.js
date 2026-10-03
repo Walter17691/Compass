@@ -192,15 +192,15 @@ export const TABLE_CLASSIFICATION = {
   case_themes: t('Links a case to an organisation theme.', C, { org: 1, case_: 1 }, D.INTERNAL_WITHHELD,
     { dsarNote: 'The join between a case and the org taxonomy. organisation_themes IS disclosed; this link table is not read by the DSAR compiler. Flagged for review, not silently dropped.' }),
   case_access: t('Explicit per-user grants of access to a case.', C, { org: 1, case_: 1 }, D.INCLUDED),
-  case_decisions: t('Authoritative decision-history events for a case (Wave D4.2).', C,
-    { org: 1, person: 1, case_: 1 }, D.INCLUDED_NOT_WIRED,
-    { dsarDefect: 'D4.3',
-      dsarNote: 'A decision about a person IS their personal data and is owed to them. '
-        + 'Classified included_not_wired rather than included because D4.2 is additive and '
-        + 'behaviour-preserving: nothing reads this table yet, and wiring it into '
-        + 'compileSubjectData would change Wave 0 disclosure in a slice forbidden from doing so. '
-        + 'D4.3 owns the cutover, at which point this becomes `included` and the DSAR invariant '
-        + 'will require the compiler to read it.' }),
+  case_decisions: t('Authoritative decision-history events for a case (Wave D4.2/D4.3).', C,
+    { org: 1, person: 1, case_: 1 }, D.INCLUDED,
+    { dsarNote: 'WAVE D4.3 — flipped from included_not_wired to included only once '
+        + 'compileSubjectData genuinely compiled it. Disclosed as the decision CHAIN, not a '
+        + 'second copy of the current position: the case disclosure already carries the head. '
+        + 'decided_by is withheld (an internal actor, as elsewhere in this compilation), '
+        + 'outcome_notes is review-required exactly as cases.outcomeNotes already is, unknown '
+        + 'decided_at stays null rather than being inferred, and a legacy_unmapped row is shown '
+        + 'as the string actually recorded with no reinterpretation.' }),
 
   // ── audit ──
   audit_log: t('Immutable action log; the deletion event itself survives as one row.', C, { org: 1, person: 1, case_: 1 }, D.INCLUDED),

@@ -29,7 +29,7 @@ function downloadJson(data, filename) {
   URL.revokeObjectURL(url);
 }
 
-function RequestDetail({ req, cases, employeeRecords, employeeActivities = [], employeeActivityRecords = [], employmentEvents = [], starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, dsarRequests, orgMembers, orgEvents, improvementInitiatives, managerCapabilityInsights, organisationThemes, caseAccess, redundancyCases, orgId, audit, updateDsarRequest, extendDsarRequest, promptDialog }) {
+function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employeeActivities = [], employeeActivityRecords = [], employmentEvents = [], starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, dsarRequests, orgMembers, orgEvents, improvementInitiatives, managerCapabilityInsights, organisationThemes, caseAccess, redundancyCases, orgId, audit, updateDsarRequest, extendDsarRequest, promptDialog }) {
   const [compiled, setCompiled] = useState(null);
   const [compiling, setCompiling] = useState(false);
 
@@ -80,6 +80,12 @@ function RequestDetail({ req, cases, employeeRecords, employeeActivities = [], e
       // Phase E1.6 — activities join subject data from day one rather than
       // becoming a blind spot discovered later. Selected by employee_id only.
       employeeActivities, employeeActivityRecords, employmentEvents,
+      // WAVE D4.3 — the authoritative decision history. Passed through the
+      // ordinary authenticated client like everything else here, so
+      // case_decisions' own RLS (which delegates to cases) decides what the
+      // person compiling the package may read. Completeness is never a reason
+      // to widen access, which is the same rule E2A applied to meetings.
+      caseDecisions,
       // Phase E2A — standaloneMeetings ARE now passed. The two reasons recorded
       // below for withholding them were both resolved by E2 (canonical
       // employee_id) and E2A (a content-bearing, RLS-scoped read). The original
@@ -355,7 +361,7 @@ function RequestDetail({ req, cases, employeeRecords, employeeActivities = [], e
   );
 }
 
-export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest, extendDsarRequest, promptDialog, cases, employeeRecords, employeeActivities = [], employeeActivityRecords = [], employmentEvents = [], starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, orgMembers, orgEvents, improvementInitiatives, managerCapabilityInsights, organisationThemes, caseAccess, redundancyCases, orgId, audit, setScreen }) {
+export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest, extendDsarRequest, promptDialog, cases, caseDecisions = [], employeeRecords, employeeActivities = [], employeeActivityRecords = [], employmentEvents = [], starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, orgMembers, orgEvents, improvementInitiatives, managerCapabilityInsights, organisationThemes, caseAccess, redundancyCases, orgId, audit, setScreen }) {
   const [form, setForm] = useState({ employeeId:null, employeeName:"", requestedBy:"", receivedDate:new Date().toISOString().split("T")[0] });
   // Explicit, and deliberately not inferred from an empty roster match.
   const [offRoster, setOffRoster] = useState(false);
@@ -446,7 +452,7 @@ export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest,
         ):(
           <div style={{background:COLOR.surface,border:`1px solid ${COLOR.border}`,borderRadius:RADIUS.surface,overflow:"hidden"}}>
             {visibleRequests.map(req=>(
-              <RequestDetail key={req.id} req={req} cases={cases} employeeRecords={employeeRecords} employeeActivities={employeeActivities} employeeActivityRecords={employeeActivityRecords} employmentEvents={employmentEvents} starterInstances={starterInstances} leaverInstances={leaverInstances} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} allegations={allegations} caseSignals={caseSignals} caseTasks={caseTasks} hrReviewRequests={hrReviewRequests} auditLog={auditLog} dsarRequests={dsarRequests} orgMembers={orgMembers} orgEvents={orgEvents} improvementInitiatives={improvementInitiatives} managerCapabilityInsights={managerCapabilityInsights} organisationThemes={organisationThemes} caseAccess={caseAccess} redundancyCases={redundancyCases} orgId={orgId} audit={audit} updateDsarRequest={updateDsarRequest} extendDsarRequest={extendDsarRequest} promptDialog={promptDialog}/>
+              <RequestDetail key={req.id} req={req} cases={cases} caseDecisions={caseDecisions} employeeRecords={employeeRecords} employeeActivities={employeeActivities} employeeActivityRecords={employeeActivityRecords} employmentEvents={employmentEvents} starterInstances={starterInstances} leaverInstances={leaverInstances} wellbeingNotes={wellbeingNotes} concernReferrals={concernReferrals} allegations={allegations} caseSignals={caseSignals} caseTasks={caseTasks} hrReviewRequests={hrReviewRequests} auditLog={auditLog} dsarRequests={dsarRequests} orgMembers={orgMembers} orgEvents={orgEvents} improvementInitiatives={improvementInitiatives} managerCapabilityInsights={managerCapabilityInsights} organisationThemes={organisationThemes} caseAccess={caseAccess} redundancyCases={redundancyCases} orgId={orgId} audit={audit} updateDsarRequest={updateDsarRequest} extendDsarRequest={extendDsarRequest} promptDialog={promptDialog}/>
             ))}
           </div>
         )}

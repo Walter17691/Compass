@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { buildEmployeeFile } from '../lib/employeeFile.js';
+import { decisionsFromCases } from './helpers/decisionsFromCases.js';
 import { resolvePrimaryAction, EMPLOYEE_FILE_ACTION, ACTION_PRIORITY, conversationIntents } from '../lib/employeeFileActions.js';
 import { ACTIVITY_TYPES } from '../lib/employeeActivities.js';
 
@@ -28,6 +29,12 @@ const employee = (over = {}) => ({
   locationId: 'loc-1', employmentStatus: 'active', ...over,
 });
 
+// D4.3 — caseDecisions is derived from the cases the test supplies, because the
+// authority for a warning is now the decision head and cases.* is its
+// projection. Without this, a fixture that says "closed with a first written
+// warning" would derive NO warning, and the assertions below would pass while
+// proving nothing — the exact failure mode this file's own comments warn about.
+// A test needing a chain passes caseDecisions explicitly.
 const build = (data = {}, viewer = { isHR: true }) => buildEmployeeFile(EMP, {
   employeeRecords: [employee(data.employeeOver)],
   cases: [], wellbeingNotes: [], concernReferrals: [], dsarRequests: [],
@@ -35,6 +42,7 @@ const build = (data = {}, viewer = { isHR: true }) => buildEmployeeFile(EMP, {
   employeeActivities: [], employeeActivityRecords: [], employmentEvents: [],
   now: NOW,
   ...data,
+  caseDecisions: data.caseDecisions ?? decisionsFromCases(data.cases),
 }, viewer);
 
 const act = (data, viewer) => resolvePrimaryAction(build(data, viewer), { now: NOW });

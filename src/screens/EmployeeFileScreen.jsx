@@ -40,6 +40,10 @@ export function EmployeeFileScreen({
   employeeId,
   employeeRecords = [],
   cases = [],
+  // WAVE D4.3 — the authoritative decision history for these cases, already
+  // RLS-filtered, loaded once in App.jsx. Current Warnings derives from this,
+  // not from the cases.* compatibility projection.
+  caseDecisions = [],
   wellbeingNotes = [],
   concernReferrals = [],
   dsarRequests = [],
@@ -78,8 +82,11 @@ export function EmployeeFileScreen({
   // Two focused modes, never a form living on Overview.
   const [employmentMode, setEmploymentMode] = useState(null);   // 'change' | 'leaver'
   const file = useMemo(
-    () => buildEmployeeFile(employeeId, { employeeRecords, cases, wellbeingNotes, concernReferrals, dsarRequests, dueSoon, allegations, employeeActivities, employeeActivityRecords, employmentEvents, locationName: (id) => locations.find(l => l.id === id)?.name || null }, { isHR, role }),
-    [employeeId, employeeRecords, cases, wellbeingNotes, concernReferrals, dsarRequests, dueSoon, allegations, employeeActivities, employeeActivityRecords, employmentEvents, locations, isHR, role]
+    // WAVE D4.3 — caseDecisions is the authoritative source for Current
+    // Warnings. Loaded once under RLS in App.jsx and threaded through, so there
+    // is no per-screen query and no second resolver.
+    () => buildEmployeeFile(employeeId, { employeeRecords, cases, caseDecisions, wellbeingNotes, concernReferrals, dsarRequests, dueSoon, allegations, employeeActivities, employeeActivityRecords, employmentEvents, locationName: (id) => locations.find(l => l.id === id)?.name || null }, { isHR, role }),
+    [employeeId, employeeRecords, cases, caseDecisions, wellbeingNotes, concernReferrals, dsarRequests, dueSoon, allegations, employeeActivities, employeeActivityRecords, employmentEvents, locations, isHR, role]
   );
 
   const tab = isEmployeeFileTab(activeTab) ? activeTab : "overview";
