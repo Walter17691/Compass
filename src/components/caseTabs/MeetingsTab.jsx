@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { isGrievanceCase } from '../../lib/caseStage';
-import { isTerminalStatus, signatureStatusLabel } from '../../lib/eSignature';
+import { isTerminalStatus, isConfirmationSettled, isExpired, signatureStatusLabel } from '../../lib/eSignature';
 import { meetingRecordState, meetingsSummary } from '../../lib/meetingRecordState';
 import { requestManualSignatureConfirmation } from '../../lib/humanOverride';
 import { SignedRecordModal } from '../SignedRecordModal';
@@ -50,7 +50,7 @@ const SUGGESTION_LABEL = {
 // Investigation meetings list (their natural narrative position, and
 // disciplinary-only — a grievance case never shows them) rather than
 // moving to Outcome, which is specifically about the decision itself.
-export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, onPresentMeetingRecord, meetingTypes, fmtDate, attemptSubmitInvestigation, concludingInvestigation, investigationReportDraft, setShowHandoffModal, setLetterOutput, onAcceptSavedSuggestion, onDismissSavedSuggestion, promptDialog, audit }) {
+export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, onPresentMeetingRecord, meetingTypes, fmtDate, attemptSubmitInvestigation, concludingInvestigation, investigationReportDraft, setShowHandoffModal, setLetterOutput, onAcceptSavedSuggestion, onDismissSavedSuggestion, promptDialog, audit, loadSignedSnapshot, proceedWithoutConfirmation, onResendReminder }) {
   const grievance = isGrievanceCase(cs);
   const meetings = cs.meetings||[];
   // Human UAT remediation, Batch 2, Part 9 — see SignedRecordModal's own
@@ -169,8 +169,14 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
               this is the one, durable, always-available place to see the
               signed copy itself, reading the exact fields the badge above
               already reads, not a second status source. */}
+          {/* Pre-V1 Trust Slice — reachable for a DISPUTE too: when a participant
+              disagrees, the issued document and their comments are exactly what
+              a reviewer most needs to see. The label follows the state rather
+              than claiming a signature in every case. */}
           {m.record&&m.signStatus&&isTerminalStatus(m.signStatus)&&m.signStatus!=="declined"&&(
-            <button onClick={()=>setViewingSignedMeeting(m)} style={{fontSize:11,background:"#E8F5EE",border:"1px solid #A8D5B5",borderRadius:6,padding:"4px 10px",color:"#1A7A4A",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500}}>View signed copy</button>
+            <button onClick={()=>setViewingSignedMeeting(m)} style={{fontSize:11,background: m.signStatus==="disputed"?"#FEF5E7":"#E8F5EE",border:`1px solid ${m.signStatus==="disputed"?"#F5E6C4":"#A8D5B5"}`,borderRadius:6,padding:"4px 10px",color: m.signStatus==="disputed"?"#7A5C1A":"#1A7A4A",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500}}>
+              {m.signStatus==="disputed"?"View issued record & comments":m.signStatus==="proceeded"?"View issued record":m.signStatus==="acknowledged"?"View acknowledged copy":"View signed copy"}
+            </button>
           )}
         </div>
       </div>
@@ -182,7 +188,38 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
         <div style={{fontSize:11,color:"#8A8EA3",marginTop:4}}>
           {m.signStatus==="declined"
             ? <>Declined{m.signerName?` by ${m.signerName}`:""}{m.signedAt?` on ${fmtDate(m.signedAt)}`:""}{m.declineReason?`: "${m.declineReason}"`:""}</>
-            : <>{signatureStatusLabel(m.signStatus)}{m.signerName?` by ${m.signerName}`:""}{m.signedAt?` on ${fmtDate(m.signedAt)}`:""}</>}
+            : m.signStatus==="disputed"
+              ? <>Participant responded with comments{m.participantCommentAt?` on ${fmtDate(m.participantCommentAt)}`:""} — the record was not changed by their comments</>
+              : m.signStatus==="proceeded"
+                ? <>Proceeded without confirmation{m.proceededAt?` on ${fmtDate(m.proceededAt)}`:""}{m.proceededFromStatus?` — was ${m.proceededFromStatus}`:""}</>
+                : <>{signatureStatusLabel(m.signStatus)}{m.signerName?` by ${m.signerName}`:""}{m.signedAt?` on ${fmtDate(m.signedAt)}`:""}</>}
+        </div>
+      )}
+      {/* ── CONFIRMATION OUTSTANDING ────────────────────────────────────────
+          One line of state and at most two actions, never a signature dashboard.
+          Shown only while the participant has neither responded nor been
+          proceeded past, so a settled record carries no call to action at all.
+
+          Compass states elapsed facts and does not judge them: it never says the
+          opportunity was reasonable, or suggests proceeding. That decision, and
+          its reason, belong to the human who records it. */}
+      {m.record&&m.signId&&!isConfirmationSettled(m.signStatus)&&(
+        <div style={{marginTop:8,background:"#F6F5FA",border:"1px solid #E8EAF2",borderRadius:8,padding:"10px 12px"}}>
+          <div style={{fontSize:12,color:"#4A4E63",lineHeight:1.6}}>
+            {m.expiresAt&&isExpired(m.expiresAt)
+              ? <>Sent for confirmation. <strong>The link has expired</strong> without a response.</>
+              : m.signStatus==="opened"
+                ? <>Sent for confirmation — opened, but no response yet.</>
+                : <>Sent for confirmation — no response yet.</>}
+          </div>
+          <div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
+            {!(m.expiresAt&&isExpired(m.expiresAt))&&onResendReminder&&(
+              <button onClick={()=>onResendReminder(cs,m)} style={{fontSize:11,background:"none",border:"1px solid #E8EAF2",borderRadius:6,padding:"4px 10px",color:"#4A4E63",cursor:"pointer",fontFamily:FONT.sans}}>Send reminder</button>
+            )}
+            {proceedWithoutConfirmation&&(
+              <button onClick={()=>proceedWithoutConfirmation(cs,m)} style={{fontSize:11,background:"none",border:"1px solid #E8EAF2",borderRadius:6,padding:"4px 10px",color:"#4A4E63",cursor:"pointer",fontFamily:FONT.sans}}>Proceed without confirmation</button>
+            )}
+          </div>
         </div>
       )}
       {!m.record&&(m.agenda||m.prepQuestions?.length>0||m.attendees?.length>0)&&<ScheduledMeetingDetails m={m}/>}
@@ -298,7 +335,7 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
           )}
         </>
       )}
-      {viewingSignedMeeting&&<SignedRecordModal meeting={viewingSignedMeeting} fmtDate={fmtDate} onClose={()=>setViewingSignedMeeting(null)}/>}
+      {viewingSignedMeeting&&<SignedRecordModal meeting={viewingSignedMeeting} fmtDate={fmtDate} loadSignedSnapshot={loadSignedSnapshot} onClose={()=>setViewingSignedMeeting(null)}/>}
     </>
   );
 }

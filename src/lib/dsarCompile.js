@@ -3,6 +3,7 @@ import { MEETING_SUBJECT_KIND } from './standaloneMeetings.js';
 import { splitMeetingRecord } from './meetingRecordSections.js';
 import { disclosableCase, summariseCaseDisclosure, MEETING_WITHHELD_INTERNAL } from './dsarCaseDisclosure.js';
 import { disclosableAllegation, summariseAllegationDisclosure } from './dsarAllegationDisclosure.js';
+import { disclosableSigningRequest, summariseSigningDisclosure } from './dsarSigningDisclosure.js';
 
 // Every free-text allegation field that can mention a person. Used by BOTH
 // third-party scans — the subject's own allegations, and the subject appearing
@@ -566,9 +567,25 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
   // was previously invisible here since only employee_name was ever
   // matched, even though the document, their own name, and their own
   // signature/decline are just as much their personal data.
-  const subjectSigningRequests = signingRequests.filter(s => s.employee_name === employeeName || s.manager_name === employeeName);
+  // Pre-V1 Trust Slice — projected per subject ROLE, not emitted raw.
+  //
+  // The filter is unchanged (the sender is still a legitimate subject of their
+  // own sending), but the two roles no longer receive the same thing: a sender
+  // gets the procedural facts, while the signer's document, signature, decline
+  // reason and comments stay with the signer. See dsarSigningDisclosure.js.
+  const subjectSigningRows = signingRequests.filter(s => s.employee_name === employeeName || s.manager_name === employeeName);
+  const subjectSigningRequests = subjectSigningRows.map(s => disclosableSigningRequest(s, {
+    // Signer wins when the same person is both, which is the safe direction:
+    // they are entitled to everything in that row either way.
+    subjectIsSigner: s.employee_name === employeeName,
+  })).filter(Boolean);
+  const signingDisclosure = summariseSigningDisclosure(subjectSigningRequests);
   const subjectPortalAccounts = portalAccounts.filter(p => p.employee_name === employeeName);
-  subjectSigningRequests.forEach(s => scanText(s.document, { field: 'signingRequest.document', signId: s.sign_id }));
+  // Scans the RAW rows deliberately: the scan's job is to notice other people
+  // named in the document, and it must still do that for a row whose document
+  // the projection above withholds from this subject.
+  subjectSigningRows.forEach(s => scanText(s.document, { field: 'signingRequest.document', signId: s.sign_id }));
+  subjectSigningRows.forEach(s => scanText(s.participant_comment, { field: 'signingRequest.participantComment', signId: s.sign_id }));
 
   // Organisational Intelligence surface (org_events, improvement
   // initiatives, manager capability insights, organisation themes) —
@@ -814,6 +831,7 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
     hrReviewRequests: subjectHrReviewRequests,
     auditLog: subjectAuditLog,
     signingRequests: subjectSigningRequests,
+    signingDisclosure,
     portalAccounts: subjectPortalAccounts,
     dsarRequests: subjectDsarRequests,
     orgMembership: subjectOrgMembership,

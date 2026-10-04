@@ -120,6 +120,19 @@
         <button class="btn" id="ack-btn" onclick="submitAcknowledgement()">Acknowledge</button>
       </div>
 
+      <!-- Pre-V1 Trust Slice — until now the ONLY thing a participant could
+           author was a decline reason, reachable only by refusing. Someone who
+           accepted the record but thought part of it was wrong had nowhere to
+           say so, so disagreement was pushed into a refusal. This box is
+           available with every outcome, and is explicit that the record itself
+           is not rewritten by it. -->
+      <div id="comment-section" class="card no-print">
+        <h2>Anything you want to add?</h2>
+        <p style="font-size:13px;color:var(--ink-soft);margin-bottom:12px">Optional. If something here is wrong, incomplete, or not how you remember it, say so. Your comments are kept with this record and shown to your employer alongside it. The record itself will not be changed or rewritten.</p>
+        <label class="label" for="participant-comment" style="margin-bottom:8px">Your comments</label>
+        <textarea id="participant-comment" rows="4" placeholder="e.g. I did say I had asked for the rota change in writing, and that is not in the notes"></textarea>
+      </div>
+
       <div id="sign-section" class="card no-print">
         <h2>Your Signature</h2>
         <p style="font-size:13px;color:var(--ink-soft);margin-bottom:16px">By signing below you confirm you have read and received a copy of this document. Your signature does not necessarily indicate agreement with its contents.</p>
@@ -135,6 +148,8 @@
           <textarea id="decline-reason" rows="3" placeholder="Let your manager know why"></textarea>
           <button class="btn" id="decline-submit-btn" onclick="submitDecline()" style="background:var(--red)">Confirm decline</button>
         </div>
+        <!-- The middle option that did not exist: received, but not agreed. -->
+        <button class="btn-ghost" id="dispute-btn" onclick="submitDispute()">I received this but disagree with part of it</button>
       </div>
 
       <div id="signed-section" style="display:none" class="card">
@@ -258,20 +273,31 @@
       document.getElementById('ack-section').style.display = 'none';
       document.getElementById('sign-section').style.display = 'none';
       document.getElementById('decline-section').style.display = 'none';
+      // The comment box is an action surface too — leaving it visible after the
+      // outcome is recorded would invite someone to type into a box that no
+      // longer goes anywhere.
+      const c = document.getElementById('comment-section');
+      if (c) c.style.display = 'none';
     }
 
     function showCompleted(data) {
       hideActionSections();
       document.getElementById('signed-section').style.display = 'block';
       const acknowledged = data.status === 'acknowledged';
-      document.getElementById('status-badge').innerHTML = '<span class="status-done">✓ ' + (acknowledged ? 'Acknowledged' : 'Signed') + '</span>';
-      document.getElementById('signed-badge').textContent = acknowledged ? '✓ Acknowledged' : '✓ Signed';
-      document.getElementById('signed-heading').textContent = 'Document ' + (acknowledged ? 'acknowledged' : 'signed') + ' successfully';
+      // A dispute is a RESPONSE, not a signature. It must never be confirmed back
+      // to the participant with wording that suggests they agreed to anything.
+      const disputed = data.status === 'disputed';
+      const word = disputed ? 'Comments submitted' : acknowledged ? 'Acknowledged' : 'Signed';
+      document.getElementById('status-badge').innerHTML = '<span class="status-done">✓ ' + word + '</span>';
+      document.getElementById('signed-badge').textContent = '✓ ' + word;
+      document.getElementById('signed-heading').textContent = disputed
+        ? 'Your comments have been sent'
+        : 'Document ' + (acknowledged ? 'acknowledged' : 'signed') + ' successfully';
       const d = data.signed_at ? new Date(data.signed_at).toLocaleString('en-GB', {day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
       document.getElementById('signed-date').textContent = d;
-      if (acknowledged || !data.signature) {
+      if (acknowledged || disputed || !data.signature) {
         document.getElementById('sig-image-wrap').style.display = 'none';
-        document.getElementById('download-btn').style.display = acknowledged ? 'none' : 'block';
+        document.getElementById('download-btn').style.display = (acknowledged || disputed) ? 'none' : 'block';
       } else {
         document.getElementById('sig-image').src = data.signature;
       }
@@ -344,7 +370,7 @@
       fetch('/api/signing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signId, signature: sigData, signedAt: new Date().toISOString() })
+        body: JSON.stringify({ signId, signature: sigData, signedAt: new Date().toISOString(), participantComment: participantComment() })
       })
       .then(r => r.json())
       .then(() => {
@@ -363,7 +389,7 @@
       fetch('/api/signing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signId, acknowledged: true, signedAt: new Date().toISOString() })
+        body: JSON.stringify({ signId, acknowledged: true, signedAt: new Date().toISOString(), participantComment: participantComment() })
       })
       .then(r => r.json())
       .then(() => {
@@ -372,6 +398,45 @@
         showCompleted(docData);
       })
       .catch(() => { btn.disabled = false; btn.textContent = 'Acknowledge'; alert('Something went wrong. Please try again.'); });
+    }
+
+    // The participant's own words, read once and shared by every outcome below.
+    // Trimmed and capped client-side as a courtesy; api/signing.js caps it again,
+    // because a client-side limit is not a limit.
+    function participantComment() {
+      const el = document.getElementById('participant-comment');
+      return el ? el.value.trim().slice(0, 5000) : '';
+    }
+
+    // RECEIVED, BUT NOT AGREED. The outcome that did not exist: previously a
+    // participant who disagreed had to either decline outright (which reads as
+    // refusing the process) or sign something they thought was wrong.
+    //
+    // A comment is REQUIRED here — "I disagree" with nothing after it gives the
+    // employer nothing to act on, and the server enforces the same rule.
+    function submitDispute() {
+      const comment = participantComment();
+      if (!comment) {
+        document.getElementById('participant-comment').focus();
+        alert('Please say what you disagree with in the comments box above, then submit again.');
+        return;
+      }
+      const btn = document.getElementById('dispute-btn');
+      btn.disabled = true;
+      btn.textContent = 'Submitting...';
+      fetch('/api/signing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signId, disputed: true, participantComment: comment, signedAt: new Date().toISOString() })
+      })
+      .then(r => r.json().then(d => ({ ok: r.ok, d })))
+      .then(({ ok, d }) => {
+        if (!ok) { btn.disabled = false; btn.textContent = 'I received this but disagree with part of it'; alert(d.error || 'Something went wrong. Please try again.'); return; }
+        docData.status = 'disputed';
+        docData.participant_comment = comment;
+        showCompleted(docData);
+      })
+      .catch(() => { btn.disabled = false; btn.textContent = 'I received this but disagree with part of it'; alert('Something went wrong. Please try again.'); });
     }
 
     function toggleDecline() {
@@ -390,7 +455,7 @@
       fetch('/api/signing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signId, declined: true, declineReason: reason, signedAt: new Date().toISOString() })
+        body: JSON.stringify({ signId, declined: true, declineReason: reason, signedAt: new Date().toISOString(), participantComment: participantComment() })
       })
       .then(r => r.json())
       .then(() => { showDeclined(); })

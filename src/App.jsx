@@ -53,7 +53,7 @@ import { computeChangesSinceView, isNonTrivialChange } from './lib/caseViews';
 import { buildCaseTimeline } from './lib/caseTimeline';
 import { withFkRetry } from './lib/retryOnFkRace';
 import { conditionalUpdate, enqueueSave, withTransientRetry } from './lib/optimisticSave';
-import { requestOverride, requestPolicyDeviation, requestLateAppealAcceptance } from './lib/humanOverride';
+import { requestOverride, requestPolicyDeviation, requestLateAppealAcceptance, requestProceedWithoutConfirmation } from './lib/humanOverride';
 import { caseRoleLabel } from './lib/caseRoles';
 import { getProcessType, stageLabel } from './lib/processStages';
 import { setEmployeeLocationWrite, describeLocationOutcome } from './lib/employeeLocationWrites';
@@ -71,7 +71,7 @@ import { EvidenceDropzone } from './components/EvidenceDropzone';
 import { buildCaseContext, meetingsNeedingSummary, buildOverviewSourceRefs, stripAdvisorNotes } from './lib/caseContext';
 import { canAnalyseEvidence, buildAnalysisContent } from './lib/documentIngestion';
 import { OH_REPORT_SYSTEM_PROMPT, buildOhFindings, ohFindingTaskName } from './lib/ohReportIntelligence';
-import { isTerminalStatus, signatureStatusLabel } from './lib/eSignature';
+import { isTerminalStatus, isExpired, isConfirmationSettled, signatureStatusLabel } from './lib/eSignature';
 import { parseCommitmentDueDate, suggestTaskOwner } from './lib/taskDueDateParsing';
 import { derivePeopleForCase } from './lib/casePeople';
 import { matchCaseByEmployeeName, matchCaseByEmployeeNameWithConfidence } from './lib/globalAssistant';
@@ -94,6 +94,7 @@ import { MEETING_SUBJECT_KIND } from './lib/standaloneMeetings';
 import { startStandaloneMeeting, endStandaloneMeeting, persistStandaloneReviewDraft, persistStandaloneTranscript, fetchStandaloneMeeting, describeStandaloneFailure, STANDALONE_FAILURE } from './lib/standaloneMeetingWrites';
 import { buildReviewDraft, restorableDraft, markDraftEdited, supersedeReviewDraft } from './lib/reviewDraft';
 import { splitMeetingRecord } from './lib/meetingRecordSections';
+import { employeeFacingSnapshot } from './lib/signedSnapshot';
 import { mergeSuggestions, suggestionKey } from './lib/suggestionIdentity';
 import { appealLinkCandidates } from './lib/appealLink';
 import { reconcileCaseEmployeeWrite, describeReconcileOutcome, shouldReloadAfter, correctCaseEmployeeWrite, describeCorrectionOutcome, CORRECT_RESULT } from './lib/reconciliationWrites';
@@ -1657,6 +1658,74 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       && typeof m.record === "string" && m.record.trim().length > 0;
   };
 
+  // ── THE AUTHORITATIVE SIGNED DOCUMENT ──────────────────────────────────
+  //
+  // signing_requests.document is written once when the request is created and
+  // never patched, so it is the only trustworthy answer to "what did this person
+  // actually sign". The internal=1 GET is already an org-scoped authenticated
+  // read (it verifies membership AND that the row belongs to the caller's org),
+  // and it deliberately never advances sent -> opened, so HR retrieving a signed
+  // copy cannot fabricate evidence that the employee opened it.
+  //
+  // Returns null on any failure. The caller must say "could not retrieve" rather
+  // than substituting the current record — substituting is the defect.
+  const loadSignedSnapshot = async (signId) => {
+    if(!signId || !org?.id) return null;
+    try {
+      const res = await authedFetch(`/api/signing?signId=${encodeURIComponent(signId)}&internal=1&orgId=${encodeURIComponent(org.id)}`);
+      if(!res.ok) return null;
+      return await res.json();
+    } catch(e) {
+      console.error('loadSignedSnapshot', e);
+      return null;
+    }
+  };
+
+  // ── PROCEED AFTER REASONABLE OPPORTUNITY ───────────────────────────────
+  //
+  // The human decides; Compass records. The actor and timestamp are derived
+  // server-side in api/signing.js from the verified session — this client sends
+  // only the request id and the reason, and could not forge provenance if it
+  // tried. The reason is required by the prompt AND by the handler AND by a
+  // CHECK constraint, because three layers is what it takes for "we recorded
+  // why" to be a promise rather than a hope.
+  const proceedWithoutConfirmation = async (cs, meeting) => {
+    if(!meeting?.signId) { showToast("This record has no confirmation request to proceed without.", "error"); return false; }
+    const daysOutstanding = meeting.signedAt ? null : (() => {
+      const sent = meeting.sentForSignatureAt || meeting.signSentAt || null;
+      if(!sent) return null;
+      return Math.max(0, Math.round((Date.now() - new Date(sent).getTime()) / 86400000));
+    })();
+    const reason = await requestProceedWithoutConfirmation(promptDialog, {
+      itemLabel: `${meeting.type || "Meeting"} record`,
+      priorStatus: meeting.signStatus || null,
+      sentAt: meeting.sentForSignatureAt || meeting.signSentAt || null,
+      daysOutstanding,
+    });
+    if(!reason) return false;
+    try {
+      const res = await authedFetch("/api/signing", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ signId: meeting.signId, proceed: true, proceedReason: reason, orgId: org?.id }),
+      });
+      const data = await res.json().catch(()=>({}));
+      if(!res.ok) { showToast(data.error || "Couldn't record that decision — please try again.", "error"); return false; }
+      if(data.alreadyProceeded) { showToast("That decision was already recorded."); return true; }
+      // The audit row carries WHAT was proceeded past, not just that something
+      // was. "Proceeded over a refusal" and "proceeded over silence" are
+      // different facts and a reader needs to tell them apart.
+      audit("Proceeded without participant confirmation",
+        `${meeting.type || "Meeting"} record — was ${data.proceededFromStatus || meeting.signStatus || "unconfirmed"} — reason: ${reason}`,
+        cs?.id || null);
+      showToast("Decision recorded — the case can continue.");
+      return true;
+    } catch(e) {
+      console.error('proceedWithoutConfirmation', e);
+      showToast("Couldn't record that decision — please try again.", "error");
+      return false;
+    }
+  };
+
   const sendDocumentForSignature = async ({ document, employeeEmail, employeeName, managerName, managerEmail, documentType, documentLabel, documentDate, requiresSignature=true, caseId, letterType }) => {
     if(!employeeEmail||!document) return { success:false };
 
@@ -1720,6 +1789,26 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       if(!statusRes.ok) { showToast("Couldn't find that signing request", "error"); return { success:false }; }
       const request = await statusRes.json();
       if(!request.employee_email) { showToast("No email on file for this reminder — resend manually from the meeting", "error"); return { success:false }; }
+
+      // Pre-V1 Trust Slice — NEVER CHASE A DEAD LINK.
+      //
+      // This used to email the original link regardless of its expiry, and never
+      // extended expires_at. A reminder sent on day 8 therefore delivered a URL
+      // that api/signing.js would immediately flip to 'expired' the moment the
+      // employee clicked it: the employee was asked again, tried, and was told
+      // the document was no longer available. That is worse than not chasing.
+      //
+      // Compass does not silently extend the window either — an extension is a
+      // decision about how long someone is given, so it stays with the human and
+      // is handled by the explicit re-send path, not smuggled into a reminder.
+      if(isTerminalStatus(request.status)) {
+        showToast("That request is already closed — no reminder sent.", "error");
+        return { success:false, reason:"not_open" };
+      }
+      if(isExpired(request.expires_at)) {
+        showToast("That signing link has expired, so a reminder would not work. Send the record again, or record a decision to proceed without confirmation.", "error");
+        return { success:false, reason:"expired" };
+      }
       const res = await authedFetch("/api/send-for-signature", {
         method: "POST", headers: {"Content-Type":"application/json"},
         body: JSON.stringify({
@@ -1778,22 +1867,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       setPendingSignature(null);
       return;
     }
-    const document = (()=>{
-      // The AUTHORITATIVE persisted record, never the local generated text —
-      // otherwise an edit made after the save could be emailed while the case
-      // file said something different.
-      //
-      // And employee-facing only. The saved record has held just that half since
-      // the boundary fix, but legacy records (the 884 that predate it) still
-      // carry both mixed, so this splits rather than trusting the shape.
-      const full = splitMeetingRecord(signMeeting.record).employeeFacing;
-      const start = full.indexOf("## Meeting Details");
-      const advisorCut = full.indexOf("## HR Advisor");
-      const keyCut = full.indexOf("\n## Key Points");
-      const end = advisorCut>-1 ? advisorCut : keyCut>-1 ? keyCut : undefined;
-      const raw = start>-1 ? full.slice(start, end) : full.slice(0, advisorCut>-1?advisorCut:undefined);
-      return raw.replace(/^## /gm,"").replace(/^# /gm,"").replace(/\*\*/g,"");
-    })();
+    // The AUTHORITATIVE persisted record, never the local generated text —
+    // otherwise an edit made after the save could be emailed while the case file
+    // said something different. Employee-facing only; see signedSnapshot.js,
+    // which is now the single home for this derivation.
+    const document = employeeFacingSnapshot(signMeeting.record);
     const { success, signId } = await sendDocumentForSignature({
       document, employeeEmail,
       employeeName: caseInfo.employee||"Employee",
@@ -3727,15 +3805,29 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
           // nothing else to confirm is what UAT flagged as effectively
           // inaccessible — the case owner needs the same detail an
           // outcome letter's signature record already shows.
-          return data.status && data.status !== m.signStatus
-            ? { id: m.id, status: data.status, signedAt: data.signed_at || data.declined_at || null, signature: data.signature || null, signerName: data.employee_name || null, declineReason: data.decline_reason || null }
+          // Pre-V1 Trust Slice — expiresAt and the participant's comment now come
+          // down too. Without expiresAt the client had nothing to compute expiry
+          // from, so effectiveStatus() could never return 'expired' and a case
+          // showed "awaiting signature" indefinitely against a dead link.
+          const changed = data.status !== m.signStatus
+            || (data.expires_at || null) !== (m.expiresAt || null)
+            || (data.participant_comment || null) !== (m.participantComment || null)
+            || (data.proceeded_at || null) !== (m.proceededAt || null);
+          return data.status && changed
+            ? { id: m.id, status: data.status, signedAt: data.signed_at || data.declined_at || null, signature: data.signature || null, signerName: data.employee_name || null, declineReason: data.decline_reason || null,
+                expiresAt: data.expires_at || null,
+                participantComment: data.participant_comment || null,
+                participantCommentAt: data.participant_comment_at || null,
+                proceededAt: data.proceeded_at || null,
+                proceedReason: data.proceed_reason || null,
+                proceededFromStatus: data.proceeded_from_status || null }
             : null;
         } catch { return null; }
       }))).filter(Boolean);
       if (cancelled || !changes.length) return;
       const changeMap = new Map(changes.map(c => [c.id, c]));
       const updated = cases.map(c => c.id === activeCaseId
-        ? { ...c, meetings: c.meetings.map(m => changeMap.has(m.id) ? { ...m, signStatus: changeMap.get(m.id).status, signedAt: changeMap.get(m.id).signedAt, signature: changeMap.get(m.id).signature, signerName: changeMap.get(m.id).signerName, declineReason: changeMap.get(m.id).declineReason } : m) }
+        ? { ...c, meetings: c.meetings.map(m => changeMap.has(m.id) ? { ...m, signStatus: changeMap.get(m.id).status, signedAt: changeMap.get(m.id).signedAt, signature: changeMap.get(m.id).signature, signerName: changeMap.get(m.id).signerName, declineReason: changeMap.get(m.id).declineReason, expiresAt: changeMap.get(m.id).expiresAt, participantComment: changeMap.get(m.id).participantComment, participantCommentAt: changeMap.get(m.id).participantCommentAt, proceededAt: changeMap.get(m.id).proceededAt, proceedReason: changeMap.get(m.id).proceedReason, proceededFromStatus: changeMap.get(m.id).proceededFromStatus } : m) }
         : c);
       // Human UAT remediation, Batch 1, Issue 3 — signature completion had
       // no notification/activity/Timeline event at all. Logged here, not
@@ -9300,20 +9392,12 @@ Please produce:
       // the whole draft would duplicate the record inside a JSONB column that
       // already carries record, summary, transcript and signDocument.
       ...(lifecycleMeetingId ? { reviewDraft: supersedeReviewDraft(draftMetaRef.current) } : {}),
-      signDocument: (()=>{
-        // employeeFacing, not reviewOutput: the old code relied on an exact
-        // indexOf("## HR Advisor") further down, which a heading variant would
-        // have defeated — and internal advice would then have reached the
-        // employee. The split is now the boundary; the cut below stays as a
-        // second line of defence for legacy records.
-        const full = splitMeetingRecord(reviewOutput).employeeFacing;
-        const start = full.indexOf("## Meeting Details");
-        const advisorCut = full.indexOf("## HR Advisor");
-        const keyCut = full.indexOf("\n## Key Points");
-        const end = advisorCut>-1 ? advisorCut : keyCut>-1 ? keyCut : undefined;
-        const raw = start>-1 ? full.slice(start, end) : full.slice(0, advisorCut>-1?advisorCut:undefined);
-        return raw.replace(/^## /gm,"").replace(/^# /gm,"").replace(/\*\*/g,"");
-      })(),
+      // employeeFacing, not reviewOutput's raw text: internal advice must never
+      // reach the employee. Same derivation as the send path, now shared — see
+      // signedSnapshot.js. NOTE this is the "what we would send" draft, NOT the
+      // authoritative signed copy: that is signing_requests.document, which is
+      // written once and never patched.
+      signDocument: employeeFacingSnapshot(reviewOutput),
       letterOutput,
       // Human UAT remediation, Batch 2 hardening — letterOutput alone never
       // recorded which letter category produced it (outcome vs invite vs
@@ -9445,6 +9529,36 @@ Please produce:
     // Release 1 Phase 2.1 — identity and provenance stamped once, at
     // creation. caseId makes the meeting's parent an intrinsic property of
     // the record rather than something later readers have to re-derive.
+    // ── AMENDING A RECORD THE PARTICIPANT HAS ALREADY CONFIRMED ───────────
+    //
+    // The save path permits COMPLETED -> COMPLETED, which is what makes
+    // legitimate corrections possible — and also what allowed a signed record's
+    // text to change with nothing but a generic "Meeting saved" row to show it.
+    // Corrections stay possible. What changes is that an amendment to a CONFIRMED
+    // record is now a named, reasoned, separately-auditable act.
+    //
+    // THE SIGNED COPY IS NOT AT RISK EITHER WAY: signing_requests.document is
+    // written once and never patched, and the Signed copy view reads that. This
+    // guard protects the TRACE — who changed the working record after the
+    // participant had agreed to it, and why.
+    const priorMeeting = existing ? (existing.meetings||[]).find(x => x && x.id === meeting.id) : null;
+    const priorSettled = isConfirmationSettled(priorMeeting?.signStatus);
+    const recordChanging = priorSettled
+      && typeof meeting.record === "string"
+      && typeof priorMeeting.record === "string"
+      && employeeFacingSnapshot(meeting.record).trim() !== employeeFacingSnapshot(priorMeeting.record).trim();
+    let amendmentReason = null;
+    if(recordChanging) {
+      const values = await promptDialog({
+        title: "Amend a confirmed record?",
+        message: `This record was already ${signatureStatusLabel(priorMeeting.signStatus)||"confirmed"} by the participant. The copy they were sent is kept exactly as it was and is still viewable — but the case file's working record will now say something different. Record why it is being changed.`,
+        fields: [{ key:"reason", label:"Why is this record being amended?", required:true, placeholder:"e.g. Corrected the date of the second incident — typed as 3 March, should be 13 March" }],
+        confirmLabel: "Amend record",
+      });
+      const reason = (values?.reason||"").trim();
+      if(!reason) { showToast("Amendment cancelled — the record is unchanged."); return { ok:false, reason:"amendment_cancelled" }; }
+      amendmentReason = reason;
+    }
     const stampedMeeting = stampNewMeeting(meeting, { caseId, by: currentUser?.name || "HR Manager" });
     const newCase = existing
       ? null
@@ -9554,6 +9668,14 @@ Please produce:
     audit(isAppealMeeting
       ? (isLetterOnlySave ? "Appeal hearing invitation saved" : "Appeal hearing recorded")
       : (isLetterOnlySave ? "Letter saved to case" : "Meeting saved"), `${caseInfo.employee} — ${meetingType?.label}`, caseId);
+    // A distinct, filterable action. "Meeting saved" fires for every save and
+    // could never answer "was a confirmed record changed, and why" — which is
+    // the question a reader of this case will actually ask.
+    if(amendmentReason) {
+      audit("Confirmed record amended",
+        `${meetingType?.label || "Meeting"} record — was ${priorMeeting?.signStatus || "confirmed"} — reason: ${amendmentReason}`,
+        caseId);
+    }
     // Human UAT remediation, Batch 1, Issue 4 — distinct from the generic
     // "Meeting saved" above (which fires for every save, signature-bound
     // or not): a dedicated Timeline/audit entry specifically for "this
@@ -12049,7 +12171,7 @@ Please produce:
             processTemplates, unansweredCovered, unansweredLoading, generateUnansweredQuestions,
             generateInconsistencies, inconsistencyLoading, ohReportFindings, ohReportAnalysisLoading,
             onAnalyseOhReport: analyseOhReport, onAcceptOhFinding: acceptOhFinding, onDismissOhFinding: dismissOhFinding,
-            onSendForSignature: sendDocumentForSignature, automationLevels, onResendReminder: resendSignatureReminder,
+            onSendForSignature: sendDocumentForSignature, automationLevels, onResendReminder: resendSignatureReminder, loadSignedSnapshot, proceedWithoutConfirmation,
           }}
           timeline={{ toggleTimelineExclude, editTimelineDescription, generateTimelineRelevance, timelineRelevanceLoading, loadJsPDF }}
           allegationsTab={{

@@ -102,15 +102,32 @@ describe('SIGNATURE IS NOT A PREREQUISITE — and refusal is not a dead end', ()
       expect(canRecordOutcome(cs, 'disciplinary')).toBe(true);
     });
 
-  it.each(['declined', 'expired', 'signed', 'acknowledged'])(
-    'the workflow moves past a TERMINAL signature state (%s) instead of repeating it forever', status => {
+  // Pre-V1 Trust Slice — this list was keyed on TERMINAL, and `expired` is
+  // terminal. So an ignored request moved the workflow on, which is "silence
+  // authorises progression": the participant was asked, said nothing, and the
+  // process advanced as though that were an answer.
+  //
+  // The predicate is now SETTLED: the participant engaged, or a named human
+  // recorded a decision to proceed. `expired` moves to the asks-first group
+  // below, and the two states that mean a real response join this one.
+  it.each(['declined', 'disputed', 'proceeded', 'signed', 'acknowledged'])(
+    'the workflow moves past a SETTLED signature state (%s) instead of repeating it forever', status => {
       const cs = { ...PHASE_3A, meetings: [{ ...PHASE_3A.meetings[0], signStatus: status }] };
       expect(getNextStep(cs).action).toBe('outcome');
     });
 
-  it.each(['sent', 'opened'])('a non-terminal signature state (%s) still asks for the record first', status => {
+  it.each(['sent', 'opened', 'expired'])('an UNSETTLED signature state (%s) still asks for the record first', status => {
     const cs = { ...PHASE_3A, meetings: [{ ...PHASE_3A.meetings[0], signStatus: status }] };
     expect(getNextStep(cs).action).toBe('send_signature');
+  });
+
+  it('expiry asks again rather than progressing — but never blocks RECORDING a decision', () => {
+    // The two halves of section 8 held apart: the confirmation lifecycle gates
+    // the suggested next step; it has never gated the decision itself, and must
+    // not start to.
+    const cs = { ...PHASE_3A, meetings: [{ ...PHASE_3A.meetings[0], signStatus: 'expired' }] };
+    expect(getNextStep(cs).action).toBe('send_signature');
+    expect(canRecordOutcome(cs, 'disciplinary')).toBe(true);
   });
 });
 

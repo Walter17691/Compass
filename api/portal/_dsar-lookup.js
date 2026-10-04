@@ -72,7 +72,7 @@ export async function dsarLookup(req, res) {
     // org-wide exportAllData call shape this endpoint exists to serve, so
     // silent truncation here meant a "complete" GDPR export wasn't.
     const { data: signingRequests } = await fetchAllPagesServer(
-      `signing_requests?org_id=eq.${encodeURIComponent(orgId)}${signingNameFilter}&select=sign_id,document,employee_name,employee_email,manager_name,manager_email,meeting_type,meeting_date,document_type,status,signature,signed_at,created_at,opened_at,expires_at,declined_at,decline_reason`
+      `signing_requests?org_id=eq.${encodeURIComponent(orgId)}${signingNameFilter}&select=sign_id,document,employee_name,employee_email,manager_name,manager_email,meeting_type,meeting_date,document_type,status,signature,signed_at,created_at,opened_at,expires_at,declined_at,decline_reason,participant_comment,participant_comment_at,proceeded_at,proceed_reason,proceeded_from_status`
     );
 
     const { data: portalAccounts } = await fetchAllPagesServer(

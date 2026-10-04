@@ -159,10 +159,17 @@ describe('the boundary holds at every payload surface', () => {
   it('SIGNATURE PAYLOAD is employee-facing only, with the legacy cut as backup', () => {
     const i = appCode.indexOf('const sendForSignature = async (employeeEmail)');
     const body = appCode.slice(i, appCode.indexOf('\n  };', i));
-    expect(body).toContain('const full = splitMeetingRecord(signMeeting.record).employeeFacing;');
+    // The derivation moved into src/lib/signedSnapshot.js (it was duplicated
+    // inline twice and the trust slice needed a third caller). The BOUNDARY this
+    // test guards is unchanged — asserted on the shared function, plus the two
+    // call sites that must use it.
+    expect(body).toContain('employeeFacingSnapshot(signMeeting.record)');
     expect(body).not.toContain('const full = signMeeting.record;');
     // the stored signDocument too
-    expect(appCode).toContain('const full = splitMeetingRecord(reviewOutput).employeeFacing;');
+    expect(appCode).toContain('employeeFacingSnapshot(reviewOutput)');
+    // and the shared function still splits rather than trusting the stored shape
+    const shared = readFileSync('src/lib/signedSnapshot.js', 'utf8');
+    expect(shared).toContain('splitMeetingRecord(record || "").employeeFacing');
   });
 
   it('a LEGACY mixed record cannot leak through the signature path', () => {

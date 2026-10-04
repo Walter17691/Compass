@@ -253,8 +253,12 @@ describe('12/13. same array, different questions', () => {
     expect(src).toContain('isMeetingComplete(lastDisc)');
     expect(src).toContain('isMeetingComplete(lastAppeal)');
     expect(src).toContain('isMeetingComplete(lastHearing)');
-    // signature checks are a different question and are untouched
-    expect(src).toContain('lastInv?.signStatus!=="signed"');
+    // Signature confirmation is a DIFFERENT question from meeting completion, and
+    // still is. The Pre-V1 Trust Slice replaced the per-branch string comparisons
+    // with one canonical predicate — the separation this test guards is unchanged,
+    // only the predicate's name is.
+    expect(src).toContain('isConfirmationSettled(lastInv?.signStatus)');
+    expect(src).not.toMatch(/signStatus!=="signed"/);
   });
 });
 

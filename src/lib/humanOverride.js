@@ -135,3 +135,43 @@ export async function requestLateAppealAcceptance(promptDialogFn, auditFn, { dea
   auditFn("Late appeal accepted exceptionally", `Deadline was ${deadlineLabel} — received ${receivedLabel} — reason: ${reason}`, caseId);
   return true;
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// PROCEEDING AFTER A REASONABLE OPPORTUNITY.
+//
+// A participant must not be able to halt an ER process indefinitely by ignoring
+// an email, refusing to sign, or disagreeing. But proceeding anyway is a real
+// decision with real consequences, and it was previously made by DEFAULT — the
+// product simply had no state for it, so a case moved on with nothing recorded
+// about why or by whom.
+//
+// Same required-reason shape as requestManualSignatureConfirmation above. Two
+// things are deliberately NOT done here:
+//
+//   · Compass does not judge whether the opportunity was reasonable. It states
+//     the facts it can prove — what was sent, when, what happened since — and
+//     the authorised human decides. The prompt shows elapsed time; it does not
+//     recommend.
+//   · No default reason, no pre-filled text. An unexplained proceed decision is
+//     exactly the gap being closed, so the field is required and empty.
+// ─────────────────────────────────────────────────────────────────────────
+export async function requestProceedWithoutConfirmation(promptDialogFn, { itemLabel, priorStatus, sentAt, daysOutstanding } = {}) {
+  const elapsed = Number.isFinite(daysOutstanding)
+    ? `It has been outstanding for ${daysOutstanding} day${daysOutstanding === 1 ? "" : "s"}.`
+    : "";
+  const what = priorStatus === "declined" ? "The participant declined to sign it."
+    : priorStatus === "expired" ? "The link expired without a response."
+    : priorStatus === "opened" ? "The participant opened it but has not responded."
+    : "The participant has not responded.";
+
+  const values = await promptDialogFn({
+    title: "Proceed without participant confirmation?",
+    message: `"${itemLabel}" was sent for confirmation${sentAt ? ` on ${new Date(sentAt).toLocaleDateString("en-GB")}` : ""}. ${what} ${elapsed}\n\nProceeding records that you decided the participant had a reasonable opportunity to respond. Compass does not make that judgement for you. The record stays exactly as it was issued, and your reason is kept with it.`,
+    fields: [{ key:"reason", label:"Why are you proceeding without confirmation?", required:true, placeholder:"e.g. Record sent twice, two weeks allowed, employee has not responded and the hearing cannot be delayed further" }],
+    confirmLabel: "Record decision and proceed",
+  });
+  if(!values) return null;
+  const reason = (values.reason||"").trim();
+  if(!reason) return null;
+  return reason;
+}

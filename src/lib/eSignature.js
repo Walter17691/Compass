@@ -12,12 +12,71 @@ export const ESIGNATURE_STATUS = {
   ACKNOWLEDGED: "acknowledged",
   DECLINED: "declined",
   EXPIRED: "expired",
+  // Pre-V1 Trust Slice. The participant responded and DISAGREES with part of
+  // the record. They have engaged, so the process is not blocked — and this is
+  // emphatically not agreement. Nothing may read it as one.
+  DISPUTED: "disputed",
+  // The organisation moved on without participant confirmation, by an explicit
+  // decision a named human recorded a reason for. Never computed, never
+  // inferred from elapsed time.
+  PROCEEDED: "proceeded",
 };
 
-const TERMINAL_STATUSES = [ESIGNATURE_STATUS.SIGNED, ESIGNATURE_STATUS.ACKNOWLEDGED, ESIGNATURE_STATUS.DECLINED, ESIGNATURE_STATUS.EXPIRED];
+// 'pending' predates this vocabulary and is not a member of it. 27 production
+// rows hold it and the brief forbids casually renaming historical states, so it
+// is recognised here as legacy and treated as NOT settled — the safe reading.
+export const LEGACY_PENDING_STATUS = "pending";
 
+const TERMINAL_STATUSES = [
+  ESIGNATURE_STATUS.SIGNED, ESIGNATURE_STATUS.ACKNOWLEDGED, ESIGNATURE_STATUS.DECLINED,
+  ESIGNATURE_STATUS.EXPIRED, ESIGNATURE_STATUS.DISPUTED, ESIGNATURE_STATUS.PROCEEDED,
+];
+
+// "No further participant action is possible on this request." Used for access
+// windows and for refusing to re-action a request — NOT for deciding whether a
+// case may progress.
 export function isTerminalStatus(status) {
   return TERMINAL_STATUSES.includes(status);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// THE PROGRESSION PREDICATE, AND WHY IT IS NOT isTerminalStatus.
+//
+// `expired` is terminal — nobody can sign it now — but an expired request means
+// the participant was asked and SAID NOTHING. Letting that unblock a case is
+// exactly "silence authorises progression", which the process must never do:
+// the whole point of a confirmation step is that somebody either engaged with
+// the record or a human consciously decided to proceed without them.
+//
+// SETTLED means one of those two things actually happened:
+//   signed / acknowledged   they agreed
+//   declined / disputed     they engaged and did not agree
+//   proceeded               a named human decided to proceed, and said why
+//
+// NOT settled: sent, opened, expired, pending. An expired request is a prompt
+// to chase or to decide — never a substitute for either.
+// ─────────────────────────────────────────────────────────────────────────
+const SETTLED_STATUSES = [
+  ESIGNATURE_STATUS.SIGNED, ESIGNATURE_STATUS.ACKNOWLEDGED,
+  ESIGNATURE_STATUS.DECLINED, ESIGNATURE_STATUS.DISPUTED,
+  ESIGNATURE_STATUS.PROCEEDED,
+];
+
+export function isConfirmationSettled(status) {
+  return SETTLED_STATUSES.includes(status);
+}
+
+// True when the participant themselves responded, whatever they said. Distinct
+// from settled, which also covers the organisation proceeding without them.
+export function isParticipantResponse(status) {
+  return [ESIGNATURE_STATUS.SIGNED, ESIGNATURE_STATUS.ACKNOWLEDGED,
+          ESIGNATURE_STATUS.DECLINED, ESIGNATURE_STATUS.DISPUTED].includes(status);
+}
+
+// True when the record carries agreement. `disputed` and `declined` deliberately
+// do not, and no caller may collapse them into "responded, therefore fine".
+export function isConfirmedByParticipant(status) {
+  return [ESIGNATURE_STATUS.SIGNED, ESIGNATURE_STATUS.ACKNOWLEDGED].includes(status);
 }
 
 const DEFAULT_EXPIRY_DAYS = 7;
@@ -79,6 +138,13 @@ export const ESIGNATURE_STATUS_LABEL = {
   [ESIGNATURE_STATUS.ACKNOWLEDGED]: "Acknowledged",
   [ESIGNATURE_STATUS.DECLINED]: "Declined",
   [ESIGNATURE_STATUS.EXPIRED]: "Expired",
+  // Worded so neither can be misread as agreement at a glance.
+  [ESIGNATURE_STATUS.DISPUTED]: "Responded with comments",
+  [ESIGNATURE_STATUS.PROCEEDED]: "Proceeded without confirmation",
+  // 'pending' is legacy (27 production rows, predates this vocabulary). Labelled
+  // rather than left to fall through to the raw string, which is what a reader
+  // saw before.
+  [LEGACY_PENDING_STATUS]: "Awaiting signature",
 };
 
 export function signatureStatusLabel(status) {

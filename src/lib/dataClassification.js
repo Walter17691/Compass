@@ -168,7 +168,25 @@ export const TABLE_CLASSIFICATION = {
   concern_referrals: t('Concerns raised about or by an employee.', C, { org: 1, person: 1, case_: 1 }, D.INCLUDED),
   leaver_instances: t('Offboarding process instances.', C, { org: 1, person: 1 }, D.INCLUDED),
   case_tasks: t('Case and org-level actions; case_id is nullable.', C, { org: 1, case_: 1 }, D.INCLUDED),
-  signing_requests: t('Signature requests — holds the signature and document text.', C, { org: 1, person: 1, case_: 1 }, D.INCLUDED),
+  signing_requests: t('Signature/acknowledgement requests — the immutable issued document, the signature, the participant\'s own comments, and any decision to proceed without confirmation.', C,
+    { org: 1, person: 1, case_: 1 }, D.INCLUDED,
+    { dsarNote: 'PRE-V1 TRUST SLICE — rows are now projected per subject ROLE '
+        + '(dsarSigningDisclosure.js) instead of being emitted raw. A row reaches a '
+        + 'DSAR when the subject is either the signer (employee_name) or the sender '
+        + '(manager_name), and those two are entitled to different things. The SIGNER '
+        + 'receives the issued document, their own signature, their own decline reason '
+        + 'and their own participant_comment. The SENDER receives the procedural facts '
+        + 'only — that they sent it, when, and what happened — because the signer\'s '
+        + 'document, handwriting and words are the other person\'s personal data. That '
+        + 'was a real pre-existing leak: the manager-matched branch previously '
+        + 'disclosed document, signature and decline_reason into a DSAR about the '
+        + 'MANAGER, and a test asserted it. proceeded_at and proceeded_from_status are '
+        + 'disclosed to both (a procedural fact about the subject\'s own process); '
+        + 'proceed_reason is review-required, as HR reasoning is everywhere else; '
+        + 'proceeded_by is withheld as an internal actor id, the same reasoning that '
+        + 'already suppresses case_decisions.decided_by, and it is not even fetched by '
+        + 'api/portal/_dsar-lookup.js. An unrecognised column is withheld AND '
+        + 'reported, so a future column cannot be disclosed by default.' }),
   employee_records: t('The core PII record: job title, department, manager, employee number.', C, { org: 1, person: 1 }, D.INCLUDED),
   employee_portal_accounts: t("An employee's own access to their case data.", C, { org: 1, person: 1 }, D.INCLUDED),
   employee_portal_invites: t('Pending employee portal invitations.', C, { org: 1, person: 1 }, D.INCLUDED),

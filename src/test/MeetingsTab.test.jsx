@@ -223,7 +223,9 @@ describe('MeetingsTab — signed record retrieval (Batch 2, Part 9)', () => {
     const user = userEvent.setup();
     const cs = caseWithMeeting({ signStatus: 'acknowledged', signId: 'sign-1', signerName: 'Sam Employee', signedAt: '2026-08-15', record: 'Outcome letter text.' });
     render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
-    await user.click(screen.getByRole('button', { name: 'View signed copy' }));
+    // Pre-V1 Trust Slice — the label now follows the state rather than claiming a
+    // signature in every case. An acknowledgement is not a signature.
+    await user.click(screen.getByRole('button', { name: 'View acknowledged copy' }));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText(/Acknowledged by Sam Employee on/)).toBeInTheDocument();
     expect(within(dialog).queryByAltText(/signature/i)).not.toBeInTheDocument();

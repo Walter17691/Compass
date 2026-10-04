@@ -2,7 +2,7 @@ import { supabaseRequest } from './_supabase.js';
 import { requireOrgMembership } from './_auth.js';
 import { escapeHtml as esc } from './_html.js';
 import { checkRateLimit } from './_rateLimit.js';
-import { computeExpiresAt, isExpired, isTerminalStatus, isPastPublicViewWindow, documentTypeLabel } from '../src/lib/eSignature.js';
+import { computeExpiresAt, isExpired, isTerminalStatus, isParticipantResponse, isPastPublicViewWindow, documentTypeLabel } from '../src/lib/eSignature.js';
 
 // signing_requests has zero client-facing RLS policies by design (same
 // pattern as employee_portal_accounts) — the signer isn't a logged-in
@@ -30,11 +30,11 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   if (req.method === 'POST') {
-    const { document, employeeEmail, employeeName, managerName, managerEmail, meetingType, meetingDate, documentType, requiresSignature, signature, acknowledged, declined, declineReason, signedAt } = req.body;
+    const { document, employeeEmail, employeeName, managerName, managerEmail, meetingType, meetingDate, documentType, requiresSignature, signature, acknowledged, declined, declineReason, signedAt, disputed, participantComment, proceed, proceedReason } = req.body;
     const signId = req.body.signId;
 
     try {
-      if (signature || acknowledged || declined) {
+      if (signature || acknowledged || declined || disputed) {
         // Phase 6.5 hardening (security review) — this path has no session
         // to rate-limit by caller id (the signer is external, unauthenticated
         // by design), so it's keyed by the sign_id itself instead: caps
@@ -58,7 +58,16 @@ export default async function handler(req, res) {
         if (isTerminalStatus(existing.status)) return res.status(409).json({ error: 'This document has already been actioned' });
         if (isExpired(existing.expires_at)) return res.status(409).json({ error: 'This signing link has expired' });
 
-        const outcome = signature ? 'signed' : acknowledged ? 'acknowledged' : 'declined';
+        // Pre-V1 Trust Slice — `disputed` joins the outcomes. It is a RESPONSE,
+        // not agreement: the participant received the record and disagrees with
+        // part of it. isConfirmedByParticipant() deliberately excludes it, so no
+        // consumer can read a dispute as confirmation.
+        const outcome = signature ? 'signed' : acknowledged ? 'acknowledged' : disputed ? 'disputed' : 'declined';
+        // The participant's own words, available with ANY outcome — somebody who
+        // signs can still note a correction, and previously the only way to say
+        // anything at all was to refuse. Trimmed, length-capped, and stored
+        // alongside the record; it never touches the manager's text.
+        const commentText = typeof participantComment === 'string' ? participantComment.trim().slice(0, 5000) : '';
         // Phase 6.5 hardening (structural remediation, Prompt 12 —
         // Signature Identity invariant): the read above and this write
         // used to be two separate round trips with no re-check at write
@@ -77,7 +86,20 @@ export default async function handler(req, res) {
         // honest 409 instead of silently corrupting the record.
         const patch = outcome === 'declined'
           ? { status: 'declined', declined_at: signedAt, decline_reason: declineReason || '' }
-          : { status: outcome, signature: signature || null, signed_at: signedAt };
+          : outcome === 'disputed'
+            // No signature and no signed_at: nothing was agreed. The response
+            // time is recorded as the comment time, which is the only thing that
+            // actually happened.
+            ? { status: 'disputed' }
+            : { status: outcome, signature: signature || null, signed_at: signedAt };
+        if (commentText) {
+          patch.participant_comment = commentText;
+          patch.participant_comment_at = signedAt || new Date().toISOString();
+        }
+        // A dispute with no words is not a dispute anybody can act on.
+        if (outcome === 'disputed' && !commentText) {
+          return res.status(400).json({ error: 'Please say what you disagree with before submitting.' });
+        }
 
         const r = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}&status=in.(sent,opened)`, {
           method: 'PATCH',
@@ -106,7 +128,7 @@ export default async function handler(req, res) {
         if (existing.manager_email) {
           try {
             const label = documentTypeLabel(existing.document_type);
-            const outcomeText = outcome === 'signed' ? 'signed' : outcome === 'acknowledged' ? 'acknowledged' : 'declined to sign';
+            const outcomeText = outcome === 'signed' ? 'signed' : outcome === 'acknowledged' ? 'acknowledged' : outcome === 'disputed' ? 'responded with comments on' : 'declined to sign';
             const notifyRes = await fetch('https://api.resend.com/emails', {
               method: 'POST',
               headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
@@ -119,6 +141,7 @@ export default async function handler(req, res) {
                   <p>Dear ${esc(existing.manager_name)},</p>
                   <p><strong>${esc(existing.employee_name)}</strong> has ${esc(outcomeText)} the <strong>${esc(label)}</strong>${existing.meeting_date ? ` from <strong>${esc(existing.meeting_date)}</strong>` : ''}.</p>
                   ${outcome === 'declined' && declineReason ? `<p>Reason given: ${esc(declineReason)}</p>` : ''}
+                  ${commentText ? `<p>They have added comments on the record. These are in the case file in Compass — they are not reproduced in this email, because they may refer to other people.</p>` : ''}
                   <p>The outcome is now recorded in the case file in Compass.</p>
                   <p style="color:#666;font-size:12px">Powered by Compass HR</p>
                 </div>`
@@ -144,6 +167,67 @@ export default async function handler(req, res) {
         // claim this document is for, storing org_id on the new row so
         // api/portal/_signatures.js can later scope a portal user's own
         // "pending signature" list to their own org, not every org's.
+        // ── PROCEED AFTER REASONABLE OPPORTUNITY ──────────────────────────
+        //
+        // An explicit human decision, never a computed one. Compass may show how
+        // long a request has been outstanding; it must not conclude that the
+        // opportunity given was reasonable. That judgement, and the reason for
+        // it, belong to a named person.
+        //
+        // AUTHORISATION AND PROVENANCE ARE BOTH SERVER-SIDE. This table has RLS
+        // enabled with zero policies and is reached only under the service role,
+        // so auth.uid() is NULL for every write and a database trigger could not
+        // derive the actor. requireOrgMembership verifies the session AND that
+        // the caller belongs to the org that owns this request; the actor and
+        // timestamp are then taken from that verified session, never from the
+        // request body. A client-supplied proceeded_by is ignored entirely.
+        if (proceed) {
+          const { orgId: proceedOrgId } = req.body;
+          const proceedAuth = await requireOrgMembership(req, res, proceedOrgId);
+          if (!proceedAuth) return;
+          if (!signId) return res.status(400).json({ error: 'Which request are you proceeding without?' });
+
+          const reason = typeof proceedReason === 'string' ? proceedReason.trim() : '';
+          if (!reason) return res.status(400).json({ error: 'Record why you are proceeding without confirmation.' });
+
+          const existingRes = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}&select=*`);
+          const [existing] = await existingRes.json();
+          if (!existing) return res.status(404).json({ error: 'Signing request not found' });
+          if (existing.org_id !== proceedOrgId) return res.status(403).json({ error: 'Not authorised for this signing request' });
+
+          // IDEMPOTENT. A replayed click returns the existing decision rather
+          // than overwriting its actor, time or reason — the first decision is
+          // the one that was made.
+          if (existing.status === 'proceeded') {
+            return res.status(200).json({ success: true, alreadyProceeded: true, proceededAt: existing.proceeded_at });
+          }
+          // A participant who has already responded cannot be proceeded past.
+          // There is nothing to proceed without, and overwriting their response
+          // would erase the very thing this slice exists to protect.
+          if (isParticipantResponse(existing.status)) {
+            return res.status(409).json({ error: 'This participant has already responded — there is nothing to proceed without.' });
+          }
+
+          const nowIso = new Date().toISOString();
+          const r = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}&status=in.(sent,opened,expired,pending)`, {
+            method: 'PATCH',
+            headers: { 'Prefer': 'return=representation' },
+            body: JSON.stringify({
+              status: 'proceeded',
+              proceeded_at: nowIso,
+              proceeded_by: proceedAuth.caller.id,
+              proceed_reason: reason.slice(0, 2000),
+              proceeded_from_status: existing.status,
+            })
+          });
+          if (!r.ok) { const text = await r.text(); return res.status(500).json({ error: text }); }
+          const rows = await r.json();
+          if (!rows.length) return res.status(409).json({ error: 'This request changed while you were deciding — reload and try again.' });
+          return res.status(200).json({
+            success: true, proceededAt: nowIso, proceededFromStatus: existing.status,
+          });
+        }
+
         const { orgId } = req.body;
         const auth = await requireOrgMembership(req, res, orgId);
         if (!auth) return;

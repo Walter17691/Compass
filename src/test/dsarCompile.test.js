@@ -199,8 +199,15 @@ describe('compileSubjectData — tasks, signing requests and portal access (Phas
   });
 
   it('includes only the subject\'s own signing requests, matched by employee_name', () => {
+    // Pre-V1 Trust Slice — signing requests are now PROJECTED per subject role
+    // (dsarSigningDisclosure.js), so this can no longer assert object identity.
+    // The scoping question it exists to answer is asserted on the identity that
+    // survives projection, and the signer still receives their own material.
     const result = compileSubjectData('Ada Lovelace', extendedData);
-    expect(result.signingRequests).toEqual([extendedData.signingRequests[0]]);
+    expect(result.signingRequests).toHaveLength(1);
+    expect(result.signingRequests[0].sign_id).toBe(extendedData.signingRequests[0].sign_id);
+    expect(result.signingRequests[0].subjectRole).toBe('signer');
+    expect(result.signingRequests[0].document).toBe(extendedData.signingRequests[0].document);
   });
 
   it('flags a third-party name mentioned inside a signing request\'s document text', () => {
@@ -520,7 +527,17 @@ describe('compileSubjectData — case_access grants, third-party witness mention
       ],
     };
     const result = compileSubjectData('Priya Manager', data);
-    expect(result.signingRequests).toEqual([data.signingRequests[0]]);
+    // Still matched — a sender is a legitimate subject of their own sending.
+    expect(result.signingRequests).toHaveLength(1);
+    expect(result.signingRequests[0].sign_id).toBe('sr1');
+    expect(result.signingRequests[0].subjectRole).toBe('sender');
+    // But this test previously asserted the manager received the WHOLE row,
+    // including the employee's meeting record — third-party disclosure to the
+    // wrong subject, encoded as an expectation. The sender now gets the
+    // procedural facts and not the signer's material.
+    expect(result.signingRequests[0]).not.toHaveProperty('document');
+    expect(result.signingRequests[0]).not.toHaveProperty('signature');
+    expect(result.signingRequests[0].withheldAsThirdPartyOrInternal).toContain('document');
   });
 
   it('includes redundancy cases where the subject appears as an at-risk employee (closes H1\'s own DSAR gap)', () => {

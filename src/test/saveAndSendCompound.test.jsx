@@ -165,8 +165,10 @@ describe('3/4/11-15. the two legitimate choices', () => {
     const i = appCode.indexOf('const sendForSignature = async (employeeEmail)');
     const body = appCode.slice(i, appCode.indexOf('\n  };', i));
     // The persisted record, AND employee-facing only since the 2026-09-25
-    // boundary fix — legacy records still carry both halves mixed.
-    expect(body).toContain('splitMeetingRecord(signMeeting.record).employeeFacing');
+    // boundary fix — legacy records still carry both halves mixed. The derivation
+    // now lives in src/lib/signedSnapshot.js; the behavioural assertion above is
+    // the real guard, and this pins the call site.
+    expect(body).toContain('employeeFacingSnapshot(signMeeting.record)');
     expect(body).not.toContain('const full = reviewOutput;');
   });
 });

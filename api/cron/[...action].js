@@ -2,6 +2,7 @@ import { runDigest } from './_digest.js';
 import { testNotify } from './_test-notify.js';
 import { reassignNotify } from './_reassign-notify.js';
 import { health } from './_health.js';
+import { expireSignatures } from './_expire-signatures.js';
 
 // Single catch-all route for /api/cron/* — same convention as
 // api/calendar/[...action].js and api/portal/[...action].js, keeping the
@@ -25,6 +26,23 @@ export default async function handler(req, res) {
         return res.status(200).json(result);
       } catch (e) {
         console.error('Digest cron error:', e.message);
+        return res.status(500).json({ error: e.message });
+      }
+    }
+    // Pre-V1 Trust Slice — persisted expiry must not depend on somebody reading
+    // the row. Secret-guarded like `digest`, because it writes: an unauthenticated
+    // caller could otherwise expire every open signature request in the estate.
+    // Added as a CASE on this existing router, not a new file at api/, so the
+    // Vercel Hobby 12-function cap is untouched.
+    case 'expire-signatures': {
+      const auth = req.headers.authorization || '';
+      if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      try {
+        return res.status(200).json(await expireSignatures());
+      } catch (e) {
+        console.error('Expire-signatures cron error:', e.message);
         return res.status(500).json({ error: e.message });
       }
     }
