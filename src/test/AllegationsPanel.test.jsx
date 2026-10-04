@@ -220,7 +220,7 @@ describe('AllegationsPanel — field labelling (Phase 6.5, Batch 13)', () => {
     render(<AllegationsPanel {...baseProps} canDecide={true} />);
     await expandAllegation();
     expect(screen.getByLabelText('Status')).toBeInTheDocument();
-    expect(screen.getByLabelText(/Investigator's finding/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Investigator's assessment/)).toBeInTheDocument();
     expect(screen.getByLabelText('Outstanding uncertainty')).toBeInTheDocument();
     expect(screen.getByLabelText(/Decision reasoning/)).toBeInTheDocument();
     expect(screen.getByLabelText('Employee response')).toBeInTheDocument();

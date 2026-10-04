@@ -10,7 +10,8 @@ import { hasGuidedProcess } from '../lib/nextStep';
 import { caseStatusLabel, isClosedStage, describeWhatIsHappening } from '../lib/caseViewSummary';
 import { reasonForDefaultSurface, scheduledMeetingWhen, hasSubstantiveContext, hasCaseInformation } from '../lib/caseSurface';
 import { caseWorkspaceDestinations, destinationForLegacyTab, DEFAULT_DESTINATION } from '../lib/caseWorkspace';
-import { canRecordOutcome } from '../lib/outcomeReachability';
+import { canRecordOutcome, hasReachedOutcomeStage } from '../lib/outcomeReachability';
+import { hasGuidedStages } from '../lib/processStages';
 import { CaseWorkspaceNav } from '../components/CaseWorkspaceNav';
 import { InvestigationTab } from '../components/caseTabs/InvestigationTab';
 import { isRiskExposureRelevant } from '../lib/tribunalExposureRelevance';
@@ -94,7 +95,7 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
     // Wave B.1 — lets the case header link its employee name back to the
     // Employee File. Navigation only; no employee data is duplicated here.
     setActiveEmployeeId,
-    getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers,
+    getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, getCaseEmployeeRecord, orgMembers,
     setCaseInfo, saveCases, setReviewOutput, onPresentMeetingRecord, setMeetingType, showToast, currentUser,
     setLetterOutput, handleLetter, isHR, caseAccess, allegations, auditLog, caseTasks,
     createCaseTask, caseSignals, changeSignalStatus, toggleCaseTaskDone, setShowHandoffModal,
@@ -287,6 +288,32 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   // they still see these fields (context they may legitimately need), just
   // read-only.
   const canDecide = isHR || (myAccess?.role==="disciplinary_officer");
+
+  // ── ER Journey Slice 1 — the right question at the right stage ───────────
+  //
+  // "Is the allegation substantiated?" is the DISCIPLINARY question. Asking it
+  // during Investigation invites the investigator to decide the case before the
+  // employee has been heard, which is the wrong adviser mental model and reads,
+  // procedurally, as a finding reached before the hearing.
+  //
+  // hasReachedOutcomeStage is the EXISTING canonical test for "this process has
+  // reached its decision point", and it is process-type aware: the stage
+  // immediately before `outcome` is `disciplinary` for a misconduct track and
+  // `hearing` for a grievance. Reused deliberately rather than writing a second
+  // stage comparison that could drift from it.
+  //
+  // A case type with no guided stage model (hasGuidedStages false) is NOT
+  // withheld from: Compass has no basis to say such a case has not reached its
+  // decision point, and hiding the control there would make the existing
+  // control unreachable on real historical cases rather than merely deferred.
+  const atDecisionStage = !hasGuidedStages(cs.caseType) || hasReachedOutcomeStage(cs, stage);
+
+  // The assigned investigator already exists as a case_access role with
+  // allegation scope (isAssignedInvestigator above). They may write the
+  // investigation NARRATIVE — the fields literally named for them — and nothing
+  // else: not the status, not the reasoning, not the outcome. Deliberately a
+  // separate, narrower gate than canDecide rather than widening canDecide.
+  const canRecordInvestigation = canDecide || isAssignedInvestigator;
   // Independent appeal officer workflow (2026-09-16) — the appeal-decision
   // gate is deliberately separate from canDecide above. The original
   // disciplinary_officer does not gain appeal-decision authority merely
@@ -311,8 +338,8 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
     // this case actually is (disciplinary vs grievance shaped); only a
     // closed case (nextStep null) falls back to the old default.
     const type = nextStep?.meetingType || (stage==="investigation"?"investigation":stage==="appeal"?"appeal-disciplinary":"disciplinary");
-    setMeetingSetup(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type}));
-    setCaseInfo(p=>({...p,employee:cs.employeeName,employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",_linkedCaseId:null}));
+    setMeetingSetup(p=>({...p,employeeId:cs.employeeId||null,employee:cs.employeeName,employeeJobTitle:getCaseEmployeeRecord?.(cs)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",type}));
+    setCaseInfo(p=>({...p,employeeId:cs.employeeId||null,employee:cs.employeeName,employeeJobTitle:getCaseEmployeeRecord?.(cs)?.jobTitle||"",manager:cs.manager||"",chairJobTitle:(orgMembers||[]).find(m=>m.name===cs.manager)?.job_title||"",_linkedCaseId:null}));
     setScreen(SCREENS.HOME+"_meeting");
   };
 
@@ -462,8 +489,9 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
       // values.
       const scheduled = isStructuredAppealHearing ? appealInvitationLogistics(cs) : null;
       setMeetingSetup(p=>({...p,
+        employeeId:cs.employeeId||null,
         employee:cs.employeeName,
-        employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",
+        employeeJobTitle:getCaseEmployeeRecord?.(cs)?.jobTitle||"",
         manager:chairName,
         chairJobTitle,
         type:nextStep.meetingType||"disciplinary",
@@ -481,8 +509,9 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
         preparedCaseId:cs.id,
       }));
       setCaseInfo(p=>({...p,
+        employeeId:cs.employeeId||null,
         employee:cs.employeeName,
-        employeeJobTitle:getEmployeeRecord(cs.employeeName)?.jobTitle||"",
+        employeeJobTitle:getCaseEmployeeRecord?.(cs)?.jobTitle||"",
         manager:chairName,
         chairJobTitle,
         _linkedCaseId:null,
@@ -1383,7 +1412,7 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
               onOpenMeeting={()=>goToDestination("meetings")}
               onOpenDocuments={()=>goToDestination("documents")}
               allegationsPanel={
-            <AllegationsPanel cs={cs} allegations={caseAllegations} allAllegations={allegations} createAllegation={allegationsTab.createAllegation} patchAllegation={allegationsTab.patchAllegation} changeAllegationStatus={allegationsTab.changeAllegationStatus} deleteAllegation={allegationsTab.deleteAllegation} saveCases={saveCases} cases={cases} confirmDialog={confirmDialog} showToast={showToast} evidenceSuggestions={allegationsTab.evidenceSuggestions?.[cs.id]||[]} evidenceSuggestionsLoading={allegationsTab.evidenceSuggestionsLoading?.[cs.id]} generateEvidenceSuggestions={allegationsTab.generateEvidenceSuggestions} acceptEvidenceSuggestion={allegationsTab.acceptEvidenceSuggestion} rejectEvidenceSuggestion={allegationsTab.rejectEvidenceSuggestion} setReviewOutput={setReviewOutput} onPresentMeetingRecord={onPresentMeetingRecord}  setScreen={setScreen} screens={screens} orgMembers={orgMembers} fmtDate={fmtDate} caseSignals={caseSignals} onAskWhy={setWhySignal} generateAppealReview={allegationsTab.generateAppealReview} appealReviewLoading={allegationsTab.appealReviewLoading} recordAppealOutcome={allegationsTab.recordAppealOutcome} policies={allegationsTab.policies} consistencyReview={allegationsTab.consistencyReview?.[cs.id]} consistencyReviewLoading={allegationsTab.consistencyReviewLoading?.[cs.id]} generateConsistencyReview={allegationsTab.generateConsistencyReview} canDecide={canDecide} canDecideAppeal={canDecideAppeal}/>
+            <AllegationsPanel cs={cs} allegations={caseAllegations} allAllegations={allegations} createAllegation={allegationsTab.createAllegation} patchAllegation={allegationsTab.patchAllegation} changeAllegationStatus={allegationsTab.changeAllegationStatus} deleteAllegation={allegationsTab.deleteAllegation} saveCases={saveCases} cases={cases} confirmDialog={confirmDialog} showToast={showToast} evidenceSuggestions={allegationsTab.evidenceSuggestions?.[cs.id]||[]} evidenceSuggestionsLoading={allegationsTab.evidenceSuggestionsLoading?.[cs.id]} generateEvidenceSuggestions={allegationsTab.generateEvidenceSuggestions} acceptEvidenceSuggestion={allegationsTab.acceptEvidenceSuggestion} rejectEvidenceSuggestion={allegationsTab.rejectEvidenceSuggestion} setReviewOutput={setReviewOutput} onPresentMeetingRecord={onPresentMeetingRecord}  setScreen={setScreen} screens={screens} orgMembers={orgMembers} fmtDate={fmtDate} caseSignals={caseSignals} onAskWhy={setWhySignal} generateAppealReview={allegationsTab.generateAppealReview} appealReviewLoading={allegationsTab.appealReviewLoading} recordAppealOutcome={allegationsTab.recordAppealOutcome} policies={allegationsTab.policies} consistencyReview={allegationsTab.consistencyReview?.[cs.id]} consistencyReviewLoading={allegationsTab.consistencyReviewLoading?.[cs.id]} generateConsistencyReview={allegationsTab.generateConsistencyReview} canDecide={canDecide} canDecideAppeal={canDecideAppeal} atDecisionStage={atDecisionStage} canRecordInvestigation={canRecordInvestigation}/>
               }
               evidencePanel={
             <EvidenceTab cs={cs} cases={cases} saveCases={saveCases} currentUser={currentUser} showToast={showToast} setReviewOutput={setReviewOutput} onPresentMeetingRecord={onPresentMeetingRecord}  setScreen={setScreen} screens={screens} fmtDate={fmtDate} setMeetingSetup={setMeetingSetup} setCaseInfo={setCaseInfo} orgMembers={orgMembers} allegations={caseAllegations} documentFindings={evidenceTab.documentFindings} documentAnalysisLoading={evidenceTab.documentAnalysisLoading} onAnalyseEvidence={(evidenceId)=>evidenceTab.analyseEvidenceDocument(cs, evidenceId)} onAcceptFinding={(evidenceId, finding)=>evidenceTab.acceptDocumentFinding(cs, evidenceId, finding)} onDismissFinding={(evidenceId, finding)=>evidenceTab.dismissDocumentFinding(cs, evidenceId, finding)} onRemoveEvidence={(evidenceId)=>evidenceTab.removeEvidence(cs.id, evidenceId)} promptDialog={promptDialog} audit={audit}/>

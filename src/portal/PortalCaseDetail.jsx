@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { employeeStageLabel } from './employeeStageLabel';
 import { authedFetch } from '../lib/authedFetch';
 
 export function PortalCaseDetail({ userId, caseId, onBack }) {
@@ -23,7 +24,7 @@ export function PortalCaseDetail({ userId, caseId, onBack }) {
       {data && (
         <>
           <h2 style={{ fontFamily: "DM Serif Display,Georgia,serif", fontSize: 22, color: "#1C1820", margin: "0 0 4px", fontWeight: 400, textTransform: "capitalize" }}>{data.caseType || "HR matter"}</h2>
-          <p style={{ fontSize: 13, color: "#9B9098", margin: "0 0 24px" }}>Current status: <span style={{ color: "#7C5CFC", fontWeight: 600 }}>{data.stage || "In progress"}</span></p>
+          <p style={{ fontSize: 13, color: "#9B9098", margin: "0 0 24px" }}>Current status: <span style={{ color: "#7C5CFC", fontWeight: 600 }}>{employeeStageLabel(data.stage)}</span></p>
 
           <div style={{ fontSize: 11, fontWeight: 600, color: "#9B9098", letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 10 }}>Correspondence</div>
           {data.meetings && data.meetings.length === 0 && (

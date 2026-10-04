@@ -896,6 +896,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     } finally { setActivityBusy(false); }
   };
   const getEmployeeRecord = (name) => findEmployeeByName(employeeRecords, name);
+  // ER Journey Slice 1 — resolve a CASE's employee by identity, not by name.
+  //
+  // getEmployeeRecord above is a name lookup, which is ambiguous the moment two
+  // people share a name and is exactly what Phase E0.5A stopped using as a key.
+  // A case created since D4.0C carries employee_id, so use it; the name fallback
+  // survives only for the 2,960 historical cases that have no employee_id yet,
+  // and is explicitly a convenience rather than an identity.
+  const getCaseEmployeeRecord = (cs) =>
+    findEmployeeById(employeeRecords, cs?.employeeId) || findEmployeeByName(employeeRecords, cs?.employeeName);
   // Phase E0.5A.1 — an UPDATE addresses the canonical id; only a CREATE uses the
   // name, and only because UNIQUE(org_id, name) still exists.
   //
@@ -2313,7 +2322,24 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         estimated_weekly_pay: caseObj.estimatedWeeklyPay || null,
         estimated_age_at_dismissal: caseObj.estimatedAgeAtDismissal || null,
         location_id: caseObj.locationId || (member?.role==='location_manager'&&member?.location_ids?.[0])||null,
-        assigned_to: user?.id || null,
+        // ── ER Journey Slice 1 — stop silently reassigning the case ──────────
+        //
+        // This was `user?.id || null`, so EVERY save — a meeting write, an
+        // allegation edit, an investigation note, a stage change — reassigned the
+        // case to whoever happened to save it. It failed silently, which is why
+        // nobody noticed: no error, just a field quietly changing owner.
+        //
+        // Traced before changing it: this is the ONLY writer of assigned_to in
+        // the codebase, nothing reads it except caseMapping (which maps it) and
+        // the DSAR withhold list, and reassignment is expressed through `manager`
+        // / reassignedFrom, never through this column. So there is no assignment
+        // semantic to preserve beyond "the creator owns it by default".
+        //
+        // Create (no updatedAt yet) defaults to the creator, exactly as before.
+        // Update preserves whatever is already on the record. The condition is
+        // the same one the update/upsert branch below uses, deliberately, so the
+        // two cannot disagree about which case this is.
+        assigned_to: caseObj.updatedAt ? (caseObj.assignedTo ?? null) : (user?.id ?? null),
         created_by: caseObj.createdBy || user?.id || null, // preserve the original creator across edits by other staff — under the three-level model, created_by is Level 2's own access path (the separate "Confidential cases restricted to authorised staff" policy was dropped in three_level_case_access_2026-09-13.sql)
         confidential: caseObj.confidential || false,
         // manager/owner_id/priority: added in supabase/case_structure_2026-08-09.sql.
@@ -10384,7 +10410,7 @@ Please produce:
         "invite": "a formal invitation letter to a "+(meetingType?.label||"meeting")+". Include: reason for the meeting, proposed date/time/location placeholders, list of allegations or agenda items (infer from context if available), right to be accompanied by a colleague or trade union rep under ERA 1999 s.10, and how to respond. If the letter states a specific deadline (e.g. to confirm attendance or submit evidence), use a placeholder such as [X working days] rather than a specific number — ACAS does not mandate a fixed notice period for this letter type, so any specific day-count you're not given below would be invented, not real guidance. Follow ACAS Code of Practice.",
         "outcome": "a formal outcome letter following a "+(meetingType?.label||"disciplinary hearing")+". Include: summary of what was discussed; the decision reached for each allegation and the reasons for it, grounded in the specific findings and decision reasoning below where available (not a generic restatement); any mitigation the employee put forward and how it was weighed in reaching the decision; the sanction imposed, stated exactly as given in the outcome decision below (never invented or reworded to a different sanction); where the information below states a warning duration and/or expiry date, state that exact duration/date (never substitute a generic or example figure of your own) — where neither is given below, use a placeholder such as [X months] rather than guessing a number; where a sanction is imposed, the specific improvement required of the employee going forward; the consequences of further misconduct during the sanction's currency (e.g. escalation to the next stage of the disciplinary procedure, up to and including dismissal); and the right of appeal. If an AUTHORITATIVE APPEAL DEADLINE is given in the information below, state that exact date as the deadline by which the employee must appeal — do not calculate your own date from this letter's own date or from today, and do not phrase the window as running from the date of this letter. If no authoritative appeal deadline is given below, use relative wording such as 'within 5 working days of the date of this letter' instead. Follow ACAS Code of Practice.",
         "appeal": "a formal appeal outcome letter. Include: the grounds of appeal considered (stated exactly as given below — never invent different grounds), the outcome of the appeal and the reasons for it (grounded in the authoritative appeal outcome/reasoning below where available, not a generic restatement), the effect on the original decision exactly as given below under 'Effect on the original decision' (never derive this yourself from the word 'upheld' alone — 'upheld' describes whether the APPEAL succeeded, not the original decision, and the two have opposite practical effect), the name of the appeal officer who heard/decided the appeal exactly as given below (never invent a different name), and confirmation this is the final stage of the internal procedure. If no appeal outcome has been recorded yet, say so clearly and do not state a result. Follow ACAS Code of Practice.",
-        "investigation-report": "a formal investigation report. Include: background and reason for investigation, allegations investigated, investigation process and evidence reviewed (infer from meeting record), findings for each allegation (upheld/not upheld), overall recommendation (case to answer/no case to answer). This is an internal HR document, not a letter to the employee. Write in formal report style with clear sections.","no-case-answer": "a formal letter to the employee confirming no case to answer. Include: that an investigation has been completed, that no further action will be taken, that the matter is now closed, and that the record will be kept confidential. Warm but professional tone.","grievance": "a formal grievance outcome letter. Include: summary of grievance raised, investigation findings, outcome and reasons, right of appeal. Follow ACAS Code of Practice.",
+        "investigation-report": "a formal investigation report. Include: background and reason for investigation, allegations investigated, investigation process and evidence reviewed (infer from meeting record), and for EACH allegation: the evidence gathered, the employee's account and any witness account relevant to it, the investigator's assessment of what the evidence shows, and anything still unresolved or uncertain. Then state, for each allegation, whether the evidence indicates there may be a case to answer at a disciplinary hearing. CRITICAL: this report does NOT decide the allegation. It must never describe an allegation as substantiated, not substantiated, upheld or not upheld, and must never state or imply that misconduct has been established or that a sanction is warranted — the finding and any outcome are decided by the responsible HR manager after the employee has been heard at a disciplinary hearing. Where the evidence is incomplete or disputed, say so rather than resolving it. This is an internal HR document, not a letter to the employee. Write in formal report style with clear sections.","no-case-answer": "a formal letter to the employee confirming no case to answer. Include: that an investigation has been completed, that no further action will be taken, that the matter is now closed, and that the record will be kept confidential. Warm but professional tone.","grievance": "a formal grievance outcome letter. Include: summary of grievance raised, investigation findings, outcome and reasons, right of appeal. Follow ACAS Code of Practice.",
         "warning": "a formal written warning letter. Include: nature of misconduct, previous warnings if any, expected improvement, review period, consequence of further misconduct, right of appeal. Follow ACAS Code of Practice.",
         "dismissal": "a formal dismissal letter. Include: reason for dismissal, date employment ends, notice period or payment in lieu, final pay arrangements, right of appeal within 5 working days. Follow ERA 1996 and ACAS Code of Practice.",
         "suspension": "a formal suspension letter. Include: that suspension is a neutral act and not a disciplinary sanction or presumption of guilt, the reason an investigation is required, that suspension is normally on full pay, restrictions during suspension (e.g. contacting colleagues, attending the workplace), a named contact during the suspension period, and that the situation will be kept under review. Follow ACAS Code of Practice.",
@@ -12039,7 +12065,7 @@ Please produce:
 
       {/* ══ OPEN IN COMPASS (HRIS deep link) ══ */}
       {screen===SCREENS.OPEN_EMPLOYEE&&(
-        <OpenInCompassScreen employeeName={openEmployeeName} cases={cases} getCaseStage={getCaseStage} getEmployeeRecord={getEmployeeRecord} setActiveCaseId={setActiveCaseId} setCaseViewInitialTab={setCaseViewInitialTab} setScreen={setScreen} setConcernForm={setConcernForm} emptyConcernForm={EMPTY_CONCERN_FORM} setConcernFormAutoOpen={setConcernFormAutoOpen} setShowCasePrompt={setShowCasePrompt} fmtDate={fmtDate} />
+        <OpenInCompassScreen employeeName={openEmployeeName} cases={cases} getCaseStage={getCaseStage} getEmployeeRecord={getEmployeeRecord} getCaseEmployeeRecord={getCaseEmployeeRecord} setActiveCaseId={setActiveCaseId} setCaseViewInitialTab={setCaseViewInitialTab} setScreen={setScreen} setConcernForm={setConcernForm} emptyConcernForm={EMPTY_CONCERN_FORM} setConcernFormAutoOpen={setConcernFormAutoOpen} setShowCasePrompt={setShowCasePrompt} fmtDate={fmtDate} />
       )}
 
       {screen===SCREENS.SEARCH&&(

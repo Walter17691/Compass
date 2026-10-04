@@ -83,14 +83,15 @@ describe('case save/load round trip', () => {
     // The exempt set is small, explicit and checked — if something case-derived
     // ever lands here the test above would miss it, so assert what it contains.
     //
-    // org_id and updated_at are legitimately context-derived. assigned_to is NOT
-    // legitimate and is recorded here rather than hidden: it is written as
-    // `user?.id || null`, so every save silently reassigns the case to whoever
-    // saved it last, discarding the value mapCaseRow just read. That is a
-    // separate, non-blocking defect reported alongside this fix — it fails
-    // silently rather than erroring, so it is not what blocked the UAT, and it
-    // is deliberately not changed here. If it is fixed, this list shrinks.
-    expect([...fromContext].sort()).toEqual(['assigned_to', 'org_id', 'updated_at']);
+    // Only org_id and updated_at are legitimately context-derived.
+    //
+    // assigned_to used to sit in this list, written as `user?.id || null`, so
+    // every save silently reassigned the case to whoever saved it last. ER
+    // Journey Slice 1 fixed it: an update now preserves caseObj.assignedTo and
+    // only a create defaults to the creator, so the value is case-derived and
+    // subject to the round-trip invariant above like everything else. The list
+    // shrank, exactly as this test predicted it would.
+    expect([...fromContext].sort()).toEqual(['org_id', 'updated_at']);
   });
 
   it('employee_id specifically is read back — the 2026-10-04 production failure', () => {

@@ -61,7 +61,13 @@ function ReadOnlyField({ label, value, placeholder }) {
   );
 }
 
-export function AllegationsPanel({ cs, allegations, allAllegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, saveCases, cases, confirmDialog, showToast, evidenceSuggestions=[], evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, onPresentMeetingRecord, orgMembers, fmtDate, caseSignals=[], onAskWhy, generateAppealReview, appealReviewLoading, recordAppealOutcome, policies, consistencyReview, consistencyReviewLoading, generateConsistencyReview, canDecide=true, canDecideAppeal=true }) {
+export function AllegationsPanel({ cs, allegations, allAllegations, createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, saveCases, cases, confirmDialog, showToast, evidenceSuggestions=[], evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion, onPresentMeetingRecord, orgMembers, fmtDate, caseSignals=[], onAskWhy, generateAppealReview, appealReviewLoading, recordAppealOutcome, policies, consistencyReview, consistencyReviewLoading, generateConsistencyReview, canDecide=true, canDecideAppeal=true,
+  // ER Journey Slice 1. atDecisionStage: has this process reached its own
+  // decision point (disciplinary hearing / grievance meeting)? Derived by
+  // CaseViewScreen from the canonical hasReachedOutcomeStage, never here.
+  // canRecordInvestigation: may this user write the investigation narrative —
+  // true for HR, the disciplinary officer, AND the assigned investigator.
+  atDecisionStage = true, canRecordInvestigation = canDecide }) {
   const [showNew, setShowNew] = useState(false);
   const [newForm, setNewForm] = useState({ title:"", description:"", period:"", peopleInvolved:"" });
   const [expandedId, setExpandedId] = useState(null);
@@ -116,7 +122,11 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
   return (
     <>
       <EvidenceMatrixPanel cs={cs} allegations={allegations} suggestions={evidenceSuggestions} suggestionsLoading={evidenceSuggestionsLoading} onGenerateSuggestions={generateEvidenceSuggestions} onAcceptSuggestion={acceptEvidenceSuggestion} onRejectSuggestion={rejectEvidenceSuggestion} onOpenEvidence={openEvidence}/>
-      <ConsistencyPanel cs={cs} sanctionDistribution={sanctionDistribution} comparableCases={comparableCases} consistencyReview={consistencyReview} consistencyReviewLoading={consistencyReviewLoading} onGenerateReview={generateConsistencyReview} onAskWhy={onAskWhy}/>
+      {/* Sanction consistency and comparable closed cases. Legitimate when
+          choosing a penalty; prejudicial while establishing facts, because it
+          shows what punishments similar cases attracted before this case has
+          any case to answer. Calculation is untouched — only its timing. */}
+      {atDecisionStage && <ConsistencyPanel cs={cs} sanctionDistribution={sanctionDistribution} comparableCases={comparableCases} consistencyReview={consistencyReview} consistencyReviewLoading={consistencyReviewLoading} onGenerateReview={generateConsistencyReview} onAskWhy={onAskWhy}/>}
     <div style={{background:"#FFFFFF",border:"1px solid #E8EAF2",borderRadius:12,marginBottom:16,overflow:"hidden"}}>
       <div style={{padding:"12px 16px",background:"#FFFFFF",borderBottom:"1px solid #E3E5EE",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div style={{fontSize:14,fontWeight:700,color:"#7A2FD8"}}>Allegations ({allegations.length})</div>
@@ -183,21 +193,34 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                     );
                   })()}
 
-                  {canDecide ? (
+                  {/* ── THE DISCIPLINARY QUESTION ─────────────────────────────
+                      Substantiated / not substantiated is decided after the
+                      employee has been heard, so the control is withheld until
+                      the process reaches its decision point. Withheld, not
+                      removed: a status already on the record (including the 343
+                      historical rows) still shows read-only, so nothing becomes
+                      inaccessible and nothing is rewritten. */}
+                  {canDecide && atDecisionStage ? (
                     <div style={{marginBottom:12}}>
                       <label htmlFor={`allegation-status-${a.id}`} style={labelStyle}>Status</label>
                       <select id={`allegation-status-${a.id}`} value={a.status} onChange={e=>changeAllegationStatus(a.id, e.target.value)} style={{...inputStyle,width:"auto"}}>
                         {ALLEGATION_STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                       </select>
                     </div>
-                  ) : (
+                  ) : (!atDecisionStage && !isFindingStatus(a.status)) ? null : (
                     <ReadOnlyField label="Status" value={allegationStatusMeta(a.status).label} />
                   )}
 
-                  {canDecide ? (
+                  {/* The INVESTIGATION question, and the investigator's own
+                      fields. Writable by the assigned investigator as well as
+                      HR / the disciplinary officer. Relabelled "assessment":
+                      "finding" invited confusion with the disciplinary finding,
+                      and the old label referred to a reasoning box that is no
+                      longer on screen during investigation. */}
+                  {canRecordInvestigation ? (
                     <>
                       <div style={{marginBottom:12}}>
-                        <label htmlFor={`allegation-investigator-finding-${a.id}`} style={labelStyle}>Investigator's finding — distinct from the decision-maker's reasoning below</label>
+                        <label htmlFor={`allegation-investigator-finding-${a.id}`} style={labelStyle}>Investigator's assessment — what the investigation itself concluded, not the disciplinary decision</label>
                         <DraftTextarea id={`allegation-investigator-finding-${a.id}`} style={{...inputStyle,resize:"vertical"}} rows={2} value={a.investigatorFinding||""} placeholder="What did the investigation itself conclude, before any hearing?" onCommit={v=>patchAllegation(a.id,{investigatorFinding:v})} />
                       </div>
                       <div style={{marginBottom:12}}>
@@ -207,12 +230,16 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                     </>
                   ) : (
                     <>
-                      <ReadOnlyField label="Investigator's finding" value={a.investigatorFinding} placeholder="Not yet recorded" />
+                      <ReadOnlyField label="Investigator's assessment" value={a.investigatorFinding} placeholder="Not yet recorded" />
                       <ReadOnlyField label="Outstanding uncertainty" value={a.outstandingUncertainty} placeholder="None recorded" />
                     </>
                   )}
 
-                  {outcomeDistribution.applicable && (
+                  {/* Finding consistency. Base-rate information about how
+                      comparable allegations were decided is not evidence about
+                      THIS one, and showing it during investigation anchors the
+                      investigator on the question they must not yet answer. */}
+                  {atDecisionStage && outcomeDistribution.applicable && (
                     <div style={{marginBottom:12,background:"#FFFFFF",border:"1px solid #E3E5EE",borderRadius:8,padding:12}}>
                       <div style={{fontSize:11,fontWeight:700,color:"#4A4E63",marginBottom:8}}>How similar cases have been decided</div>
                       <div style={{fontSize:11,color:"#8A8EA3",marginBottom:10}}>Based on {outcomeDistribution.total} closed {cs.caseType} case{outcomeDistribution.total===1?"":"s"} at this organisation. For context only — every case turns on its own facts.</div>
@@ -228,7 +255,7 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                     </div>
                   )}
 
-                  {isFindingStatus(a.status) && (
+                  {atDecisionStage && isFindingStatus(a.status) && (
                     <div style={{marginBottom:12,background:"#FFFFFF",border:"1px solid #E3E5EE",borderRadius:8,padding:12}}>
                       <label htmlFor={`allegation-decision-reasoning-${a.id}`} style={labelStyle}>Decision reasoning — why was this finding reached?</label>
                       {canDecide ? (

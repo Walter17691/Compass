@@ -1,4 +1,6 @@
 import { supabaseRequest } from './_supabase.js';
+import { mapCaseRow } from '../../src/lib/caseMapping.js';
+import { getCaseStage } from '../../src/lib/caseStage.js';
 import { verifyCaller } from '../_auth.js';
 
 export async function caseList(req, res) {
@@ -14,7 +16,7 @@ export async function caseList(req, res) {
     if (!account) return res.status(404).json({ error: 'No portal account for this user' });
 
     const casesRes = await supabaseRequest(
-      `cases?org_id=eq.${account.org_id}&employee_name=eq.${encodeURIComponent(account.employee_name)}&select=id,case_type,stage,date_received,employee_email`
+      `cases?org_id=eq.${account.org_id}&employee_name=eq.${encodeURIComponent(account.employee_name)}&select=id,case_type,stage,date_received,employee_email,outcome,meetings,investigation_report`
     );
     let cases = await casesRes.json();
 
@@ -39,7 +41,10 @@ export async function caseList(req, res) {
     const curated = cases.map(c => ({
       id: c.id,
       caseType: c.case_type,
-      stage: c.stage,
+      // Same canonical derivation as _case-detail and as HR. outcome, meetings
+      // and investigation_report are selected solely to feed it — none of them
+      // is returned to the employee.
+      stage: getCaseStage(mapCaseRow(c)),
       dateReceived: c.date_received,
     }));
 

@@ -1,4 +1,6 @@
 import { supabaseRequest } from './_supabase.js';
+import { mapCaseRow } from '../../src/lib/caseMapping.js';
+import { getCaseStage } from '../../src/lib/caseStage.js';
 import { verifyCaller } from '../_auth.js';
 
 // Only ever return these fields for a meeting — never record/transcript/
@@ -51,7 +53,13 @@ export async function caseDetail(req, res) {
 
     res.status(200).json({
       caseType: cs.case_type,
-      stage: cs.stage,
+      // ER Journey Slice 1 — the CANONICAL stage, the same derivation HR sees.
+      // cases.stage is only advanced by some workflow actions, so a case whose
+      // outcome has been issued can still hold 'open'. HR read through
+      // getCaseStage and saw "outcome"; the portal read the column and would
+      // have told the employee their case was still open. One derivation, one
+      // answer, until stored stage becomes a maintained projection.
+      stage: getCaseStage(mapCaseRow(cs)),
       meetings: formalLetters,
     });
   } catch (e) {

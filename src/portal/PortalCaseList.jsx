@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
+import { employeeStageLabel } from './employeeStageLabel';
 import { authedFetch } from '../lib/authedFetch';
 
-const stageLabel = stage => {
-  const labels = { open: "Open", investigation: "Investigation", inv_report: "Awaiting next step", disciplinary: "Disciplinary", outcome: "Outcome issued", appeal: "Appeal", closed: "Closed" };
-  return labels[stage] || stage || "In progress";
-};
+
 
 export function PortalCaseList({ userId, onOpenCase }) {
   const [cases, setCases] = useState(null);
@@ -43,7 +41,7 @@ export function PortalCaseList({ userId, onOpenCase }) {
                 <div style={{ fontSize: 14, fontWeight: 600, color: "#1C1820", textTransform: "capitalize" }}>{cs.caseType || "HR matter"}</div>
                 <div style={{ fontSize: 12, color: "#9B9098", marginTop: 2 }}>Received {cs.dateReceived || "—"}</div>
               </div>
-              <span style={{ fontSize: 11, fontWeight: 600, color: "#7C5CFC", background: "#EDE8FF", borderRadius: 20, padding: "3px 10px" }}>{stageLabel(cs.stage)}</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "#7C5CFC", background: "#EDE8FF", borderRadius: 20, padding: "3px 10px" }}>{employeeStageLabel(cs.stage)}</span>
             </button>
           ))}
         </div>
