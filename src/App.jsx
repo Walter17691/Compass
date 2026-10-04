@@ -97,6 +97,7 @@ import { buildReviewDraft, restorableDraft, markDraftEdited, supersedeReviewDraf
 import { splitMeetingRecord } from './lib/meetingRecordSections';
 import { employeeFacingSnapshot } from './lib/signedSnapshot';
 import { applyRecordIdentity, resolvePersistedMeeting, RESOLUTION, isPersistedIdentityMissing, describeUnresolvedPersistedRecord } from './lib/meetingIdentity';
+import { CAPTURE_CHANNEL, isSegmentable, pendingCapture, attributeCapture, reconcileCapture } from './lib/noteCapture';
 import { mergeSuggestions, suggestionKey } from './lib/suggestionIdentity';
 import { appealLinkCandidates } from './lib/appealLink';
 import { reconcileCaseEmployeeWrite, describeReconcileOutcome, shouldReloadAfter, correctCaseEmployeeWrite, describeCorrectionOutcome, CORRECT_RESULT } from './lib/reconciliationWrites';
@@ -7479,7 +7480,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     const rec = new SR(); rec.continuous=true; rec.interimResults=true; rec.lang="en-GB";
     let buf="";
     rec.onresult = e => { let interim=""; for(let i=e.resultIndex;i<e.results.length;i++) { if(e.results[i].isFinal) buf+=e.results[i][0].transcript+" "; else interim=e.results[i][0].transcript; } setInputText(buf+interim); };
-    rec.onend = () => { if(buf.trim()) { addUtterance(buf.trim()); buf=""; setInputText(""); } setIsListening(false); };
+    rec.onend = () => { if(buf.trim()) { addUtterance(buf.trim(), CAPTURE_CHANNEL.SPEECH_MIC); buf=""; setInputText(""); } setIsListening(false); };
     rec.onerror = () => setIsListening(false);
     recognitionRef.current = rec; rec.start(); setIsListening(true);
   }, []);
@@ -7498,7 +7499,7 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       if(SR) {
         const rec = new SR(); rec.continuous=true; rec.interimResults=false; rec.lang="en-GB";
         let buf="";
-        rec.onresult = e => { for(let i=e.resultIndex;i<e.results.length;i++) { if(e.results[i].isFinal) { buf+=e.results[i][0].transcript+" "; if(buf.trim().split(" ").length>=8) { addUtterance(buf.trim()); buf=""; } } } };
+        rec.onresult = e => { for(let i=e.resultIndex;i<e.results.length;i++) { if(e.results[i].isFinal) { buf+=e.results[i][0].transcript+" "; if(buf.trim().split(" ").length>=8) { addUtterance(buf.trim(), CAPTURE_CHANNEL.SPEECH_SCREEN); buf=""; } } } };
         screenRecRef.current = rec; rec.start();
       }
       stream.getVideoTracks()[0].addEventListener("ended", () => stopScreenCapture());
@@ -7524,12 +7525,21 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const handleImportSubmit = async () => {
     if(!importText.trim()) return;
     const chunks = importText.split("\n\n").filter(c=>c.trim().length>10);
-    for(const chunk of chunks) await addUtterance(chunk.trim());
+    for(const chunk of chunks) await addUtterance(chunk.trim(), CAPTURE_CHANNEL.IMPORT);
     setImportText("");
   };
 
   // ── Auto-attribute utterance ──
-  const addUtterance = async text => {
+  //
+  // ONE CALL = ONE CAPTURE EVENT = ONE NOTE (or, on a segmentable channel, a
+  // faithful split of that one note). The attribution reply may set the
+  // speaker; it may never add, delete or reword a note. See lib/noteCapture.js
+  // for the blocker this contract closes — four typed notes rendered as eight,
+  // because the reply's extra elements were appended as fresh notes.
+  //
+  // `channel` defaults to TYPING, which is ATOMIC. Fail closed: a caller that
+  // forgets to declare its channel gets the variant that cannot multiply notes.
+  const addUtterance = async (text, channel = CAPTURE_CHANNEL.TYPING) => {
     if(!text||!text.trim()) return;
     const raw = text.trim(); setInputText(""); if(inputRef.current) inputRef.current.focus();
     // Human UAT remediation, Batch 2, Part 4 — this is the one place
@@ -7540,9 +7550,18 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     // manual-typing path and left meetingStartTime unset for a meeting
     // conducted purely by speech.
     if(!meetingStartTime) setMeetingStartTime(new Date().toISOString());
-    const pendingId = newId("utt");
+    const captureId = newId("utt");
     const ts = new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
-    setTranscript(p=>[...p,{id:pendingId, speaker:"...", text:raw, ts, pending:true}]);
+    const capture = pendingCapture({ captureId, channel, text: raw, ts });
+    setTranscript(p=>[...p,capture]);
+    // The names a speaker may be attributed to. Anything outside this list is
+    // the model inventing an attendee, and resolveSpeaker refuses it.
+    const speakerNames = [
+      caseInfo.manager||"HR Manager",
+      caseInfo.employee||"Employee",
+      ...(caseInfo.representative ? [caseInfo.representative] : []),
+      ...participants.map(p=>p.name).filter(Boolean),
+    ];
     try {
       const knownSpeakers = [
         `"${caseInfo.manager||"HR Manager"}" (chair)`,
@@ -7550,16 +7569,27 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         ...(caseInfo.representative ? [`"${caseInfo.representative}" (representative/companion)`] : []),
         ...participants.map(p=>`"${p.name}" (${p.role})`),
       ];
+      // The earlier lines are CONTEXT and are fenced as such. The previous
+      // wording ("Attribute each utterance") read as an instruction to return
+      // all of them, and the client then appended every one as a new note.
+      // The prompt is restated here for quality, but it is NOT the fix: the
+      // guarantee lives in attributeCapture, which cannot emit a note that is
+      // not derived from this capture however the model replies.
+      const splitRule = isSegmentable(channel)
+        ? `The new text was captured from audio and may contain more than one speaker. You may split it, but only by partitioning the new text exactly — reproduce it verbatim and in order across the elements you return, adding and removing nothing.`
+        : `Return exactly ONE element. Reproduce the new text verbatim as "text".`;
       const result = await streamClaude(
-        `UK HR meeting transcription. Known speakers: ${knownSpeakers.join(", ")}. Attribute each utterance to whichever of these speakers actually said it. Return JSON only: [{"speaker":"NAME","text":"..."}]. Use exact names.`,
-        `Meeting: ${meetingType?.label||"HR"}\nEmployee: ${caseInfo.employee}\nRecent:\n${transcript.slice(-5).filter(u=>!u.pending).map(u=>u.speaker+": "+u.text).join("\n")}\nNew: "${raw}"`,
+        `UK HR meeting transcription. Known speakers: ${knownSpeakers.join(", ")}. Attribute ONLY the new text below to whichever of these speakers said it, using their exact name. Never return the earlier context lines. ${splitRule} Return JSON only: [{"speaker":"NAME","text":"..."}].`,
+        `Meeting: ${meetingType?.label||"HR"}\nEmployee: ${caseInfo.employee}\n--- earlier lines, for context only, do not return these ---\n${transcript.slice(-5).filter(u=>!u.pending).map(u=>u.speaker+": "+u.text).join("\n")}\n--- end context ---\nNew text to attribute: "${raw}"`,
         ()=>{}
       );
       const parsed = JSON.parse(result.replace(/```json|```/g,"").trim());
-      const items = parsed.map((u,i)=>({id:i===0?pendingId:newId("utt"), speaker:u.speaker, text:u.text, ts, aiAttributed:true}));
-      setTranscript(p=>{const w=p.filter(u=>u.id!==pendingId); return [...w,...items];});
+      const entries = attributeCapture(capture, parsed, { allowedSpeakers: speakerNames });
+      setTranscript(p=>reconcileCapture(p, captureId, entries));
     } catch(e) {
-      setTranscript(p=>p.map(u=>u.id===pendingId?{...u,speaker:caseInfo.manager||"HR Manager",pending:false}:u));
+      // Attribution unavailable. The note still stands, UNATTRIBUTED — it is not
+      // evidence that the chair said it, which is what the old fallback claimed.
+      setTranscript(p=>reconcileCapture(p, captureId, attributeCapture(capture, null)));
     }
   };
   const handleKeyDown = e => { if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();addUtterance(inputText);} };

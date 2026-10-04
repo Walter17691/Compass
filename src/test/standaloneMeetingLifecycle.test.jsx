@@ -495,7 +495,16 @@ describe('D. live writes route by storage home', () => {
   });
 
   it('the live transcript is React state during the meeting, so nothing writes per utterance', () => {
-    const addUtterance = appCode.slice(appCode.indexOf('const addUtterance = async text =>'), appCode.indexOf('const handleKeyDown ='));
+    const from = appCode.indexOf('const addUtterance = async (text,');
+    const to = appCode.indexOf('const handleKeyDown =');
+    // A negative indexOf would make slice() return a one-character string and
+    // every assertion below would pass vacuously. Prove the slice is real
+    // first — this exact trap went undetected when addUtterance gained its
+    // `channel` parameter and the old anchor stopped matching.
+    expect(from, 'addUtterance anchor').toBeGreaterThan(-1);
+    expect(to, 'handleKeyDown anchor').toBeGreaterThan(from);
+    const addUtterance = appCode.slice(from, to);
+    expect(addUtterance).toContain('setTranscript');
     ['saveCases', 'endStandaloneMeeting', 'transitionMeeting', 'from(\'meetings\')']
       .forEach(f => expect(addUtterance, f).not.toContain(f));
   });
