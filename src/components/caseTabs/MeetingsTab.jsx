@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { isGrievanceCase } from '../../lib/caseStage';
 import { isTerminalStatus, isConfirmationSettled, isExpired, signatureStatusLabel } from '../../lib/eSignature';
+import { confirmationSemantics, provenanceLine } from '../../lib/confirmationSemantics';
 import { meetingRecordState, meetingsSummary } from '../../lib/meetingRecordState';
 import { requestManualSignatureConfirmation } from '../../lib/humanOverride';
 import { SignedRecordModal } from '../SignedRecordModal';
@@ -50,12 +51,22 @@ const SUGGESTION_LABEL = {
 // Investigation meetings list (their natural narrative position, and
 // disciplinary-only — a grievance case never shows them) rather than
 // moving to Outcome, which is specifically about the decision itself.
-export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, onPresentMeetingRecord, meetingTypes, fmtDate, attemptSubmitInvestigation, concludingInvestigation, investigationReportDraft, setShowHandoffModal, setLetterOutput, onAcceptSavedSuggestion, onDismissSavedSuggestion, promptDialog, audit, loadSignedSnapshot, proceedWithoutConfirmation, onResendReminder }) {
+export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, onPresentMeetingRecord, meetingTypes, fmtDate, attemptSubmitInvestigation, concludingInvestigation, investigationReportDraft, setShowHandoffModal, setLetterOutput, onAcceptSavedSuggestion, onDismissSavedSuggestion, promptDialog, audit, loadSignedSnapshot, loadRequestHistory, proceedWithoutConfirmation, onResendReminder }) {
   const grievance = isGrievanceCase(cs);
   const meetings = cs.meetings||[];
   // Human UAT remediation, Batch 2, Part 9 — see SignedRecordModal's own
   // comment for why this needs a durable, in-Compass view at all.
   const [viewingSignedMeeting, setViewingSignedMeeting] = useState(null);
+  // Slice 1b — previous versions are loaded ON DEMAND, per meeting. Nothing is
+  // fetched, and nothing is shown, unless the manager asks: the default view is
+  // the current state only, which is the whole point of the re-issue UX brief.
+  const [historyFor, setHistoryFor] = useState(null);
+  const [historyRows, setHistoryRows] = useState(null);
+  const openHistory = async (m) => {
+    setHistoryFor(m.id); setHistoryRows(null);
+    const chain = await loadRequestHistory?.(m.id);
+    setHistoryRows(chain?.superseded || []);
+  };
   // Human UAT remediation, Batch 2, Part 12 — keeps the live report
   // preview scrolled to the newest text as it streams in, rather than
   // stuck showing only the opening lines once the content outgrows the
@@ -138,7 +149,12 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
     </div>
   );
 
-  const MeetingRow = ({m}) => (
+  const MeetingRow = ({m}) => {
+    // Computed once per row. One canonical source for every label below, so a
+    // status can never pick up a different meaning in two places.
+    const sem = confirmationSemantics(m.signStatus);
+    const agreed = sem.impliesAgreement;
+    return (
     <div style={{padding:"12px 0",borderBottom:"1px solid #F0F1F7"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
         <div style={{flex:1,minWidth:0}}>
@@ -174,8 +190,8 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
               a reviewer most needs to see. The label follows the state rather
               than claiming a signature in every case. */}
           {m.record&&m.signStatus&&isTerminalStatus(m.signStatus)&&m.signStatus!=="declined"&&(
-            <button onClick={()=>setViewingSignedMeeting(m)} style={{fontSize:11,background: m.signStatus==="disputed"?"#FEF5E7":"#E8F5EE",border:`1px solid ${m.signStatus==="disputed"?"#F5E6C4":"#A8D5B5"}`,borderRadius:6,padding:"4px 10px",color: m.signStatus==="disputed"?"#7A5C1A":"#1A7A4A",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500}}>
-              {m.signStatus==="disputed"?"View issued record & comments":m.signStatus==="proceeded"?"View issued record":m.signStatus==="acknowledged"?"View acknowledged copy":"View signed copy"}
+            <button onClick={()=>setViewingSignedMeeting(m)} style={{fontSize:11,background: agreed?"#E8F5EE":"#FEF5E7",border:`1px solid ${agreed?"#A8D5B5":"#F5E6C4"}`,borderRadius:6,padding:"4px 10px",color: agreed?"#1A7A4A":"#7A5C1A",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500}}>
+              {sem.viewLabel}
             </button>
           )}
         </div>
@@ -186,13 +202,15 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
           the badge above said "Signed" with nothing to confirm it. */}
       {m.signStatus&&isTerminalStatus(m.signStatus)&&(m.signedAt||m.declineReason)&&(
         <div style={{fontSize:11,color:"#8A8EA3",marginTop:4}}>
+          {/* One canonical state line. Only `signed` can produce signature
+              wording, because only its provenanceKind is SIGNED. */}
           {m.signStatus==="declined"
-            ? <>Declined{m.signerName?` by ${m.signerName}`:""}{m.signedAt?` on ${fmtDate(m.signedAt)}`:""}{m.declineReason?`: "${m.declineReason}"`:""}</>
+            ? <>Declined to sign{m.signerName?` by ${m.signerName}`:""}{m.signedAt?` on ${fmtDate(m.signedAt)}`:""}{m.declineReason?`: "${m.declineReason}"`:""}</>
             : m.signStatus==="disputed"
-              ? <>Participant responded with comments{m.participantCommentAt?` on ${fmtDate(m.participantCommentAt)}`:""} — the record was not changed by their comments</>
+              ? <>Responded with comments{m.participantCommentAt?` on ${fmtDate(m.participantCommentAt)}`:""} — the record was not changed by their comments</>
               : m.signStatus==="proceeded"
-                ? <>Proceeded without confirmation{m.proceededAt?` on ${fmtDate(m.proceededAt)}`:""}{m.proceededFromStatus?` — was ${m.proceededFromStatus}`:""}</>
-                : <>{signatureStatusLabel(m.signStatus)}{m.signerName?` by ${m.signerName}`:""}{m.signedAt?` on ${fmtDate(m.signedAt)}`:""}</>}
+                ? <>Proceeded without confirmation{m.proceededAt?` on ${fmtDate(m.proceededAt)}`:""}{m.proceededFromStatus?` — the request was ${confirmationSemantics(m.proceededFromStatus).stateLine.toLowerCase()} at the time`:""}</>
+                : <>{provenanceLine(m.signStatus, { name: m.signerName, at: m.signedAt, fmtDate })}</>}
         </div>
       )}
       {/* ── CONFIRMATION OUTSTANDING ────────────────────────────────────────
@@ -222,6 +240,39 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
           </div>
         </div>
       )}
+      {/* ── PREVIOUS VERSIONS, ON DEMAND ───────────────────────────────────
+          One quiet link, shown only where a request exists at all. No list, no
+          dashboard, no counts in the default view: a manager who never re-issued
+          anything sees nothing here, and one who did gets the history when they
+          ask for it. */}
+      {m.record&&m.signId&&loadRequestHistory&&(
+        <div style={{marginTop:6}}>
+          {historyFor!==m.id ? (
+            <button onClick={()=>openHistory(m)} style={{fontSize:11,background:"none",border:"none",padding:0,color:"#8A8EA3",cursor:"pointer",textDecoration:"underline",fontFamily:FONT.sans}}>
+              Previous versions
+            </button>
+          ) : historyRows===null ? (
+            <div style={{fontSize:11,color:"#8A8EA3"}}>Loading previous versions…</div>
+          ) : historyRows.length===0 ? (
+            <div style={{fontSize:11,color:"#8A8EA3"}}>No previous versions — this record has been issued once.</div>
+          ) : (
+            <div style={{background:"#F6F5FA",border:"1px solid #E8EAF2",borderRadius:8,padding:"8px 10px"}}>
+              <div style={{fontSize:10,fontWeight:700,color:"#4A4E63",letterSpacing:0.4,textTransform:"uppercase",marginBottom:6}}>Previous versions</div>
+              {historyRows.map(r=>(
+                <div key={r.sign_id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"3px 0"}}>
+                  <span style={{fontSize:11,color:"#4A4E63"}}>
+                    Issued {r.created_at?fmtDate(r.created_at):"—"} · {confirmationSemantics(r.status).stateLine} · replaced {r.superseded_at?fmtDate(r.superseded_at):"—"}
+                  </span>
+                  <button onClick={()=>setViewingSignedMeeting({...m, signId:r.sign_id, signStatus:r.status, signedAt:r.signed_at, supersededAt:r.superseded_at})}
+                    style={{fontSize:11,background:"none",border:"1px solid #E8EAF2",borderRadius:6,padding:"2px 8px",color:"#4A4E63",cursor:"pointer",fontFamily:FONT.sans,flexShrink:0}}>
+                    View issued record
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       {!m.record&&(m.agenda||m.prepQuestions?.length>0||m.attendees?.length>0)&&<ScheduledMeetingDetails m={m}/>}
       {m.record&&m.unresolvedSuggestions?.length>0&&(onAcceptSavedSuggestion||onDismissSavedSuggestion)&&(
         <div style={{marginTop:8,background:"#FDF3E8",border:"1px solid #E8C088",borderRadius:8,padding:"10px 12px"}}>
@@ -246,6 +297,7 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
       )}
     </div>
   );
+  };
 
   if (!activeStage) return null;
 

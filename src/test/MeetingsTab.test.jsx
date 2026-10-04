@@ -179,7 +179,7 @@ describe('MeetingsTab — signature completion detail (Human UAT remediation, Ba
   it('shows the decline reason distinctly when the recipient declined', () => {
     const cs = caseWithMeeting({ signStatus: 'declined', signId: 'sign-1', signerName: 'Sam Employee', signedAt: '2026-08-15', declineReason: 'Disputes the accuracy of the record' });
     render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
-    expect(screen.getByText(/Declined by Sam Employee on/)).toBeInTheDocument();
+    expect(screen.getByText(/Declined to sign by Sam Employee on/)).toBeInTheDocument();
     expect(screen.getByText(/Disputes the accuracy of the record/)).toBeInTheDocument();
   });
 
@@ -227,7 +227,7 @@ describe('MeetingsTab — signed record retrieval (Batch 2, Part 9)', () => {
     // signature in every case. An acknowledgement is not a signature.
     await user.click(screen.getByRole('button', { name: 'View acknowledged copy' }));
     const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByText(/Acknowledged by Sam Employee on/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Acknowledged receipt by Sam Employee on/)).toBeInTheDocument();
     expect(within(dialog).queryByAltText(/signature/i)).not.toBeInTheDocument();
   });
 

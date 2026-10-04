@@ -166,7 +166,7 @@ describe('the signed copy is read from the snapshot, never from current text', (
       meeting={signedMeeting({ signStatus: 'disputed', signature: null, participantComment: 'I never said that.' })}
       fmtDate={d => d} onClose={() => {}}
       loadSignedSnapshot={snapshotFor(ORIGINAL, { status: 'disputed', participant_comment: 'I never said that.' })} />);
-    await waitFor(() => expect(screen.getByText(/participant disagreed/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/participant responded with comments/)).toBeInTheDocument());
     expect(screen.queryByText('Signed copy')).not.toBeInTheDocument();
     expect(screen.queryByText('Acknowledged copy')).not.toBeInTheDocument();
   });
@@ -431,7 +431,7 @@ describe('expiry is persisted, and a reminder never sends a dead link', () => {
 describe('amending a confirmed record is a named, reasoned act', () => {
   it('it requires a reason, and cancelling leaves the record alone', () => {
     const src = app();
-    expect(src).toMatch(/title: "Amend a confirmed record\?"/);
+    expect(src).toMatch(/title: "Amend a record that has been issued\?"/);
     expect(src).toMatch(/key:"reason", label:"Why is this record being amended\?", required:true/);
     expect(src).toMatch(/Amendment cancelled — the record is unchanged/);
   });
@@ -439,18 +439,18 @@ describe('amending a confirmed record is a named, reasoned act', () => {
   it('it only triggers when the employee-facing text actually changes', () => {
     const src = app();
     expect(src).toMatch(/employeeFacingSnapshot\(meeting\.record\)\.trim\(\) !== employeeFacingSnapshot\(priorMeeting\.record\)\.trim\(\)/);
-    expect(src).toMatch(/isConfirmationSettled\(priorMeeting\?\.signStatus\)/);
+    expect(src).toMatch(/hasBeenIssued\(priorMeeting\?\.signStatus\)/);
   });
 
   it('it emits a distinct, filterable audit action', () => {
     const src = app();
-    expect(src).toMatch(/audit\("Confirmed record amended"/);
+    expect(src).toMatch(/audit\("Issued record amended"/);
     // And it is reached by a REAL condition, not stranded behind a falsy one.
     // Raw source, not stripJs: App.jsx contains `/*` inside string literals, so
     // the non-greedy block-comment strip pairs it with a distant `*/` and removes
     // a large span of real code. Worth knowing — that helper is not safe on this file.
     expectLiveGuard(src, 'amendmentReason)');
-    expect(src).toMatch(/was \$\{priorMeeting\?\.signStatus \|\| "confirmed"\} — reason/);
+    expect(src).toMatch(/had been issued and was \$\{priorMeeting\?\.signStatus \|\| "unanswered"\}/);
   });
 
   it('divergence detection ignores whitespace but not substance', () => {

@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from 'react';
 import { MDRenderer } from './MDRenderer';
 import { useModalA11y } from '../hooks/useModalA11y';
 import { snapshotDivergence } from '../lib/signedSnapshot';
+import { confirmationSemantics, provenanceLine } from '../lib/confirmationSemantics';
 
 // ─────────────────────────────────────────────────────────────────────────
 // WHAT THE PARTICIPANT ACTUALLY SIGNED.
@@ -66,10 +67,12 @@ export function SignedRecordModal({ meeting, fmtDate, onClose, loadSignedSnapsho
     return () => { cancelled = true; };
   }, [canLoad, meeting?.signId, loadSignedSnapshot]);
 
-  const acknowledged = meeting.signStatus === 'acknowledged';
-  const disputed = meeting.signStatus === 'disputed';
-  const heading = disputed ? 'Record as issued — participant disagreed'
-    : acknowledged ? 'Acknowledged copy' : 'Signed copy';
+  // ONE exhaustive map, no ternary chain and no default that implies agreement.
+  // The previous version fell through to "Signed copy" for `expired` and
+  // `proceeded`, rendering silence as a signature — see confirmationSemantics.js.
+  const semantics = confirmationSemantics(meeting.signStatus);
+  const heading = semantics.heading;
+  const showSignatureImage = semantics.impliesAgreement;
 
   // Provenance comes from the SNAPSHOT where the snapshot loaded, because that
   // row is the authoritative one; the mirrored meeting fields are a convenience
@@ -89,13 +92,23 @@ export function SignedRecordModal({ meeting, fmtDate, onClose, loadSignedSnapsho
     <div role="dialog" aria-modal="true" aria-labelledby="signed-record-title" ref={containerRef} tabIndex={-1}
       style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:4000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:640,maxHeight:"85vh",overflowY:"auto"}}>
-        <div style={{fontSize:11,fontWeight:700,color: disputed ? "#B87520" : "#1A7A4A",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>{heading}</div>
+        <div style={{fontSize:11,fontWeight:700,color: semantics.impliesAgreement ? "#1A7A4A" : "#B87520",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>{heading}</div>
         <h3 id="signed-record-title" style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:6,fontWeight:400}}>{meeting.type || "Meeting"} — {fmtDate(meeting.date)}</h3>
         <p style={{fontSize:13,color:"#6B6375",marginBottom:20}}>
-          {disputed
-            ? <>Issued to {signerName || "the participant"}{commentAt ? ` — they responded on ${fmtDate(commentAt)}` : ""}</>
-            : <>{acknowledged ? "Acknowledged" : "Signed"}{signerName ? ` by ${signerName}` : ""}{signedAt ? ` on ${fmtDate(signedAt)}` : ""}</>}
+          {provenanceLine(meeting.signStatus, { name: signerName, at: signedAt, fmtDate })}
+          {commentAt ? ` — they responded on ${fmtDate(commentAt)}` : ""}
         </p>
+        {/* The manager's own decision, shown SEPARATELY from participant
+            provenance so "proceeded" can never read as something the
+            participant did. proceeded_from_status keeps the chain legible:
+            sent -> expired -> proceeded stays visible as a sequence. */}
+        {meeting.proceededAt && (
+          <p style={{fontSize:12,color:"#7A5C1A",background:"#FEF5E7",border:"1px solid #F5E6C4",borderRadius:8,padding:"8px 10px",marginBottom:16,lineHeight:1.6}}>
+            Proceeded without participant confirmation on {fmtDate(meeting.proceededAt)}
+            {meeting.proceededFromStatus ? ` — the request was ${confirmationSemantics(meeting.proceededFromStatus).stateLine.toLowerCase()} at the time` : ""}.
+            {meeting.proceedReason ? ` Reason recorded: ${meeting.proceedReason}` : ""}
+          </p>
+        )}
 
         {state === LOAD.PENDING && (
           <div style={{...notice, background:"#F6F5FA", border:"1px solid #E8EAF2", color:"#4A4E63"}}>
@@ -141,7 +154,7 @@ export function SignedRecordModal({ meeting, fmtDate, onClose, loadSignedSnapsho
           </div>
         )}
 
-        {!acknowledged && !disputed && signatureImg && (
+        {showSignatureImage && signatureImg && (
           <div style={{marginBottom:20,padding:16,background:"#FDFAF5",borderRadius:8,border:"1px solid #EDE5D8"}}>
             <div style={{fontSize:10,fontWeight:700,color:"#9B9098",letterSpacing:0.5,textTransform:"uppercase",marginBottom:8}}>Employee signature</div>
             <img src={signatureImg} alt={`${signerName || "Employee"}'s signature`} style={{maxWidth:280,background:"#fff",borderRadius:4,padding:8,border:"1px solid #E8E0D0"}}/>

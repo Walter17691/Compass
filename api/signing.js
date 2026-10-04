@@ -30,7 +30,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   if (req.method === 'POST') {
-    const { document, employeeEmail, employeeName, managerName, managerEmail, meetingType, meetingDate, documentType, requiresSignature, signature, acknowledged, declined, declineReason, signedAt, disputed, participantComment, proceed, proceedReason } = req.body;
+    const { document, employeeEmail, employeeName, managerName, managerEmail, meetingType, meetingDate, documentType, requiresSignature, signature, acknowledged, declined, declineReason, signedAt, disputed, participantComment, proceed, proceedReason, meetingId } = req.body;
     const signId = req.body.signId;
 
     try {
@@ -56,6 +56,18 @@ export default async function handler(req, res) {
         const [existing] = await existingRes.json();
         if (!existing) return res.status(404).json({ error: 'Signing request not found' });
         if (isTerminalStatus(existing.status)) return res.status(409).json({ error: 'This document has already been actioned' });
+        // Slice 1b — a SUPERSEDED request can no longer be actioned. Before this,
+        // an older link stayed live and signable, and because the client polls
+        // only meetings[].signId that response would never have appeared in
+        // Compass: a real participant action, invisible to the case.
+        //
+        // The message is neutral and names no replacement token.
+        if (existing.superseded_at) {
+          return res.status(409).json({
+            error: 'This version has been replaced by a newer record. Please use the most recent request you received.',
+            superseded: true,
+          });
+        }
         if (isExpired(existing.expires_at)) return res.status(409).json({ error: 'This signing link has expired' });
 
         // Pre-V1 Trust Slice — `disputed` joins the outcomes. It is a RESPONSE,
@@ -101,7 +113,7 @@ export default async function handler(req, res) {
           return res.status(400).json({ error: 'Please say what you disagree with before submitting.' });
         }
 
-        const r = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}&status=in.(sent,opened)`, {
+        const r = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}&status=in.(sent,opened)&superseded_at=is.null`, {
           method: 'PATCH',
           headers: { 'Prefer': 'return=representation' },
           body: JSON.stringify(patch)
@@ -236,6 +248,41 @@ export default async function handler(req, res) {
         if (!withinLimit) return res.status(429).json({ error: 'Too many requests — please wait a moment and try again.' });
 
         const newSignId = crypto.randomUUID();
+
+        // ── SUPERSEDE FIRST, THEN INSERT ──────────────────────────────────
+        //
+        // Order matters and is not arbitrary. signing_requests carries a partial
+        // unique index over (meeting_id) where superseded_at is null, so there
+        // can only ever be ONE current request per document. Inserting the
+        // successor before retiring the predecessor would violate it.
+        //
+        // Scoped by org_id, which requireOrgMembership has already verified, so
+        // a caller cannot retire another tenant's requests. meeting_id comes from
+        // the payload but is only ever used INSIDE that org filter. The actor and
+        // timestamp are server-derived; the body is not consulted for either.
+        //
+        // Idempotent by construction: a replayed re-issue matches no
+        // not-yet-superseded row the second time.
+        if (meetingId) {
+          const supersededAt = new Date().toISOString();
+          const supersedeRes = await supabaseRequest(
+            `signing_requests?meeting_id=eq.${encodeURIComponent(meetingId)}&org_id=eq.${encodeURIComponent(orgId)}&superseded_at=is.null`,
+            {
+              method: 'PATCH',
+              headers: { 'Prefer': 'return=representation' },
+              body: JSON.stringify({
+                superseded_at: supersededAt,
+                superseded_by_sign_id: newSignId,
+                superseded_by: auth.caller.id,
+              })
+            }
+          );
+          if (!supersedeRes.ok) {
+            const text = await supersedeRes.text();
+            return res.status(500).json({ error: `Could not retire the previous request: ${text}` });
+          }
+        }
+
         const r = await supabaseRequest('signing_requests', {
           method: 'POST',
           headers: { 'Prefer': 'return=minimal' },
@@ -245,6 +292,7 @@ export default async function handler(req, res) {
             document_type: documentType || 'meeting_record',
             requires_signature: requiresSignature !== false,
             org_id: orgId,
+            meeting_id: meetingId || null,
             status: 'sent', expires_at: computeExpiresAt(), created_at: new Date().toISOString(),
           })
         });
@@ -258,8 +306,34 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    const { signId, internal, orgId } = req.query;
+    const { signId, internal, orgId, meetingId } = req.query;
     try {
+      // ── THE REQUEST CHAIN FOR ONE DOCUMENT ──────────────────────────────
+      //
+      // Authenticated and org-scoped, like internal=1 — and metadata ONLY. No
+      // document text, no signature image, no participant comment, and no
+      // superseded_by_sign_id. A caller that wants a specific snapshot asks for
+      // it by sign_id through the existing path, which applies the same checks.
+      //
+      // Exists so the manager UI can say "current request, and one previous"
+      // without the client having to hold a list of tokens.
+      if (meetingId && internal === '1') {
+        const auth = await requireOrgMembership(req, res, orgId);
+        if (!auth) return;
+        const chainRes = await supabaseRequest(
+          `signing_requests?meeting_id=eq.${encodeURIComponent(meetingId)}&org_id=eq.${encodeURIComponent(orgId)}`
+          + `&select=sign_id,status,document_type,created_at,opened_at,signed_at,declined_at,expires_at,superseded_at,proceeded_at,proceeded_from_status`
+          + `&order=created_at.desc`
+        );
+        if (!chainRes.ok) return res.status(500).json({ error: await chainRes.text() });
+        const rows = await chainRes.json();
+        return res.status(200).json({
+          requests: rows,
+          current: rows.find(r => !r.superseded_at) || null,
+          superseded: rows.filter(r => r.superseded_at),
+        });
+      }
+
       const r = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}&select=*`);
       const data = await r.json();
       if (!data.length) return res.status(404).json({ error: 'Not found' });
@@ -340,6 +414,18 @@ export default async function handler(req, res) {
         return res.status(200).json({ status: existing.status, restricted: true });
       }
 
+      // superseded_by_sign_id IS the successor's signing token. An authenticated
+      // org member may see it (they can already reach every request in their
+      // org); an anonymous link holder must never, or an old email would become
+      // a route to the current document.
+      if (!isInternalStatusCheck) {
+        const publicView = { ...existing, superseded: !!existing.superseded_at };
+        // Removed rather than destructured-away, so the intent reads as a
+        // deliberate withholding rather than two unused bindings.
+        delete publicView.superseded_by_sign_id;   // the successor's TOKEN
+        delete publicView.superseded_by;           // an internal actor id
+        return res.status(200).json(publicView);
+      }
       return res.status(200).json(existing);
     } catch(e) {
       return res.status(500).json({ error: e.message });

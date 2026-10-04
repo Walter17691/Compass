@@ -71,7 +71,8 @@ import { EvidenceDropzone } from './components/EvidenceDropzone';
 import { buildCaseContext, meetingsNeedingSummary, buildOverviewSourceRefs, stripAdvisorNotes } from './lib/caseContext';
 import { canAnalyseEvidence, buildAnalysisContent } from './lib/documentIngestion';
 import { OH_REPORT_SYSTEM_PROMPT, buildOhFindings, ohFindingTaskName } from './lib/ohReportIntelligence';
-import { isTerminalStatus, isExpired, isConfirmationSettled, signatureStatusLabel } from './lib/eSignature';
+import { isTerminalStatus, isExpired, signatureStatusLabel } from './lib/eSignature';
+import { hasBeenIssued, confirmationSemantics } from './lib/confirmationSemantics';
 import { parseCommitmentDueDate, suggestTaskOwner } from './lib/taskDueDateParsing';
 import { derivePeopleForCase } from './lib/casePeople';
 import { matchCaseByEmployeeName, matchCaseByEmployeeNameWithConfidence } from './lib/globalAssistant';
@@ -1669,6 +1670,22 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   //
   // Returns null on any failure. The caller must say "could not retrieve" rather
   // than substituting the current record — substituting is the defect.
+  // The request chain for one document: the current request and any it replaced.
+  // Metadata only — the server returns no document text and no tokens beyond the
+  // sign_ids an org member could already reach. Used so the manager UI can offer
+  // "previous versions" on demand without carrying a list of requests in state.
+  const loadRequestHistory = async (meetingId) => {
+    if(!meetingId || !org?.id) return null;
+    try {
+      const res = await authedFetch(`/api/signing?meetingId=${encodeURIComponent(meetingId)}&internal=1&orgId=${encodeURIComponent(org.id)}`);
+      if(!res.ok) return null;
+      return await res.json();
+    } catch(e) {
+      console.error('loadRequestHistory', e);
+      return null;
+    }
+  };
+
   const loadSignedSnapshot = async (signId) => {
     if(!signId || !org?.id) return null;
     try {
@@ -1726,7 +1743,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     }
   };
 
-  const sendDocumentForSignature = async ({ document, employeeEmail, employeeName, managerName, managerEmail, documentType, documentLabel, documentDate, requiresSignature=true, caseId, letterType }) => {
+  const sendDocumentForSignature = async ({ document, employeeEmail, employeeName, managerName, managerEmail, documentType, documentLabel, documentDate, requiresSignature=true, caseId, meetingId, letterType }) => {
     if(!employeeEmail||!document) return { success:false };
 
     // Store document in Supabase via API. Authenticated — this step creates
@@ -1740,6 +1757,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         document, employeeEmail, employeeName, managerName, managerEmail,
         meetingType: documentLabel, meetingDate: documentDate,
         documentType, requiresSignature, orgId: org?.id,
+        // Slice 1b — identifies the DOCUMENT, so the server can retire any
+        // request it previously issued for the same one. Without this, "newest
+        // signId wins" is still the only model and an old link stays live.
+        meetingId: meetingId || null,
       })
     });
     if(!storeRes.ok) {
@@ -1877,6 +1898,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       employeeName: caseInfo.employee||"Employee",
       managerName: caseInfo.manager||"Manager",
       documentType: "meeting_record",
+      meetingId: ids.meetingId,
       documentLabel: meetingType?.label||"Meeting",
       // Human UAT remediation, Batch 2, Part 7 — caseInfo.date defaults
       // to a raw ISO string (new Date().toISOString().split("T")[0]),
@@ -3812,7 +3834,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
           const changed = data.status !== m.signStatus
             || (data.expires_at || null) !== (m.expiresAt || null)
             || (data.participant_comment || null) !== (m.participantComment || null)
-            || (data.proceeded_at || null) !== (m.proceededAt || null);
+            || (data.proceeded_at || null) !== (m.proceededAt || null)
+            || (data.superseded_at || null) !== (m.supersededAt || null);
           return data.status && changed
             ? { id: m.id, status: data.status, signedAt: data.signed_at || data.declined_at || null, signature: data.signature || null, signerName: data.employee_name || null, declineReason: data.decline_reason || null,
                 expiresAt: data.expires_at || null,
@@ -3820,14 +3843,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
                 participantCommentAt: data.participant_comment_at || null,
                 proceededAt: data.proceeded_at || null,
                 proceedReason: data.proceed_reason || null,
-                proceededFromStatus: data.proceeded_from_status || null }
+                proceededFromStatus: data.proceeded_from_status || null,
+                supersededAt: data.superseded_at || null }
             : null;
         } catch { return null; }
       }))).filter(Boolean);
       if (cancelled || !changes.length) return;
       const changeMap = new Map(changes.map(c => [c.id, c]));
       const updated = cases.map(c => c.id === activeCaseId
-        ? { ...c, meetings: c.meetings.map(m => changeMap.has(m.id) ? { ...m, signStatus: changeMap.get(m.id).status, signedAt: changeMap.get(m.id).signedAt, signature: changeMap.get(m.id).signature, signerName: changeMap.get(m.id).signerName, declineReason: changeMap.get(m.id).declineReason, expiresAt: changeMap.get(m.id).expiresAt, participantComment: changeMap.get(m.id).participantComment, participantCommentAt: changeMap.get(m.id).participantCommentAt, proceededAt: changeMap.get(m.id).proceededAt, proceedReason: changeMap.get(m.id).proceedReason, proceededFromStatus: changeMap.get(m.id).proceededFromStatus } : m) }
+        ? { ...c, meetings: c.meetings.map(m => changeMap.has(m.id) ? { ...m, signStatus: changeMap.get(m.id).status, signedAt: changeMap.get(m.id).signedAt, signature: changeMap.get(m.id).signature, signerName: changeMap.get(m.id).signerName, declineReason: changeMap.get(m.id).declineReason, expiresAt: changeMap.get(m.id).expiresAt, participantComment: changeMap.get(m.id).participantComment, participantCommentAt: changeMap.get(m.id).participantCommentAt, proceededAt: changeMap.get(m.id).proceededAt, proceedReason: changeMap.get(m.id).proceedReason, proceededFromStatus: changeMap.get(m.id).proceededFromStatus, supersededAt: changeMap.get(m.id).supersededAt } : m) }
         : c);
       // Human UAT remediation, Batch 1, Issue 3 — signature completion had
       // no notification/activity/Timeline event at all. Logged here, not
@@ -9542,16 +9566,24 @@ Please produce:
     // guard protects the TRACE — who changed the working record after the
     // participant had agreed to it, and why.
     const priorMeeting = existing ? (existing.meetings||[]).find(x => x && x.id === meeting.id) : null;
-    const priorSettled = isConfirmationSettled(priorMeeting?.signStatus);
-    const recordChanging = priorSettled
+    // Slice 1b — hasBeenIssued, not isConfirmationSettled.
+    //
+    // The rule is about ISSUANCE, not settlement: once a specific version has
+    // been put in front of a participant, a later material change must be
+    // attributable. An EXPIRED request was still issued — the participant holds
+    // that document, and the fact they never replied does not un-issue it. The
+    // previous predicate left expired (and sent, and opened) editable with no
+    // reason, no actor and no distinct audit entry.
+    const priorIssued = hasBeenIssued(priorMeeting?.signStatus);
+    const recordChanging = priorIssued
       && typeof meeting.record === "string"
       && typeof priorMeeting.record === "string"
       && employeeFacingSnapshot(meeting.record).trim() !== employeeFacingSnapshot(priorMeeting.record).trim();
     let amendmentReason = null;
     if(recordChanging) {
       const values = await promptDialog({
-        title: "Amend a confirmed record?",
-        message: `This record was already ${signatureStatusLabel(priorMeeting.signStatus)||"confirmed"} by the participant. The copy they were sent is kept exactly as it was and is still viewable — but the case file's working record will now say something different. Record why it is being changed.`,
+        title: "Amend a record that has been issued?",
+        message: `This version was already issued to the participant (${confirmationSemantics(priorMeeting.signStatus).stateLine.toLowerCase()}). The copy they were sent is kept exactly as it was and is still viewable — but the case file's working record will now say something different. Record why it is being changed.`,
         fields: [{ key:"reason", label:"Why is this record being amended?", required:true, placeholder:"e.g. Corrected the date of the second incident — typed as 3 March, should be 13 March" }],
         confirmLabel: "Amend record",
       });
@@ -9672,8 +9704,8 @@ Please produce:
     // could never answer "was a confirmed record changed, and why" — which is
     // the question a reader of this case will actually ask.
     if(amendmentReason) {
-      audit("Confirmed record amended",
-        `${meetingType?.label || "Meeting"} record — was ${priorMeeting?.signStatus || "confirmed"} — reason: ${amendmentReason}`,
+      audit("Issued record amended",
+        `${meetingType?.label || "Meeting"} record — had been issued and was ${priorMeeting?.signStatus || "unanswered"} — reason: ${amendmentReason}`,
         caseId);
     }
     // Human UAT remediation, Batch 1, Issue 4 — distinct from the generic
@@ -12171,7 +12203,7 @@ Please produce:
             processTemplates, unansweredCovered, unansweredLoading, generateUnansweredQuestions,
             generateInconsistencies, inconsistencyLoading, ohReportFindings, ohReportAnalysisLoading,
             onAnalyseOhReport: analyseOhReport, onAcceptOhFinding: acceptOhFinding, onDismissOhFinding: dismissOhFinding,
-            onSendForSignature: sendDocumentForSignature, automationLevels, onResendReminder: resendSignatureReminder, loadSignedSnapshot, proceedWithoutConfirmation,
+            onSendForSignature: sendDocumentForSignature, automationLevels, onResendReminder: resendSignatureReminder, loadSignedSnapshot, loadRequestHistory, proceedWithoutConfirmation,
           }}
           timeline={{ toggleTimelineExclude, editTimelineDescription, generateTimelineRelevance, timelineRelevanceLoading, loadJsPDF }}
           allegationsTab={{

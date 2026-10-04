@@ -184,6 +184,23 @@
            MEDIUM) — the document/signature content is no longer sent to
            this page once a link is well past being actioned; this is
            what a request in that state renders instead. -->
+      <!-- Slice 1b — an older version of this record was replaced. Stated
+           neutrally: it does not blame the participant, it does not claim the
+           newer version says anything different, and it deliberately does NOT
+           contain a link or token for the current request. A superseded email
+           must never become a route to the live document. -->
+      <div id="superseded-section" style="display:none" class="card">
+        <h2>This version has been replaced</h2>
+        <p style="font-size:13px;color:var(--ink-soft);line-height:1.7">
+          A newer version of this record has since been issued to you. This copy is kept for your reference,
+          but it can no longer be signed or responded to.
+        </p>
+        <p style="font-size:13px;color:var(--ink-soft);line-height:1.7;margin-top:10px">
+          Please use the most recent request you received. If you cannot find it, contact the manager named above
+          and ask them to send it again.
+        </p>
+      </div>
+
       <div id="restricted-section" style="display:none" class="card">
         <div style="text-align:center">
           <h2>This link is no longer available</h2>
@@ -244,7 +261,12 @@
         const expired = data.status !== 'signed' && data.status !== 'acknowledged' && data.status !== 'declined'
           && data.expires_at && new Date() > new Date(data.expires_at);
 
-        if (data.status === 'signed' || data.status === 'acknowledged') {
+        // Checked BEFORE the response branches: a superseded request may itself
+        // be signed, declined or expired, and in every one of those cases the
+        // thing the participant needs to know is that it has been replaced.
+        if (data.superseded) {
+          showSuperseded(data);
+        } else if (data.status === 'signed' || data.status === 'acknowledged') {
           showCompleted(data);
         } else if (data.status === 'declined') {
           showDeclined();
@@ -278,6 +300,18 @@
       // longer goes anywhere.
       const c = document.getElementById('comment-section');
       if (c) c.style.display = 'none';
+    }
+
+    // The document itself stays visible (the participant was sent it, and the
+    // existing public-view window still governs for how long); only the ACTIONS
+    // are withdrawn, plus a plain explanation of why.
+    function showSuperseded(data) {
+      hideActionSections();
+      document.getElementById('superseded-section').style.display = 'block';
+      document.getElementById('status-badge').innerHTML = '<span class="status-muted">Replaced by a newer version</span>';
+      if (data && data.status === 'signed') {
+        document.getElementById('signed-section').style.display = 'block';
+      }
     }
 
     function showCompleted(data) {
