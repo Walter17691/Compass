@@ -639,8 +639,13 @@ describe('NEW-28 leaves every other protection intact', () => {
     expect(app.slice(i - 300, i)).toContain('stream:false');
     expect(app).toContain('setRiskScore({...JSON.parse(text.replace(/```json|```/g,"").trim()), historyContext});');
     expect(app).toContain('setRiskScore({rating:"UNKNOWN",summary:"Could not assess.",flags:[]})');
-    // Input unchanged: still the generated record, no new grounding channel.
-    expect(app).toContain('runRiskScore(fullRecord || allNotes.slice(-40).map(u=>u.text).join("\\n"));');
+    // Input is still the generated record with the same raw-notes fallback — no
+    // new grounding channel — but it is now the GUARDED record. Passing
+    // fullRecord gave the risk rating (a) a reconstruction the employee-facing
+    // fidelity guard had already rejected, and (b) Compass's own HR Advisor
+    // Notes, which fullRecord still contains, as evidence for its own rating.
+    expect(app).toContain('runRiskScore(guardedRecord || allNotes.slice(-40).map(u=>u.text).join("\\n"));');
+    expect(app).not.toContain('runRiskScore(fullRecord');
   });
 
   it('14/17. no legal-retrieval layer was added, and NEW-29 timing code is untouched', () => {

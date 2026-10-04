@@ -138,8 +138,30 @@ export function discussionText(record) {
 // first character of every whitespace-separated token, including punctuation
 // and em-dashes, so "UAT D4.3 (test)" becomes "UD(" and
 // "ZZ UAT Trust Slice — Sam Testcase" becomes "ZUTS—ST".
-export function initialsOf(name) {
-  return String(name || '').trim().split(/\s+/).filter(Boolean).map(w => w[0]).join('');
+// ┌─ THE DEFECT THIS REPLACES ──────────────────────────────────────────────┐
+// │ The prompt derived initials as                                           │
+// │   name.split(" ").map(w => w[0]).join("")                                │
+// │ which takes the first CHARACTER of every whitespace token, punctuation    │
+// │ included. So the UAT record was headed:                                  │
+// │   "UAT D4.3 (test)"                 -> "UD("                             │
+// │   "ZZ UAT Trust Slice — Sam Testcase" -> "ZUTS—ST"                       │
+// │ An em-dash and an opening bracket presented as a person's initials.      │
+// └─────────────────────────────────────────────────────────────────────────┘
+//
+// Punctuation-only tokens are dropped, dashes are separators rather than
+// initials, and a label that cannot be made useful falls back to the ROLE
+// rather than to something meaningless. A single-token name is returned whole,
+// because one letter identifies nobody.
+export function participantInitials(name, { fallback = 'Participant' } = {}) {
+  const tokens = String(name || '')
+    // En/em dash and hyphen are separators, never initials.
+    .split(/[\s‐-―-]+/)
+    .map(t => t.replace(/[^\p{L}\p{N}]/gu, ''))
+    .filter(t => t && /^\p{L}/u.test(t));
+  if (!tokens.length) return fallback;
+  if (tokens.length === 1) return tokens[0].length <= 12 ? tokens[0] : fallback;
+  const letters = tokens.map(t => t[0].toUpperCase()).join('');
+  return letters.slice(0, 4);
 }
 
 /** Every string that could legitimately prefix a line as "this person spoke". */
@@ -149,8 +171,14 @@ export function speakerLabels(names) {
     const name = String(n || '').trim();
     if (!name) continue;
     out.add(name.toLowerCase());
-    const i = initialsOf(name);
-    if (i) { out.add(i.toLowerCase()); out.add(i.toUpperCase().toLowerCase()); }
+    // BOTH derivations, deliberately. The clean one is what the prompt now asks
+    // for; the naive first-character-of-every-token one is what produced "UD("
+    // and "ZUTS—ST", and the guard must still recognise those as speaker labels
+    // — in a restored draft, or if the model mimics the old shape.
+    const clean = participantInitials(name, { fallback: '' });
+    if (clean) out.add(clean.toLowerCase());
+    const naive = name.split(/\s+/).filter(Boolean).map(w => w[0]).join('');
+    if (naive) out.add(naive.toLowerCase());
     const first = name.split(/\s+/)[0];
     if (first) out.add(first.toLowerCase());
   }
@@ -203,11 +231,209 @@ export function quotedSpans(text) {
 
 const FIRST_PERSON = /\b(I|I'm|I'll|I've|I'd|me|my|mine|myself|we|we're|us|our|ours)\b/i;
 
+// ─────────────────────────────────────────────────────────────────────────
+// THE THREE SOURCE CLASSES.
+//
+//   A. AUTHORITATIVE STRUCTURED DATA — meeting date and times, participant
+//      identities, meeting type. Compass knows these independently of anything
+//      the model wrote, so a record may state them.
+//   B. CAPTURED MEETING MATERIAL — the transcript. What was actually taken down.
+//   C. GENERATED INTERPRETATION — the model's own prose.
+//
+// A generated employee-facing factual claim must be grounded in A or B.
+// C IS NEVER A SOURCE. That is the whole boundary, and it is why `supports()`
+// below is built only from A and B and never from the record under test.
+// ─────────────────────────────────────────────────────────────────────────
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+
+/**
+ * Every equivalent rendering of an authoritative date.
+ *
+ * ┌─ A FALSE POSITIVE THIS PREVENTS ────────────────────────────────────────┐
+ * │ caseInfo.date is ISO — "2026-10-04" — and the model writes it out as     │
+ * │ "4 October 2026". Comparing the two as strings makes Compass's OWN       │
+ * │ meeting date look like an invented fact, so the guard would have         │
+ * │ rebuilt Meeting Details on essentially every real meeting. Caught by     │
+ * │ probing the helper before deploying, not by a user.                      │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ *
+ * Built from components rather than Date formatting, so no timezone can shift
+ * the day. An unparseable value is passed through unchanged.
+ */
+export function dateRenderings(value) {
+  const s = String(value == null ? '' : value).trim();
+  if (!s) return [];
+  let y, m, d;
+  let mt = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (mt) { y = +mt[1]; m = +mt[2]; d = +mt[3]; }
+  else {
+    // en-GB day-first, which is what this product uses everywhere.
+    mt = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (mt) { d = +mt[1]; m = +mt[2]; y = +mt[3]; }
+  }
+  if (!y || !m || !d || m < 1 || m > 12) return [s];
+  const name = MONTH_NAMES[m - 1];
+  const pad = n => String(n).padStart(2, '0');
+  return [s, `${y}-${pad(m)}-${pad(d)}`, `${d} ${name} ${y}`,
+    `${name} ${d}, ${y}`, `${pad(d)}/${pad(m)}/${y}`, `${d}/${m}/${y}`];
+}
+
+/** Flatten authoritative structured context into supporting text. */
+export function authoritativeText(authoritative) {
+  const a = authoritative || {};
+  const parts = [
+    a.meetingType, ...dateRenderings(a.date), a.startTime, a.endTime,
+    a.chair, a.employee, a.notetaker, a.representative, a.caseType,
+    ...(Array.isArray(a.participants) ? a.participants : []),
+    ...(Array.isArray(a.adjournments) ? a.adjournments : []),
+    ...(Array.isArray(a.extra) ? a.extra : []),
+  ];
+  return parts.filter(Boolean).map(String).join(' | ');
+}
+
+const MONTHS = 'january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec';
+
+/**
+ * Date-aware normalisation, so a FORMAT change is never mistaken for an
+ * invented fact: "2nd October" and "2 Oct" both reduce to "2 oct".
+ *
+ * Without this the guard would reject legitimate reformatting, which the brief
+ * rightly forbids — the objective is source fidelity, not identical wording.
+ */
+function normaliseFacts(s) {
+  return normalise(s)
+    .replace(/(\d{1,2})(st|nd|rd|th)\b/g, '$1')
+    .replace(new RegExp(`\\b(${MONTHS})\\b`, 'g'), m => m.slice(0, 3))
+    // Canonical day-month order, so "October 2" and "2 October" are the same
+    // date. The day pattern is \d{1,2} precisely so a YEAR is never swapped into
+    // the day position ("oct 2026" must not become "2026 oct").
+    .replace(/\b([a-z]{3})\s+(\d{1,2})\b/g, (whole, mon, day) =>
+      (new RegExp(`^(?:${MONTHS})$`).test(mon) ? `${day} ${mon}` : whole));
+}
+
+// Specificity classes that carry evidential weight on their own. Deliberately
+// NOT "every number": a count the model derives from the notes is summarising,
+// whereas a date, a year, a clock time or a sum of money is a factual claim.
+const SPECIFIC_PATTERNS = [
+  // A full or partial date, in either order.
+  new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s+(?:${MONTHS})\\b\\.?(?:\\s+\\d{4})?`, 'gi'),
+  new RegExp(`\\b(?:${MONTHS})\\s+\\d{1,2}(?:st|nd|rd|th)?\\b(?:,?\\s+\\d{4})?`, 'gi'),
+  /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g,
+  /\b\d{4}-\d{2}-\d{2}\b/g,
+  // A bare year.
+  /\b(?:19|20)\d{2}\b/g,
+  // A clock time.
+  /\b\d{1,2}:\d{2}(?::\d{2})?\b/g,
+  // Money and percentages.
+  /[£$€]\s?\d[\d,.]*/g,
+  /\b\d[\d,.]*\s?%/g,
+];
+
+/**
+ * Factual specifics asserted by `text` that neither A nor B supports.
+ *
+ * This is the check that catches the UAT gap: the notes said "2 October" and
+ * the generated Purpose said "2 October 2026". The year was plausible — the
+ * meeting really is in 2026 — but plausibility is not evidence, and the record
+ * must not pin an event to a year nobody recorded.
+ *
+ * Note that it is the WHOLE date expression that must be supported, not its
+ * tokens. "2026" on its own IS supported here (the meeting date is authoritative
+ * and contains it); "2 October 2026" is not, and that is exactly the distinction
+ * a token-level check would have missed.
+ */
+export function unsupportedSpecifics(text, supportCorpus) {
+  const haystack = normaliseFacts(supportCorpus);
+  const found = [];
+  const seen = new Set();
+  for (const re of SPECIFIC_PATTERNS) {
+    for (const m of String(text || '').matchAll(re)) {
+      const span = m[0].trim().replace(/\.$/, '');
+      const key = normaliseFacts(span);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      if (!haystack.includes(key)) found.push(span);
+    }
+  }
+  return found;
+}
+
 export const FIDELITY_VIOLATION = Object.freeze({
   INVENTED_DIALOGUE: 'invented_dialogue',
   FIRST_PERSON_SPEECH: 'first_person_speech',
   UNSUPPORTED_QUOTATION: 'unsupported_quotation',
+  UNSUPPORTED_SPECIFICITY: 'unsupported_specificity',
+  UNSUPPORTED_ATTRIBUTION: 'unsupported_attribution',
 });
+
+/** Which part of the employee-facing record a finding is in. */
+export const RECORD_REGION = Object.freeze({
+  DETAILS: 'details',
+  DISCUSSION: 'discussion',
+});
+
+// Labels that organise a record rather than name a speaker. A record may use
+// these freely; only a label naming a PERSON is an attribution.
+//
+// Kept deliberately generous. A false positive here would replace a manager's
+// legitimately structured record, which is worse than the narrower coverage.
+const STRUCTURAL_LABELS = new Set([
+  'type', 'date', 'start time', 'end time', 'adjournments', 'chair', 'notetaker',
+  'employee', 'representative', 'representative/companion', 'companion',
+  'other participants', 'participants', 'purpose', 'note', 'notes', 'manager',
+  'employee response', 'employer response', 'management position',
+  'employee position', 'response', 'evidence', 'follow-up', 'follow up',
+  'action', 'actions', 'next steps', 'outcome', 'background', 'summary',
+  'key points', 'procedural checks', 'discussion', 'present', 'apologies',
+  'attendees', 'location', 'meeting', 'subject', 'allegation', 'allegations',
+]);
+
+/** The Meeting Details block only. */
+export function detailsText(record) {
+  const text = typeof record === 'string' ? record : '';
+  if (!text) return '';
+  const out = [];
+  let inside = false;
+  let level = 0;
+  for (const raw of text.split('\n')) {
+    const line = raw.replace(/\r$/, '');
+    if (isDetailsHeading(line)) { inside = true; level = headingLevel(line) || 1; continue; }
+    if (!inside) continue;
+    const h = headingLevel(line);
+    if (h > 0 && h <= level) { inside = false; continue; }
+    out.push(line);
+  }
+  return out.join('\n');
+}
+
+/**
+ * Dialogue-format lines whose label names nobody in the meeting.
+ *
+ * Only meaningful where dialogue is permitted at all — for a paraphrase source
+ * every dialogue line is already refused. Restricted to labels that look like a
+ * person (capitalised words or initials, no lowercase-only token) and are not
+ * structural, so "Evidence / follow-up:" is not mistaken for a witness.
+ */
+export function unsupportedAttributions(text, names) {
+  const known = speakerLabels(names);
+  const out = [];
+  for (const raw of String(text || '').split('\n')) {
+    const m = raw.match(/^[ \t>*-]*([^:\n]{1,60}?)[ \t]*:[ \t]*(\S.*)$/);
+    if (!m) continue;
+    const label = m[1].replace(/^[*_"'[\]]+|[*_"'[\]]+$/g, '').trim();
+    const key = label.toLowerCase();
+    if (!label || known.has(key) || STRUCTURAL_LABELS.has(key)) continue;
+    const tokens = label.split(/\s+/);
+    if (tokens.length > 5) continue;
+    // Person-like: every token starts with a capital, and none is a bare
+    // lowercase word. Initials such as "JS" qualify.
+    if (!tokens.every(t => /^[A-Z\p{Lu}]/u.test(t))) continue;
+    out.push(label);
+  }
+  return out;
+}
 
 /**
  * Does this generated record claim more fidelity than its source supports?
@@ -215,53 +441,94 @@ export const FIDELITY_VIOLATION = Object.freeze({
  * Returns [] when clean. Three independent checks, so defeating one is not
  * enough — the UAT output trips all three.
  */
-export function fidelityViolations(record, transcript, { participantNames = [] } = {}) {
+export function fidelityViolations(record, transcript, { participantNames = [], authoritative = null } = {}) {
   const fidelity = sourceFidelity(transcript);
   const discussion = discussionText(record);
-  if (!discussion.trim()) return [];
+  const details = detailsText(record);
+  if (!discussion.trim() && !details.trim()) return [];
   const findings = [];
 
-  const sourceText = normalise((Array.isArray(transcript) ? transcript : []).map(e => e && e.text).filter(Boolean).join(' '));
-  const supports = span => sourceText.includes(normalise(span));
+  // A and B. C is absent by construction — the record under test is never a
+  // source for itself.
+  const captured = (Array.isArray(transcript) ? transcript : []).map(e => e && e.text).filter(Boolean).join(' ');
+  const authority = authoritativeText(authoritative);
+  const sourceText = normalise(captured);
+  const supportCorpus = `${captured} | ${authority}`;
+  const supports = span => sourceText.includes(normalise(span)) || normalise(authority).includes(normalise(span));
 
-  // 1. Paraphrase rendered as speech. The format IS the claim.
-  if (!dialoguePermitted(fidelity)) {
-    const lines = attributedDialogueLines(discussion, participantNames);
-    if (lines.length) {
-      findings.push({
-        code: FIDELITY_VIOLATION.INVENTED_DIALOGUE,
-        detail: `${lines.length} line(s) are written as attributed speech, but no capture in this meeting carries the speaker's own wording.`,
-      });
-    }
-    // 2. First-person wording THE SOURCE DOES NOT SUPPORT.
-    //
-    // Supported quotations are removed before this check, and that exclusion is
-    // load-bearing rather than a convenience: a notetaker may legitimately type
-    // a verbatim fragment — `Sam said "I was not working that day"` — and
-    // reproducing it is faithful, not invented. Caught by my own test, which
-    // had asserted the blunter rule. Unsupported quotations are not removed, so
-    // the UAT output's invented first-person speech is still caught here as
-    // well as by check 3.
-    const outsideSupportedQuotes = String(discussion).replace(QUOTED, (whole, inner) => (supports(inner) ? ' ' : whole));
-    if (FIRST_PERSON.test(outsideSupportedQuotes)) {
-      findings.push({
-        code: FIDELITY_VIOLATION.FIRST_PERSON_SPEECH,
-        detail: 'The account uses first-person wording the captured notes do not support, which presents the notetaker\'s summary as a participant\'s own words.',
-      });
+  const add = (code, region, detail) => findings.push({ code, region, detail });
+
+  // ── Checks that run on the DISCUSSION only ───────────────────────────────
+  if (discussion.trim()) {
+    // 1. Paraphrase rendered as speech. The format IS the claim.
+    if (!dialoguePermitted(fidelity)) {
+      const lines = attributedDialogueLines(discussion, participantNames);
+      if (lines.length) {
+        add(FIDELITY_VIOLATION.INVENTED_DIALOGUE, RECORD_REGION.DISCUSSION,
+          `${lines.length} line(s) are written as attributed speech, but no capture in this meeting carries the speaker's own wording.`);
+      }
+      // 2. First-person wording THE SOURCE DOES NOT SUPPORT.
+      //
+      // Supported quotations are removed before this check, and that exclusion
+      // is load-bearing rather than a convenience: a notetaker may legitimately
+      // type a verbatim fragment — `Sam said "I was not working that day"` — and
+      // reproducing it is faithful, not invented. Caught by my own test, which
+      // had asserted the blunter rule.
+      const outsideSupportedQuotes = String(discussion).replace(QUOTED, (whole, inner) => (supports(inner) ? ' ' : whole));
+      if (FIRST_PERSON.test(outsideSupportedQuotes)) {
+        add(FIDELITY_VIOLATION.FIRST_PERSON_SPEECH, RECORD_REGION.DISCUSSION,
+          'The account uses first-person wording the captured notes do not support, which presents the notetaker\'s summary as a participant\'s own words.');
+      }
+    } else {
+      // 1b. Dialogue is permitted, so the risk shifts to WHO is credited.
+      const invented = unsupportedAttributions(discussion, participantNames);
+      if (invented.length) {
+        add(FIDELITY_VIOLATION.UNSUPPORTED_ATTRIBUTION, RECORD_REGION.DISCUSSION,
+          `Speech is attributed to ${invented.length} name(s) not recorded as present: ${invented.join(', ')}.`);
+      }
     }
   }
 
-  // 3. A quotation that is not in the source. Applies at EVERY fidelity: a
-  //    quotation mark is a claim about exact words whatever the channel, and a
-  //    transcript-derived record may still be embellished.
-  const unsupported = quotedSpans(discussion).filter(q => !supports(q));
-  if (unsupported.length) {
-    findings.push({
-      code: FIDELITY_VIOLATION.UNSUPPORTED_QUOTATION,
-      detail: `${unsupported.length} quoted passage(s) do not appear in what was captured.`,
-    });
+  // ── Checks that run on the WHOLE employee-facing record ──────────────────
+  //
+  // THE GAP THIS CLOSES. The guard previously scanned only the discussion, so
+  // Meeting Details > Purpose turned "2 October" into "2 October 2026"
+  // unchallenged. A record is one document; a fabricated date in its header is
+  // no less a fabrication than one in its body.
+  for (const [region, text] of [[RECORD_REGION.DETAILS, details], [RECORD_REGION.DISCUSSION, discussion]]) {
+    if (!text.trim()) continue;
+
+    // 3. A quotation that is not in the source. Applies at EVERY fidelity: a
+    //    quotation mark is a claim about exact words whatever the channel.
+    const quotes = quotedSpans(text).filter(q => !supports(q));
+    if (quotes.length) {
+      add(FIDELITY_VIOLATION.UNSUPPORTED_QUOTATION, region,
+        `${quotes.length} quoted passage(s) do not appear in what was captured.`);
+    }
+
+    // 4. Factual specificity neither the notes nor Compass's own structured
+    //    data supports — an invented year, date, time, sum or percentage.
+    const specifics = unsupportedSpecifics(text, supportCorpus);
+    if (specifics.length) {
+      add(FIDELITY_VIOLATION.UNSUPPORTED_SPECIFICITY, region,
+        `${specifics.length} factual detail(s) are not supported by the notes or by the meeting's own recorded data: ${specifics.join(', ')}.`);
+    }
+
+    // 5. First person in the Details header is always wrong: it is a field list.
+    if (region === RECORD_REGION.DETAILS) {
+      const outside = String(text).replace(QUOTED, (whole, inner) => (supports(inner) ? ' ' : whole));
+      if (FIRST_PERSON.test(outside)) {
+        add(FIDELITY_VIOLATION.FIRST_PERSON_SPEECH, region,
+          'The meeting details are written in the first person.');
+      }
+    }
   }
   return findings;
+}
+
+/** Regions with at least one finding. */
+export function violatedRegions(violations) {
+  return new Set((Array.isArray(violations) ? violations : []).map(v => v && v.region).filter(Boolean));
 }
 
 // ── The instruction given to the generator ─────────────────────────────────
@@ -324,37 +591,103 @@ export function faithfulDiscussion(transcript, { fidelity = null } = {}) {
  * destroyed the manager's work on a false positive would be worse than the
  * defect it prevents.
  */
-export function applyFidelityGuard(record, transcript, { participantNames = [] } = {}) {
-  const violations = fidelityViolations(record, transcript, { participantNames });
-  if (!violations.length) return { record, violations: [], replaced: false };
+/**
+ * Meeting Details rebuilt from AUTHORITATIVE STRUCTURED DATA alone.
+ *
+ * Every field here is something Compass knows independently of the model, which
+ * is why this is provably faithful — including the Purpose line, which states
+ * only the meeting type and who it was with. The generated Purpose is exactly
+ * what invented "2 October 2026", so when Details is rejected the generated
+ * prose is the thing that goes.
+ */
+export function faithfulDetails(authoritative) {
+  const a = authoritative || {};
+  const field = (label, value) => `${label}: ${value || 'Not specified'}`;
+  const rows = [
+    field('Type', a.meetingType),
+    field('Date', a.date),
+    field('Start time', a.startTime),
+    field('End time', a.endTime),
+    ...(Array.isArray(a.adjournments) && a.adjournments.length
+      ? [field('Adjournments', a.adjournments.join('; '))] : []),
+    field('Chair', a.chair),
+    field('Notetaker', a.notetaker),
+    field('Employee', a.employee),
+    `Representative/companion: ${a.representative || 'N/A'}`,
+    `Other participants: ${(Array.isArray(a.participants) && a.participants.length) ? a.participants.join(', ') : 'None'}`,
+    `Purpose: ${a.meetingType || 'Meeting'}${a.employee ? ` with ${a.employee}` : ''}.`,
+  ];
+  return `## Meeting Details\n\n${rows.join('\n')}`;
+}
 
+/**
+ * Enforce source fidelity on a generated record, REGION BY REGION.
+ *
+ * Only the part that failed is replaced, so a fabricated Purpose does not cost
+ * the manager a well-written discussion section and vice versa.
+ *
+ * Never throws, and never returns empty when there were notes: a guard that
+ * destroyed the manager's work on a false positive would be worse than the
+ * defect it prevents. Details is only replaced when authoritative data is
+ * actually available to rebuild it from — inventing a blank header would be its
+ * own kind of lie.
+ */
+export function applyFidelityGuard(record, transcript, { participantNames = [], authoritative = null } = {}) {
+  const violations = fidelityViolations(record, transcript, { participantNames, authoritative });
+  if (!violations.length) return { record, violations: [], replaced: false, replacedRegions: [] };
+
+  const regions = violatedRegions(violations);
   const fidelity = sourceFidelity(transcript);
-  const faithful = faithfulDiscussion(transcript, { fidelity });
-  if (!faithful) return { record, violations, replaced: false };
-
   const text = typeof record === 'string' ? record : '';
-  const lines = text.split('\n');
-  const details = [];
+
+  // Split the record into its Details block and everything else, once.
+  const detailsLines = [];
+  const restLines = [];
   let inDetails = false;
   let level = 0;
-  for (const raw of lines) {
+  for (const raw of text.split('\n')) {
     const line = raw.replace(/\r$/, '');
-    if (isDetailsHeading(line)) { inDetails = true; level = headingLevel(line) || 1; details.push(line); continue; }
+    if (isDetailsHeading(line)) { inDetails = true; level = headingLevel(line) || 1; detailsLines.push(line); continue; }
     if (inDetails) {
       const h = headingLevel(line);
-      if (h > 0 && h <= level) { inDetails = false; continue; }
-      details.push(line);
+      if (h > 0 && h <= level) inDetails = false;
+      else { detailsLines.push(line); continue; }
     }
+    restLines.push(line);
   }
-  const head = details.join('\n').replace(/[\s\r\n]+$/, '');
+
+  const replacedRegions = [];
+
+  let head = detailsLines.join('\n').replace(/[\s\r\n]+$/, '');
+  if (regions.has(RECORD_REGION.DETAILS)) {
+    const rebuilt = authoritativeText(authoritative) ? faithfulDetails(authoritative) : '';
+    if (rebuilt) { head = rebuilt; replacedRegions.push(RECORD_REGION.DETAILS); }
+  }
+
+  let body = restLines.join('\n').replace(/^[\s\r\n]+|[\s\r\n]+$/g, '');
+  if (regions.has(RECORD_REGION.DISCUSSION)) {
+    const faithful = faithfulDiscussion(transcript, { fidelity });
+    if (faithful) { body = faithful; replacedRegions.push(RECORD_REGION.DISCUSSION); }
+  }
+
+  if (!replacedRegions.length) return { record, violations, replaced: false, replacedRegions: [] };
   return {
-    record: head ? `${head}\n\n${faithful}` : faithful,
+    record: [head, body].filter(s => s && s.trim()).join('\n\n'),
     violations,
     replaced: true,
+    replacedRegions,
   };
 }
 
-/** The one sentence the manager is told when the guard replaced the section. */
-export function describeFidelityFallback() {
+/** What the manager is told when the guard replaced part of the record. */
+export function describeFidelityFallback(replacedRegions = []) {
+  const r = new Set(Array.isArray(replacedRegions) ? replacedRegions : []);
+  const both = r.has(RECORD_REGION.DETAILS) && r.has(RECORD_REGION.DISCUSSION);
+  if (both) {
+    return 'Compass set out your notes and the meeting details as recorded. The drafted version added wording your notes do not support — please edit the record as needed.';
+  }
+  if (r.has(RECORD_REGION.DETAILS)) {
+    return 'Compass set out the meeting details from the meeting\'s own recorded data. The drafted version added a detail your notes do not support — please edit the record as needed.';
+  }
   return 'Compass set out your notes as recorded. The drafted version restated them as dialogue, which your notes do not support — please edit the record as needed.';
 }
