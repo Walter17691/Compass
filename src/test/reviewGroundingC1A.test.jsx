@@ -167,7 +167,12 @@ describe('C.1A — one entry point binds record and analysis', () => {
   });
 
   it('generation and both restore paths bind analysis to the record they produced', () => {
-    expect(app).toContain('setAnalysisForRecord(split.employeeFacing)');
+    // Binds to the GUARDED record, which is what actually reaches the editable
+    // surface and the signature payload once the source-fidelity guard may have
+    // replaced the discussion section. Binding to split.employeeFacing would
+    // mean the analysis described text the user never sees.
+    expect(app).toContain('setAnalysisForRecord(guarded.record)');
+    expect(app).not.toContain('setAnalysisForRecord(split.employeeFacing)');
     expect((app.match(/setAnalysisForRecord\(restored\.employeeFacing\)/g) || []).length).toBe(2);
   });
 

@@ -164,9 +164,19 @@ describe('B. HR Advisor Notes prompt contract', () => {
     expect(p).toMatch(/A conflict genuinely recorded in the case record is different and should be stated plainly/);
   });
 
-  it('preserves the three-section structure and the initials rule', () => {
+  it('preserves the three-section structure, and the initials rule is now conditional on source fidelity', () => {
     expect(p).toMatch(/EXACTLY these three sections and NO others/);
-    expect(p).toMatch(/Use ONLY these initials, never full names in the dialogue/);
+    // Initials label SPOKEN lines, so the rule now applies only where the
+    // capture actually carries someone's own words.
+    expect(p).toMatch(/dialoguePermitted\(recordFidelityKind\)/);
+    expect(p).toMatch(/Use ONLY these initials, never full names/);
+  });
+
+  it('a paraphrase-sourced record is told, in the prompt, not to invent dialogue', () => {
+    expect(p).toMatch(/SOURCE FIDELITY/);
+    expect(p).toMatch(/not a record of anyone's exact words/);
+    expect(p).toMatch(/no speaker-initial prefixes/);
+    expect(p).toMatch(/no invented question, answer, admission, denial, detail or chronology/);
   });
 });
 

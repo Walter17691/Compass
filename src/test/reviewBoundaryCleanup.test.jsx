@@ -117,10 +117,15 @@ describe('the employee-facing / internal boundary', () => {
 describe('the boundary holds at every payload surface', () => {
   it('GENERATION splits once, the moment the stream completes', () => {
     const i = appCode.indexOf('if(!fullRecord.trim()) throw new Error');
-    const region = appCode.slice(i, i + 700);
+    expect(i, 'anchor').toBeGreaterThan(-1);
+    const region = appCode.slice(i, i + 2200);
     expect(region).toContain('const split = splitMeetingRecord(fullRecord);');
-    expect(region).toContain('setReviewOutput(split.employeeFacing);');
-    expect(region).toContain('setReviewOutputOriginal(split.employeeFacing);');
+    // The employee-facing half then passes through the source-fidelity guard,
+    // and it is the GUARDED text that becomes the record. The advisory half is
+    // untouched by the guard: it is analysis, not a record of what was said.
+    expect(region).toContain('applyFidelityGuard(split.employeeFacing, allNotes');
+    expect(region).toContain('setReviewOutput(guarded.record);');
+    expect(region).toContain('setReviewOutputOriginal(guarded.record);');
     expect(region).toContain('setAdvisorNotes(split.internal);');
   });
 
