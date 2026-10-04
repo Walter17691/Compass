@@ -13,15 +13,35 @@
 // not standalone importable functions — so this stays a plain, pure,
 // unit-testable composition rather than a hook, the same shape as every
 // other src/lib/*.js helper in this codebase.
-export async function requestOverride(promptDialogFn, auditFn, label, { caseId=null, actionLabel="Proceeded despite unresolved warning" } = {}) {
+export async function requestOverride(promptDialogFn, auditFn, label, { caseId=null, actionLabel="Proceeded despite unresolved warning", requireReason=false } = {}) {
+  // ┌─ WHY requireReason IS OPT-IN AND NOT GLOBAL ───────────────────────────┐
+  // │ D4.3c. Three callers use this helper: the pre-outcome decision-quality  │
+  // │ check, the investigation-submission quality check, and the procedural   │
+  // │ guardrails panel. All three are auditable overrides, so requiring a     │
+  // │ reason everywhere would be defensible — but only the outcome flow was   │
+  // │ specified, and silently making two other flows refuse to proceed        │
+  // │ without typing is a behaviour change nobody asked for. The capability   │
+  // │ lives here; each caller decides.                                       │
+  // └───────────────────────────────────────────────────────────────────────┘
   const values = await promptDialogFn({
     title: "Proceed anyway?",
     message: `You're proceeding without resolving: ${label}`,
-    fields: [{ key:"reason", label:"Reason (optional)", placeholder:"Why are you proceeding despite this?" }],
+    fields: [{
+      key: "reason",
+      label: requireReason ? "Reason" : "Reason (optional)",
+      required: requireReason,
+      placeholder: "Why are you proceeding despite this?",
+    }],
     confirmLabel: "Proceed",
   });
   if(!values) return false;
   const reason = (values.reason||"").trim();
+  // Fails closed. PromptModal already disables Confirm while a required field is
+  // blank or whitespace-only, so this is unreachable through the UI — but if it
+  // were ever reached, recording "no reason given" against a flow that REQUIRES
+  // one would put a false statement in the audit log. Refusing to proceed is the
+  // only honest answer: no override event, and the caller does not continue.
+  if(requireReason && !reason) return false;
   // Phase 6.5 hardening (closes independent audit finding 5.6) — was
   // `if(reason) auditFn(...)`, so the fastest, most common path through
   // this dialog (confirm with the reason left blank) left no audit

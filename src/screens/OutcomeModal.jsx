@@ -165,7 +165,11 @@ export function OutcomeModal({ cases, caseDecisions = [], activeCaseId, setShowO
 
   const proceedPastQualityCheck = async () => {
     setShowQualityCheck(false);
-    const ok = await requestOverrideReason(qualityGaps.join("; "), { caseId: activeCaseId, actionLabel: "Issued outcome despite quality check gaps" });
+    // D4.3c — a reason is REQUIRED here. Production UAT produced an override
+    // audit row reading "no reason given" for a sanction-bearing decision; a
+    // blank override on the highest-stakes write in the product is not an
+    // acceptable record, whatever the cause of the blank.
+    const ok = await requestOverrideReason(qualityGaps.join("; "), { caseId: activeCaseId, actionLabel: "Issued outcome despite quality check gaps", requireReason: true });
     if(!ok) return;
     finalizeOutcome();
   };
