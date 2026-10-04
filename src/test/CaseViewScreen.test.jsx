@@ -585,7 +585,12 @@ describe('CaseViewScreen — suggested next step "Appoint appeal officer" (Appea
   it('calls the getNextStep prop with hasAppealManager:false and isHR when no appeal_manager case_access row exists', () => {
     const getNextStep = vi.fn().mockReturnValue({ label: 'Start appeal hearing', action: 'start_appeal_meeting', meetingType: 'appeal-disciplinary', primary: true });
     render(<CaseViewScreen {...baseProps} shell={{ ...baseProps.shell, cases: [appealCase], getCaseStage: () => 'appeal', isHR: true, caseAccess: [], getNextStep }} />);
-    expect(getNextStep).toHaveBeenCalledWith(appealCase, { hasAppealManager: false, isHR: true });
+    expect(getNextStep).toHaveBeenCalledWith(appealCase,
+      // Slice 2 added conclusionRollup to the same ctx. The two flags this test
+      // is about are still asserted exactly; the rollup is asserted separately
+      // below so a regression in either is caught on its own terms.
+      expect.objectContaining({ hasAppealManager: false, isHR: true }));
+    expect(getNextStep.mock.calls.at(-1)[1].conclusionRollup).toMatchObject({ state: 'no_allegations' });
   });
 
   it('calls the getNextStep prop with hasAppealManager:true when an appeal_manager case_access row exists for this case — the same array the "Officer:" banner already reads, not a second source of truth', () => {
@@ -593,7 +598,12 @@ describe('CaseViewScreen — suggested next step "Appoint appeal officer" (Appea
     const caseAccess = [{ id: 'ca1', caseId: 'c1', userId: 'u2', role: 'appeal_manager' }];
     const orgMembers = [{ id: 'm2', user_id: 'u2', name: 'Priya Shah' }];
     render(<CaseViewScreen {...baseProps} shell={{ ...baseProps.shell, cases: [appealCase], getCaseStage: () => 'appeal', isHR: true, caseAccess, orgMembers, getNextStep }} />);
-    expect(getNextStep).toHaveBeenCalledWith(appealCase, { hasAppealManager: true, isHR: true });
+    expect(getNextStep).toHaveBeenCalledWith(appealCase,
+      // Slice 2 added conclusionRollup to the same ctx. The two flags this test
+      // is about are still asserted exactly; the rollup is asserted separately
+      // below so a regression in either is caught on its own terms.
+      expect.objectContaining({ hasAppealManager: true, isHR: true }));
+    expect(getNextStep.mock.calls.at(-1)[1].conclusionRollup).toMatchObject({ state: 'no_allegations' });
   });
 
   it('when the suggested next step is "appoint_appeal_officer", clicking its primary action button opens AppealOfficerModal', async () => {

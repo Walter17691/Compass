@@ -111,8 +111,16 @@ describe('compileSubjectData — additional data sources (Phase 6.5, Batch 5)', 
   });
 
   it('includes only allegations on the subject\'s own cases', () => {
+    // Slice 2 — allegations are now PROJECTED through a per-field allow-list
+    // (dsarAllegationDisclosure.js) rather than emitted as raw rows, so this can
+    // no longer assert object identity. The scoping question it exists to answer
+    // — whose allegations travel — is asserted on the identity that survives the
+    // projection, and the projection's own field-level behaviour has its own
+    // tests in erJourneySlice2.
     const result = compileSubjectData('Ada Lovelace', extendedData);
-    expect(result.allegations).toEqual([extendedData.allegations[0]]);
+    expect(result.allegations).toHaveLength(1);
+    expect(result.allegations[0].id).toBe(extendedData.allegations[0].id);
+    expect(result.allegations[0].caseId).toBe(extendedData.allegations[0].caseId);
   });
 
   it('includes only case signals on the subject\'s own cases', () => {

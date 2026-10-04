@@ -247,7 +247,7 @@ describe('Wave B — supporting detail appears only when it applies', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 describe('Wave B — the screen composes, it does not re-decide', () => {
   it('the process engine is still the only authority on what happens next', () => {
-    expect(screenSrc).toContain('getNextStep(cs, {hasAppealManager: !!currentAppealManagerAccess, isHR})');
+    expect(screenSrc).toContain('getNextStep(cs, {hasAppealManager: !!currentAppealManagerAccess, isHR, conclusionRollup})');
     expect(screenSrc).toContain('onClick: handleNextStepAction');
     // No second next-step table in the screen or the summary module.
     expect(summarySrc).not.toContain('nextStep');

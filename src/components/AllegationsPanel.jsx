@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { InvestigationConclusionField } from './InvestigationConclusionField';
 import { FONT } from '../styles/tokens';
 import { ALLEGATION_STATUSES, EVIDENCE_STANCES, allegationStatusMeta, evidenceForAllegation, linkEvidenceToAllegation, unlinkEvidenceFromAllegation, isFindingStatus, APPEAL_OUTCOMES, appealOutcomeMeta } from '../lib/allegations';
 import { computeOutcomeDistribution, computeSanctionDistribution, comparableCaseSummaries } from '../lib/outcomeConsistency';
@@ -67,7 +68,8 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
   // CaseViewScreen from the canonical hasReachedOutcomeStage, never here.
   // canRecordInvestigation: may this user write the investigation narrative —
   // true for HR, the disciplinary officer, AND the assigned investigator.
-  atDecisionStage = true, canRecordInvestigation = canDecide }) {
+  atDecisionStage = true, canRecordInvestigation = canDecide,
+  recordInvestigationConclusion }) {
   const [showNew, setShowNew] = useState(false);
   const [newForm, setNewForm] = useState({ title:"", description:"", period:"", peopleInvolved:"" });
   const [expandedId, setExpandedId] = useState(null);
@@ -234,6 +236,25 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                       <ReadOnlyField label="Outstanding uncertainty" value={a.outstandingUncertainty} placeholder="None recorded" />
                     </>
                   )}
+
+                  {/* ── THE INVESTIGATION CONCLUSION (Slice 2) ──────────────────
+                      Last in the investigation sequence, and above everything
+                      disciplinary: evidence and accounts, then the investigator's
+                      assessment, then the outstanding uncertainty, then this.
+                      It is the conclusion of that work, so it comes after it.
+
+                      Ungated by atDecisionStage — unlike the status control
+                      above, this belongs DURING the investigation. The authority
+                      is canRecordInvestigation (HR or the assigned investigator),
+                      which is also what the database enforces; the UI gate is
+                      only the front door. */}
+                  <InvestigationConclusionField
+                    allegation={a}
+                    canRecord={canRecordInvestigation}
+                    onRecord={(conclusion, reasoning) => recordInvestigationConclusion?.(a.id, conclusion, reasoning)}
+                    fmtDate={fmtDate}
+                    orgMembers={orgMembers}
+                  />
 
                   {/* Finding consistency. Base-rate information about how
                       comparable allegations were decided is not evidence about

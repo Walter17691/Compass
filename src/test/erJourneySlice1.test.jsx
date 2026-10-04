@@ -258,10 +258,18 @@ describe('Slice 1 — the investigation report does not decide the allegation', 
     expect(prompt).toMatch(/never state or imply that misconduct has been established/);
   });
 
-  it('does not create or persist a structured case-to-answer decision (Slice 2 owns that)', () => {
+  it('the report states the structured conclusion but never a disciplinary finding', () => {
+    // Slice 1 asserted the absence of any structured conclusion, because Slice 2
+    // owned it. Slice 2 has since shipped it, and section K of that brief
+    // requires the report to summarise it once one genuinely exists. So the
+    // guard moves to the line that still matters: the report may carry the
+    // procedural conclusion, and must not convert it into a finding.
     const src = app();
-    expect(src).not.toContain('investigation_conclusion');
-    expect(src).not.toContain('case_to_answer');
+    expect(src).toContain('STRUCTURED INVESTIGATION CONCLUSION');
+    // Never asked for per-allegation upheld/not-upheld findings.
+    expect(src).not.toContain('upheld / not upheld');
+    // And the prompt says so explicitly rather than relying on omission.
+    expect(src).toContain('Do NOT state whether the allegation is substantiated, upheld, proven or made out');
   });
 
   it('leaves the appeal prompt\'s legitimate use of "upheld" alone', () => {
@@ -403,10 +411,21 @@ describe('Slice 1 — HR and the employee portal agree on the stage', () => {
 // 8. WHAT SLICE 1 MUST NOT HAVE TOUCHED
 // ═══════════════════════════════════════════════════════════════════════════
 describe('Slice 1 — out-of-scope architecture is untouched', () => {
-  it('no schema change ships with this slice', () => {
+  it('the Slice 3 disciplinary-finding model is still deferred', () => {
+    // This test used to assert that NEITHER investigation_conclusion nor
+    // disciplinary_finding appeared anywhere — true of Slice 1, which shipped no
+    // schema change at all. Slice 2 then added the investigation conclusion
+    // deliberately, so half of that assertion became a statement that Slice 2
+    // had not happened rather than a guard on anything.
+    //
+    // What it protects now is the part that IS still deferred: Slice 3's
+    // authoritative disciplinary-finding persistence. allegations.status remains
+    // the compatibility field for the disciplinary side until then.
     const app = readFileSync('src/App.jsx', 'utf8');
-    expect(app).not.toContain('investigation_conclusion');
     expect(app).not.toContain('disciplinary_finding');
+    // And the conclusion that Slice 2 did add is genuinely wired, so this test
+    // cannot pass by the feature having been reverted.
+    expect(app).toContain('investigation_conclusion');
   });
 
   it('the allegation status vocabulary is unchanged', async () => {

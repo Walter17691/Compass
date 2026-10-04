@@ -178,7 +178,20 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
         {!req.extended&&req.status!=="completed"&&<Btn variant="ghost" onClick={handleExtend}>Extend deadline</Btn>}
       </div>
 
-      {compiled&&(
+      {compiled&&(() => {
+        // Slice 2 — review-required items now come from TWO classifiers: the
+        // case/meeting one and the new allegation one. Merged here so the
+        // reviewer sees one list and one count; a flag that never reaches this
+        // banner is a flag nobody acts on.
+        const reviewRequired = [
+          ...(compiled.caseDisclosure?.reviewRequired || []),
+          ...(compiled.allegationDisclosure?.reviewRequired || []),
+        ];
+        const unrecognisedWithheld = [...new Set([
+          ...(compiled.caseDisclosure?.unrecognisedFieldsWithheld || []),
+          ...(compiled.allegationDisclosure?.unrecognisedFieldsWithheld || []),
+        ])].sort();
+        return (
         <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 14px"}}>
           {compiled.identityRequiresReconciliation&&(
             <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FEF0EB",border:"1px solid #F0C4B0",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
@@ -228,21 +241,21 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
               </div>
             </div>
           )}
-          {compiled.caseDisclosure?.reviewRequired?.length>0&&(
+          {reviewRequired.length>0&&(
             <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FEF5E7",border:"1px solid #F5E6C4",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
               <WarningIcon size={14} color="#B87520" style={{flexShrink:0,marginTop:1}}/>
               <div style={{fontSize:12,color:"#7A5C1A",lineHeight:1.6}}>
-                <strong>{compiled.caseDisclosure.reviewRequired.length} item{compiled.caseDisclosure.reviewRequired.length===1?"":"s"} need{compiled.caseDisclosure.reviewRequired.length===1?"s":""} your decision.</strong>{" "}
-                Compass has not included {compiled.caseDisclosure.reviewRequired.length===1?"it":"them"} either way:
+                <strong>{reviewRequired.length} item{reviewRequired.length===1?"":"s"} need{reviewRequired.length===1?"s":""} your decision.</strong>{" "}
+                Compass has not included {reviewRequired.length===1?"it":"them"} either way:
                 <ul style={{margin:"4px 0 0",paddingLeft:16}}>
-                  {compiled.caseDisclosure.reviewRequired.slice(0,4).map((r,i)=>(
+                  {reviewRequired.slice(0,4).map((r,i)=>(
                     <li key={i}>{r.reason}</li>
                   ))}
                 </ul>
               </div>
             </div>
           )}
-          {compiled.caseDisclosure?.unrecognisedFieldsWithheld?.length>0&&(
+          {unrecognisedWithheld.length>0&&(
             <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FEF5E7",border:"1px solid #F5E6C4",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
               <WarningIcon size={14} color="#B87520" style={{flexShrink:0,marginTop:1}}/>
               <div style={{fontSize:12,color:"#7A5C1A",lineHeight:1.6}}>
@@ -356,7 +369,8 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
             I have reviewed the flagged sections{compiled.evidenceRequiringReview.length>0?" and evidence files":""} (required before marking as completed)
           </label>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

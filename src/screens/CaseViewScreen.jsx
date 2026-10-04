@@ -3,6 +3,7 @@ import { SCREENS, MEETING_TYPES } from '../constants';
 import { toISODateLocal, isPastLocalDate } from '../lib/dates';
 import { appealInvitationLogistics } from '../lib/appealInvitation';
 import { getCurrentRisk, isGrievanceCase } from '../lib/caseStage';
+import { rollupInvestigationConclusions } from '../lib/investigationConclusion';
 // Imported directly rather than threaded through as a prop like getNextStep:
 // adding a callee inside App.jsx's component is what silently disabled lint
 // analysis in an earlier phase, and this file already imports from lib above.
@@ -203,7 +204,18 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   // appeal-manager display block read the exact same case_access lookup,
   // never a second source of truth for appeal-manager state.
   const currentAppealManagerAccess = caseAccess.find(a=>a.caseId===cs.id && a.role==="appeal_manager");
-  const nextStep = getNextStep(cs, {hasAppealManager: !!currentAppealManagerAccess, isHR});
+  // Declared here rather than further down because the Slice 2 rollup below
+  // needs it, and nextStep is computed before the old declaration site.
+  const caseAllegations = allegationsForCase(allegations, cs.id);
+  // ER Journey Slice 2 — the structured per-allegation investigation
+  // conclusions are what the inv_report step now consults. Derived, never
+  // stored: there is deliberately no case-level conclusion field for this to
+  // disagree with.
+  // A plain call, not useMemo: this sits below an early return, so a hook here
+  // would be conditionally called (rules-of-hooks). It is a single pass over one
+  // case's allegations and returns a frozen object, so memoising it buys nothing.
+  const conclusionRollup = rollupInvestigationConclusions(caseAllegations);
+  const nextStep = getNextStep(cs, {hasAppealManager: !!currentAppealManagerAccess, isHR, conclusionRollup});
   const currentRisk = getCurrentRisk(cs);
   const empRecord = getEmployeeRecord(cs.employeeName);
   // Open items from the deterministic NEXT_STEPS_MAP checklist saved onto
@@ -216,7 +228,6 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   // inflated each other's count. Canonical only; a legacy case reports 1 (itself)
   // rather than a number assembled from string matches.
   const repeatCount = cs.employeeId ? cases.filter(c=>c.employeeId===cs.employeeId).length : 1;
-  const caseAllegations = allegationsForCase(allegations, cs.id);
   const caseTaskList = tasksForCase(caseTasks, cs.id);
   const nextActionSignal = openSignalsForCase(caseSignals, cs.id, "next_action")[0];
   // P5 — a next_action signal may carry a real, indexed policy clause
@@ -560,6 +571,17 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
       const m=relevantMeeting();if(m){setReviewOutput(m.record||"");setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date,appealManagerId:null,isAppealHearingInvitation:false}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);}setShowDraft(true);setDraftedType("appeal");handleLetter("appeal",{inline:true,employeeName:cs.employeeName,manager:cs.manager||"",date:m?.date});
     }
     else if(nextStep.action==="close_case"){requestCloseCase();}
+    // ER Journey Slice 2. Two actions the inv_report step can now produce.
+    //
+    // investigation_conclusions just navigates — the conclusion is recorded on
+    // the allegation itself, in the Investigation destination, and this step
+    // exists to say what the case is waiting for rather than to do it.
+    else if(nextStep.action==="investigation_conclusions"){setActiveTab("investigation");}
+    // close_no_case was previously reachable ONLY from the secondary button in
+    // the context strip. The structured conclusions can now make it the primary
+    // action, so it needs a branch here too — the same requestCloseCase gate,
+    // the same HR-only check, the same confirm dialog, the same letter.
+    else if(nextStep.action==="close_no_case"){closeWithNoCaseToAnswer();}
     // Appeal Independence P1 (2026-09-18) — the suggested next step itself
     // must execute the correct action, not just relabel the button; opens
     // the same AppealOfficerModal the existing manual "Appoint appeal
@@ -662,7 +684,13 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
     // available to non-HR users.
     if (!isHR) { showToast("Only HR can close a case.", "error"); return; }
     const primaryReady = nextStep?.action === "close_case";
-    const secondaryReady = allowNoCase && nextStep?.secondary?.action === "close_no_case";
+    // Slice 2 — close_no_case used to exist only as a secondary action. Once the
+    // structured allegation conclusions all say "no case to answer" it becomes
+    // the PRIMARY recommendation, so both positions have to count as ready. The
+    // gate itself is unchanged: it still only ever agrees with what nextStep.js
+    // currently recommends, which is now derived from the conclusions.
+    const secondaryReady = allowNoCase
+      && (nextStep?.secondary?.action === "close_no_case" || nextStep?.action === "close_no_case");
     if (!primaryReady && !secondaryReady) {
       showToast(nextStep ? `This case isn't ready to close yet — try "${nextStep.label}" first.` : "This case isn't ready to close yet.", "error");
       return;
@@ -705,6 +733,28 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
       setClosingCase(false);
     }
   };
+
+  // ER Journey Slice 2 — ONE close-no-case implementation, not two.
+  //
+  // This body used to live inline in the secondary button's onClick. Now that
+  // the structured conclusions can make "No case to answer — close" the primary
+  // recommendation, two call sites need it, and duplicating it would be exactly
+  // the second decision path section D of the brief forbids.
+  //
+  // It remains a CONSEQUENCE, not a conclusion. It records no decision of its
+  // own: the authoritative facts are the per-allegation conclusions already on
+  // the allegations, and this transitions the case and offers the letter that
+  // follows from them.
+  const closeWithNoCaseToAnswer = () => requestCloseCase({
+    allowNoCase: true,
+    closeReasonLabel: "no case to answer",
+    afterClose: () => {
+      setCaseInfo(p=>({...p, employee: cs.employeeName, manager: cs.manager||""}));
+      setShowDraft(true);
+      setDraftedType("no-case-answer");
+      handleLetter("no-case-answer", {inline:true, employeeName: cs.employeeName, manager: cs.manager||""});
+    },
+  });
 
   if(isAssignedNotetaker) {
     return (
@@ -1077,7 +1127,7 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
               )}
             </div>
             <div style={{display:"flex",gap:8,flexShrink:0}}>
-              {nextStep.secondary&&<button onClick={()=>{if(nextStep.secondary.action==="close_no_case"){requestCloseCase({allowNoCase:true, closeReasonLabel:"no case to answer", afterClose:()=>{setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||""}));setShowDraft(true);setDraftedType("no-case-answer");handleLetter("no-case-answer",{inline:true,employeeName:cs.employeeName,manager:cs.manager||""});}});}}} disabled={closingCase} style={{fontSize:12,background:"none",border:"1px solid #E8EAF2",borderRadius:6,padding:"6px 14px",color:"#4A4E63",cursor:closingCase?"not-allowed":"pointer",opacity:closingCase?0.6:1,fontFamily:FONT.sans}}>{nextStep.secondary.label}</button>}
+              {nextStep.secondary&&<button onClick={()=>{if(nextStep.secondary.action==="close_no_case"){closeWithNoCaseToAnswer();}}} disabled={closingCase} style={{fontSize:12,background:"none",border:"1px solid #E8EAF2",borderRadius:6,padding:"6px 14px",color:"#4A4E63",cursor:closingCase?"not-allowed":"pointer",opacity:closingCase?0.6:1,fontFamily:FONT.sans}}>{nextStep.secondary.label}</button>}
             </div>
           </div>
 
@@ -1412,7 +1462,7 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
               onOpenMeeting={()=>goToDestination("meetings")}
               onOpenDocuments={()=>goToDestination("documents")}
               allegationsPanel={
-            <AllegationsPanel cs={cs} allegations={caseAllegations} allAllegations={allegations} createAllegation={allegationsTab.createAllegation} patchAllegation={allegationsTab.patchAllegation} changeAllegationStatus={allegationsTab.changeAllegationStatus} deleteAllegation={allegationsTab.deleteAllegation} saveCases={saveCases} cases={cases} confirmDialog={confirmDialog} showToast={showToast} evidenceSuggestions={allegationsTab.evidenceSuggestions?.[cs.id]||[]} evidenceSuggestionsLoading={allegationsTab.evidenceSuggestionsLoading?.[cs.id]} generateEvidenceSuggestions={allegationsTab.generateEvidenceSuggestions} acceptEvidenceSuggestion={allegationsTab.acceptEvidenceSuggestion} rejectEvidenceSuggestion={allegationsTab.rejectEvidenceSuggestion} setReviewOutput={setReviewOutput} onPresentMeetingRecord={onPresentMeetingRecord}  setScreen={setScreen} screens={screens} orgMembers={orgMembers} fmtDate={fmtDate} caseSignals={caseSignals} onAskWhy={setWhySignal} generateAppealReview={allegationsTab.generateAppealReview} appealReviewLoading={allegationsTab.appealReviewLoading} recordAppealOutcome={allegationsTab.recordAppealOutcome} policies={allegationsTab.policies} consistencyReview={allegationsTab.consistencyReview?.[cs.id]} consistencyReviewLoading={allegationsTab.consistencyReviewLoading?.[cs.id]} generateConsistencyReview={allegationsTab.generateConsistencyReview} canDecide={canDecide} canDecideAppeal={canDecideAppeal} atDecisionStage={atDecisionStage} canRecordInvestigation={canRecordInvestigation}/>
+            <AllegationsPanel cs={cs} allegations={caseAllegations} allAllegations={allegations} createAllegation={allegationsTab.createAllegation} patchAllegation={allegationsTab.patchAllegation} changeAllegationStatus={allegationsTab.changeAllegationStatus} deleteAllegation={allegationsTab.deleteAllegation} saveCases={saveCases} cases={cases} confirmDialog={confirmDialog} showToast={showToast} evidenceSuggestions={allegationsTab.evidenceSuggestions?.[cs.id]||[]} evidenceSuggestionsLoading={allegationsTab.evidenceSuggestionsLoading?.[cs.id]} generateEvidenceSuggestions={allegationsTab.generateEvidenceSuggestions} acceptEvidenceSuggestion={allegationsTab.acceptEvidenceSuggestion} rejectEvidenceSuggestion={allegationsTab.rejectEvidenceSuggestion} setReviewOutput={setReviewOutput} onPresentMeetingRecord={onPresentMeetingRecord}  setScreen={setScreen} screens={screens} orgMembers={orgMembers} fmtDate={fmtDate} caseSignals={caseSignals} onAskWhy={setWhySignal} generateAppealReview={allegationsTab.generateAppealReview} appealReviewLoading={allegationsTab.appealReviewLoading} recordAppealOutcome={allegationsTab.recordAppealOutcome} policies={allegationsTab.policies} consistencyReview={allegationsTab.consistencyReview?.[cs.id]} consistencyReviewLoading={allegationsTab.consistencyReviewLoading?.[cs.id]} generateConsistencyReview={allegationsTab.generateConsistencyReview} canDecide={canDecide} canDecideAppeal={canDecideAppeal} atDecisionStage={atDecisionStage} canRecordInvestigation={canRecordInvestigation} recordInvestigationConclusion={allegationsTab.recordInvestigationConclusion}/>
               }
               evidencePanel={
             <EvidenceTab cs={cs} cases={cases} saveCases={saveCases} currentUser={currentUser} showToast={showToast} setReviewOutput={setReviewOutput} onPresentMeetingRecord={onPresentMeetingRecord}  setScreen={setScreen} screens={screens} fmtDate={fmtDate} setMeetingSetup={setMeetingSetup} setCaseInfo={setCaseInfo} orgMembers={orgMembers} allegations={caseAllegations} documentFindings={evidenceTab.documentFindings} documentAnalysisLoading={evidenceTab.documentAnalysisLoading} onAnalyseEvidence={(evidenceId)=>evidenceTab.analyseEvidenceDocument(cs, evidenceId)} onAcceptFinding={(evidenceId, finding)=>evidenceTab.acceptDocumentFinding(cs, evidenceId, finding)} onDismissFinding={(evidenceId, finding)=>evidenceTab.dismissDocumentFinding(cs, evidenceId, finding)} onRemoveEvidence={(evidenceId)=>evidenceTab.removeEvidence(cs.id, evidenceId)} promptDialog={promptDialog} audit={audit}/>

@@ -495,7 +495,7 @@ describe('the Resume affordance is minimal and truthful', () => {
     // This asserted the purple banner's exact markup. Wave B.1 removed that
     // duplicate surface — the header already carried the same action — so the
     // assertion moves to what actually matters: the engine and its routing.
-    expect(caseView).toContain('getNextStep(cs, {hasAppealManager: !!currentAppealManagerAccess, isHR})');
+    expect(caseView).toContain('getNextStep(cs, {hasAppealManager: !!currentAppealManagerAccess, isHR, conclusionRollup})');
     expect(caseView).toContain('onClick: handleNextStepAction');
     // Targets the RENDERED form: a leading ">" means JSX text output, not prose.
     // An unrelated historical comment still mentions the old banner wording, and a

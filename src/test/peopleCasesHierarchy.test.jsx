@@ -164,7 +164,7 @@ describe('Wave B.1 — the same instruction is not given three times', () => {
 
   it('the engine and its explanation data are untouched', () => {
     // Removing a surface must not remove the authority behind it.
-    expect(caseViewCode).toContain('getNextStep(cs, {hasAppealManager: !!currentAppealManagerAccess, isHR})');
+    expect(caseViewCode).toContain('getNextStep(cs, {hasAppealManager: !!currentAppealManagerAccess, isHR, conclusionRollup})');
     expect(caseViewCode).toContain('handleNextStepAction');
     // Wave B.2 — the screen no longer renders the reason on sight, so this asserts
     // the INVARIANT rather than the old call shape: the engine still produces the

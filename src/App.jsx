@@ -17,6 +17,8 @@ import { isLetterApproved, createLetterApproval } from './lib/letterApproval';
 import { getCaseStage, withStageTransitionStamp, hasLetterType, isLetterOnlyRecord, isGenuineMeetingRecord } from './lib/caseStage';
 import { getNextStep } from './lib/nextStep';
 import { addAllegation, updateAllegation, setAllegationStatus, removeAllegation, allegationStatusMeta, allegationsForCase, linkEvidenceToAllegation, evidenceForAllegation, setAppealOutcome, appealOutcomeMeta } from './lib/allegations';
+import { recordInvestigationConclusionWrite, CONCLUSION_WRITE_RESULT, describeConclusionWriteOutcome } from './lib/investigationConclusionWrite';
+import { conclusionLabel, conclusionMeaning } from './lib/investigationConclusion';
 import { matchExistingTheme, buildThemeSuggestionPrompt, parseThemeSuggestionResponse, buildKnownNameTokens, filterUnsafeThemeSuggestions, isUnsafeThemeSuggestion } from './lib/themes';
 import {
   addPrepQuestion as addPrepQuestionHelper,
@@ -4669,6 +4671,14 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
         decisionReasoning:r.decision_reasoning||"", decidedBy:r.decided_by||null, decidedAt:r.decided_at||null,
         appealOutcome:r.appeal_outcome||null, appealReasoning:r.appeal_reasoning||"",
         appealDecidedBy:r.appeal_decided_by||null, appealDecidedAt:r.appeal_decided_at||null,
+        // Slice 2. null means NO conclusion has been recorded, which is true of
+        // every allegation that predates the field. It is deliberately not
+        // defaulted to "" like the free-text columns above — an empty string is
+        // a value, and this must stay distinguishable from one.
+        investigationConclusion:r.investigation_conclusion||null,
+        investigationConclusionReasoning:r.investigation_conclusion_reasoning||"",
+        investigationConclusionBy:r.investigation_conclusion_by||null,
+        investigationConclusionAt:r.investigation_conclusion_at||null,
         createdBy:r.created_by, createdAt:r.created_at, updatedAt:r.updated_at,
       })));
     } catch(e) { console.error('loadAllegations', e); }
@@ -4701,6 +4711,21 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
       decided_at: allegation.decidedAt||null,
       appeal_outcome: allegation.appealOutcome||null, appeal_reasoning: allegation.appealReasoning||null,
       appeal_decided_by: allegation.appealDecidedBy||null, appeal_decided_at: allegation.appealDecidedAt||null,
+      // THE FOUR investigation_conclusion* COLUMNS ARE DELIBERATELY ABSENT.
+      //
+      // This is the generic allegation writer: every panel edit — description,
+      // the investigator's assessment, outstanding uncertainty, the disciplinary
+      // status — comes through here and sends the whole field list. If the
+      // conclusion columns were in that list, an ordinary edit made against a
+      // slightly stale in-memory copy would carry a superseded conclusion back
+      // to the database, and the protection trigger would faithfully re-stamp
+      // provenance to whoever happened to be editing the description.
+      //
+      // Omitting them means an UPDATE from this path cannot touch them at all,
+      // so there is nothing for a stale copy to overwrite. The only writer is
+      // recordInvestigationConclusionWrite, which sends those columns and
+      // nothing else. Same principle as record_case_decision in D4.3: one
+      // authoritative writer per authoritative fact.
     };
     // The actual write, deferred until this allegation's queue reaches it —
     // reads the version ref (not allegation.updatedAt) at execution time,
@@ -4923,6 +4948,34 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     setAllegations(updated);
     const changed = updated.find(a=>a.id===allegationId);
     if(changed) { saveAllegationToDB(changed); audit("Allegation status changed", `${changed.title} → ${allegationStatusMeta(status).label}`, changed.caseId); }
+  };
+
+  // Slice 2. The structured investigation conclusion, recorded through its own
+  // writer rather than through patchAllegation.
+  //
+  // NO audit() CALL HERE, AND THAT IS DELIBERATE. The audit event is written by
+  // the log_investigation_conclusion database trigger, so it records what
+  // actually happened rather than what the client believed it was about to do —
+  // and 'Investigation conclusion recorded'/'amended' are now reserved in
+  // log_audit_event, so this client could not write them even if it tried.
+  //
+  // State is refreshed from the database rather than patched locally, because
+  // the authoritative row carries two values this client did not send:
+  // investigation_conclusion_by and _at.
+  const recordInvestigationConclusion = async (allegationId, conclusion, reasoning) => {
+    const { result } = await recordInvestigationConclusionWrite({
+      supabase, allegationId, conclusion, reasoning,
+      expectedUpdatedAt: allegationVersionRef.current[allegationId],
+      conditionalUpdate,
+    });
+    if(result === CONCLUSION_WRITE_RESULT.OK) {
+      await loadAllegations();
+      showToast(describeConclusionWriteOutcome(result));
+      return true;
+    }
+    if(result === CONCLUSION_WRITE_RESULT.CONFLICT) await loadAllegations();
+    showToast(describeConclusionWriteOutcome(result), "error");
+    return false;
   };
 
   const deleteAllegation = (allegationId) => {
@@ -10278,7 +10331,7 @@ Please produce:
         return `- "${a.title}"${a.description?": "+a.description:""}`+nl
           +"  Finding: "+allegationStatusMeta(a.status).label+nl
           +"  Decision reasoning: "+(a.decisionReasoning||"not recorded")+nl
-          +"  Investigator's finding: "+(a.investigatorFinding||"not recorded")+nl
+          +"  Investigator's assessment: "+(a.investigatorFinding||"not recorded")+nl
           +"  Employee response / mitigation put forward: "+(a.employeeResponse||"not recorded")+nl
           +"  Supporting evidence: "+(supporting.join(", ")||"none linked")+nl
           +"  Contrary evidence: "+(contrary.join(", ")||"none linked")+nl
@@ -10542,7 +10595,16 @@ Please produce:
         const linked = evidenceForAllegation(cs.evidence||[], a.id);
         const supporting = linked.filter(ev=>ev.stance==="supports").map(ev=>ev.name);
         const contrary = linked.filter(ev=>ev.stance==="contradicts").map(ev=>ev.name);
-        return `- "${a.title}"${a.description?": "+a.description:""}\n  Current status: ${allegationStatusMeta(a.status).label}\n  Supporting evidence: ${supporting.join(", ")||"none linked"}\n  Contrary evidence: ${contrary.join(", ")||"none linked"}\n  Employee response: ${a.employeeResponse||"not recorded"}\n  Witness evidence: ${a.witnessEvidence||"not recorded"}`;
+        // Slice 2. Three distinct things, labelled as three distinct things,
+        // because the whole point of the slice is that they are not one:
+        // the investigator's own assessment, the structured investigation
+        // conclusion, and the recorded disciplinary status. The conclusion is
+        // included ONLY when one genuinely exists — "not recorded" is the
+        // truthful value and must never be filled in by inference.
+        const conclusionLine = a.investigationConclusion
+          ? `\n  STRUCTURED INVESTIGATION CONCLUSION: ${conclusionLabel(a.investigationConclusion)} — ${conclusionMeaning(a.investigationConclusion)}${a.investigationConclusionReasoning?`\n  Conclusion reasoning: ${a.investigationConclusionReasoning}`:""}`
+          : `\n  STRUCTURED INVESTIGATION CONCLUSION: not recorded`;
+        return `- "${a.title}"${a.description?": "+a.description:""}\n  Recorded disciplinary status (a SEPARATE later decision, not the investigation conclusion): ${allegationStatusMeta(a.status).label}\n  Supporting evidence: ${supporting.join(", ")||"none linked"}\n  Contrary evidence: ${contrary.join(", ")||"none linked"}\n  Employee response: ${a.employeeResponse||"not recorded"}\n  Witness evidence: ${a.witnessEvidence||"not recorded"}\n  Investigator's assessment: ${a.investigatorFinding||"not recorded"}\n  Outstanding uncertainty: ${a.outstandingUncertainty||"none recorded"}${conclusionLine}`;
       }).join(nl+nl);
 
       const openQuestions = openSignalsForCase(caseSignals, caseId, "unanswered_question");
@@ -10557,7 +10619,7 @@ Please produce:
       const inconsistencies = openSignalsForCase(caseSignals, caseId, "inconsistency");
       const nextAction = openSignalsForCase(caseSignals, caseId, "next_action")[0];
 
-      const systemPrompt = "You are a senior UK employment lawyer and HR advisor with 20 years of experience, drafting a formal internal investigation report. Follow ACAS Code of Practice. Produce the report using EXACTLY the section structure given, using ## for the three PART headers and ### for subsections within them — this structure is what keeps evidence, AI interpretation, and the HR decision visually separate for the reader, so do not merge or reorder it. PART 1 must contain only what is actually in the record — no interpretation. PART 2 is explicitly your analysis — say so, and never state a finding as an established fact where the record is silent or disputed. PART 3 must recommend only a procedural next step, never a sanction, disciplinary outcome, or finding of guilt — that decision belongs solely to the responsible HR manager. Where a detail is genuinely unknown, say so rather than inventing it. Output only the document itself, no preamble.";
+      const systemPrompt = "You are a senior UK employment lawyer and HR advisor with 20 years of experience, drafting a formal internal investigation report. Follow ACAS Code of Practice. Produce the report using EXACTLY the section structure given, using ## for the three PART headers and ### for subsections within them — this structure is what keeps evidence, AI interpretation, and the HR decision visually separate for the reader, so do not merge or reorder it. PART 1 must contain only what is actually in the record — no interpretation. PART 2 is explicitly your analysis — say so, and never state a finding as an established fact where the record is silent or disputed. PART 3 must recommend only a procedural next step, never a sanction, disciplinary outcome, or finding of guilt — that decision belongs solely to the responsible HR manager. Three things in the input are distinct and must never be merged or substituted for one another: the INVESTIGATOR'S ASSESSMENT (the investigator's own view of what the investigation showed), the STRUCTURED INVESTIGATION CONCLUSION (whether there is a case to answer, no case to answer, or further investigation required — a procedural conclusion about whether the matter should be considered at a hearing, NOT a finding that anything is proven), and the RECORDED DISCIPLINARY STATUS (a separate decision taken later in the process, which for historical cases may read 'substantiated' — report it only as the recorded status, never as this investigation's conclusion). Where no structured investigation conclusion has been recorded, say that none has been recorded; never infer one from the disciplinary status, the evidence or anything else. Where a detail is genuinely unknown, say so rather than inventing it. Output only the document itself, no preamble.";
       const userPrompt = "Employee: "+cs.employeeName+nl
         +"Case type: "+(cs.caseType||"HR Matter")+nl
         +(cs.description?"Case description: "+cs.description+nl:"")
@@ -10573,7 +10635,7 @@ Please produce:
         +"## PART 1 — Evidence on Record"+nl
         +"### Background"+nl+"### Scope of Investigation"+nl+"### Allegations"+nl+"### Investigation Undertaken"+nl+"### People Interviewed"+nl+"### Evidence Considered"+nl+"### Employee Responses"+nl+"### Witness Evidence"+nl
         +"## PART 2 — Compass Analysis (advisory interpretation, not a finding)"+nl
-        +"### Findings by Allegation (for each: supporting evidence, contrary evidence, and whether the allegation currently appears upheld / not upheld / unable to determine)"+nl+"### Conflicting Accounts"+nl+"### Matters That Could Not Be Established"+nl+"### Outstanding Issues"+nl
+        +"### Assessment by Allegation (for each: supporting evidence, contrary evidence, the investigator's own assessment, what remains uncertain, and — only where one has been recorded — the structured investigation conclusion exactly as recorded. Do NOT state whether the allegation is substantiated, upheld, proven or made out: that decision has not been taken yet and is not yours to state.)"+nl+"### Conflicting Accounts"+nl+"### Matters That Could Not Be Established"+nl+"### Outstanding Issues"+nl
         +"## PART 3 — For HR Decision"+nl
         +"### Recommended Procedural Next Step"+nl
         +"End PART 3 with one line making clear that the final finding, sanction, and outcome decision rest with the responsible HR manager, not with this report.";
@@ -11991,7 +12053,7 @@ Please produce:
           }}
           timeline={{ toggleTimelineExclude, editTimelineDescription, generateTimelineRelevance, timelineRelevanceLoading, loadJsPDF }}
           allegationsTab={{
-            createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, evidenceSuggestions,
+            createAllegation, patchAllegation, changeAllegationStatus, deleteAllegation, recordInvestigationConclusion, evidenceSuggestions,
             evidenceSuggestionsLoading, generateEvidenceSuggestions, acceptEvidenceSuggestion, rejectEvidenceSuggestion,
             generateAppealReview, appealReviewLoading: appealReviewLoading?.[activeCaseId], recordAppealOutcome,
             policies, consistencyReview, consistencyReviewLoading, generateConsistencyReview,

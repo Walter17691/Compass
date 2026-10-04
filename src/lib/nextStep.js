@@ -256,8 +256,43 @@ function disciplinaryNextStep(cs, stage, ctx = {}) {
       if(!isMeetingComplete(lastInv)) return {label:"Start investigation meeting", action:"start_investigation", meetingType:"investigation", primary:true, reason:"No investigation meeting recorded yet."};
       if(lastInv?.signStatus!=="signed") return {label:"Send investigation record for signature", action:"send_signature", meetingType:"investigation", primary:true, reason:"The employee should confirm the record is accurate before it's relied on."};
       return {label:"Generate investigation report", action:"inv_report", meetingType:"investigation", primary:true, reason:"Investigation meetings are complete — summarise findings before deciding next steps."};
-    case "inv_report":
-      return {label:"Proceed to disciplinary — send invitation", action:"disciplinary_invite", meetingType:"disciplinary", primary:true, reason:"ACAS Code: give the employee written notice of the allegations and evidence in good time before any hearing.", secondary:{label:"No case to answer — close", action:"close_no_case"}};
+    case "inv_report": {
+      // ER Journey Slice 2. This branch used to offer BOTH "proceed to
+      // disciplinary" and "no case to answer — close", unconditionally and
+      // simultaneously, with nothing in the product recording which was right.
+      // The choice was the adviser's to remember, and the case carried no
+      // machine-readable reason for it afterwards.
+      //
+      // Now the structured per-allegation conclusions decide. The actions
+      // themselves are UNCHANGED — same action ids, same handlers, same
+      // letters — this only determines which one is offered, and when neither
+      // is yet.
+      //
+      // NO ALLEGATIONS: the conclusion model has nothing to say, so the
+      // pre-Slice-2 behaviour stands exactly as it was. That is the
+      // non-regression path for historical cases, which is most of them.
+      const roll = ctx.conclusionRollup;
+      const DISCIPLINARY = {label:"Proceed to disciplinary — send invitation", action:"disciplinary_invite", meetingType:"disciplinary", primary:true, reason:"ACAS Code: give the employee written notice of the allegations and evidence in good time before any hearing."};
+      if(!roll || roll.state==="no_allegations")
+        return {...DISCIPLINARY, secondary:{label:"No case to answer — close", action:"close_no_case"}};
+
+      // An allegation nobody has concluded on, or one that needs more work,
+      // blocks BOTH transitions. The investigation is not finished, and the
+      // product must not offer an action that pretends it is.
+      if(roll.state==="unresolved")
+        return {label:"Record an investigation conclusion for each allegation", action:"investigation_conclusions", primary:true, reason: roll.unresolved===1
+          ? "1 allegation has no investigation conclusion yet, so it isn't yet clear whether this case has anything to answer."
+          : `${roll.unresolved} allegations have no investigation conclusion yet, so it isn't yet clear whether this case has anything to answer.`};
+      if(roll.state==="further_required")
+        return {label:"Continue the investigation", action:"investigation_conclusions", primary:true, reason:"At least one allegation needs further investigation before this case can move on."};
+
+      // Every allegation concluded, none needing more work: exactly one of the
+      // two transitions is right, so only that one is offered. The close action
+      // is no longer a permanently available alternative to proceeding.
+      if(roll.state==="close_no_case")
+        return {label:"No case to answer — close", action:"close_no_case", primary:true, reason:"No allegation has a case to answer, so there is nothing to put to a disciplinary hearing."};
+      return DISCIPLINARY;
+    }
     case "disciplinary":
       if(!isMeetingComplete(lastDisc)) return {label:"Start disciplinary hearing", action:"start_disciplinary", meetingType:"disciplinary", primary:true, reason:"Invitation sent — the hearing hasn't been held yet."};
       // isTerminalStatus, not ==="signed": declined and expired are TERMINAL in

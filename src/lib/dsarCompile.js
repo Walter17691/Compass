@@ -2,6 +2,19 @@ import { classifyIdentityByName, IDENTITY } from './employeeRecords.js';
 import { MEETING_SUBJECT_KIND } from './standaloneMeetings.js';
 import { splitMeetingRecord } from './meetingRecordSections.js';
 import { disclosableCase, summariseCaseDisclosure, MEETING_WITHHELD_INTERNAL } from './dsarCaseDisclosure.js';
+import { disclosableAllegation, summariseAllegationDisclosure } from './dsarAllegationDisclosure.js';
+
+// Every free-text allegation field that can mention a person. Used by BOTH
+// third-party scans — the subject's own allegations, and the subject appearing
+// inside other people's — because this list was previously written out twice by
+// hand and a new column added to one copy but not the other would silently stop
+// being scanned for third-party mentions. investigationConclusionReasoning is
+// here from the day it exists, which is the point of having one list.
+const ALLEGATION_FREE_TEXT_FIELDS = Object.freeze([
+  'description', 'peopleInvolved', 'employeeResponse', 'witnessEvidence',
+  'investigatorFinding', 'outstandingUncertainty', 'decisionReasoning',
+  'appealReasoning', 'investigationConclusionReasoning',
+]);
 // Compiles everything Compass holds about one named individual, for a UK
 // GDPR/DPA 2018 Subject Access Request. Pure/client-side — the data is
 // already loaded into the app, so this needs no new API route.
@@ -538,7 +551,7 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
     scanText(r.evidenceDescription, { field: 'concernReferral.evidenceDescription', concernReferralId: r.id });
   });
   subjectAllegations.forEach(a => {
-    ['description', 'peopleInvolved', 'employeeResponse', 'witnessEvidence', 'investigatorFinding', 'outstandingUncertainty', 'decisionReasoning', 'appealReasoning'].forEach(field => {
+    ALLEGATION_FREE_TEXT_FIELDS.forEach(field => {
       scanText(a[field], { field: `allegation.${field}`, caseId: a.caseId, allegationId: a.id });
     });
   });
@@ -625,7 +638,7 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
 
   const otherCaseIds = new Set(otherCases.map(c => c.id));
   allegations.filter(a => otherCaseIds.has(a.caseId)).forEach(a => {
-    ['description', 'peopleInvolved', 'employeeResponse', 'witnessEvidence', 'investigatorFinding', 'outstandingUncertainty', 'decisionReasoning', 'appealReasoning'].forEach(field => {
+    ALLEGATION_FREE_TEXT_FIELDS.forEach(field => {
       scanForSubjectAsThirdParty(a[field], { field: `allegation.${field}`, caseId: a.caseId, allegationId: a.id });
     });
   });
@@ -660,6 +673,11 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
   // DSAR download by default.
   const casesForExport = subjectCases.map(disclosableCase).filter(Boolean);
   const caseDisclosure = summariseCaseDisclosure(casesForExport);
+  // Slice 2 — allegations now go through a per-field allow-list like cases and
+  // meetings already did, rather than being emitted raw. See
+  // dsarAllegationDisclosure.js for what moves and why.
+  const disclosedAllegations = subjectAllegations.map(disclosableAllegation).filter(Boolean);
+  const allegationDisclosure = summariseAllegationDisclosure(disclosedAllegations);
 
   return {
     employeeName,
@@ -789,7 +807,8 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
     employmentEvents: subjectEmploymentEvents,
     concernReferrals: subjectConcernReferrals,
     caseDecisions: subjectCaseDecisions,
-    allegations: subjectAllegations,
+    allegations: disclosedAllegations,
+    allegationDisclosure,
     caseSignals: subjectCaseSignals,
     caseTasks: subjectCaseTasks,
     hrReviewRequests: subjectHrReviewRequests,

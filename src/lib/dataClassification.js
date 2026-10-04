@@ -187,7 +187,26 @@ export const TABLE_CLASSIFICATION = {
   redundancy_cases: t('Redundancy process records.', C, { org: 1, person: 1, case_: 1 }, D.INCLUDED),
 
   // ── erased for free by a NOT NULL / CASCADE FK to `cases` ──
-  allegations: t('Allegations under a case, with findings and appeal outcome.', C, { org: 1, person: 1, case_: 1 }, D.INCLUDED),
+  allegations: t('Allegations under a case, with the investigation conclusion, disciplinary finding and appeal outcome.', C,
+    { org: 1, person: 1, case_: 1 }, D.INCLUDED,
+    { dsarNote: 'WAVE SLICE 2 — allegations now pass through a per-field allow-list '
+        + '(dsarAllegationDisclosure.js) instead of being emitted as raw rows. Before '
+        + 'that they were the only dsar:included source with no projection at all, so '
+        + 'every column reached the download, including the internal auth.users ids in '
+        + 'created_by, decided_by and appeal_decided_by. Now: the structured '
+        + 'investigation_conclusion and its timestamp are disclosed (a procedural fact '
+        + 'about the subject\'s own case); investigator_finding, outstanding_uncertainty '
+        + 'and investigation_conclusion_reasoning are review-required, surfaced to the '
+        + 'human reviewer with a reason, exactly as cases.outcome_notes already is; all '
+        + 'four provenance id columns including investigation_conclusion_by are withheld '
+        + 'as internal, the same reasoning that already suppresses '
+        + 'case_decisions.decided_by; and an unrecognised column is withheld AND '
+        + 'reported, so a future column cannot be disclosed by default. KNOWN '
+        + 'ASYMMETRY, deliberately unchanged here: decision_reasoning — the '
+        + 'disciplinary reasoning — is still auto-disclosed verbatim, while the same '
+        + 'category of content is review-required at case level and suppressed on '
+        + 'case_decisions. That is the disciplinary side of the allegation and belongs '
+        + 'with the Slice 3 migration; it is reported as a finding, not fixed here.' }),
   case_signals: t('Risk/guardrail signals derived for a case.', C, { org: 1, case_: 1 }, D.INCLUDED),
   case_themes: t('Links a case to an organisation theme.', C, { org: 1, case_: 1 }, D.INTERNAL_WITHHELD,
     { dsarNote: 'The join between a case and the org taxonomy. organisation_themes IS disclosed; this link table is not read by the DSAR compiler. Flagged for review, not silently dropped.' }),

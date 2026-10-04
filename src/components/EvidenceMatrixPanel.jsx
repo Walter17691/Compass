@@ -73,7 +73,7 @@ export function EvidenceMatrixPanel({ cs, allegations, suggestions, suggestionsL
               <th style={headStyle}>Context</th>
               <th style={headStyle}>Employee response</th>
               <th style={headStyle}>Witness evidence</th>
-              <th style={headStyle}>Investigator's finding</th>
+              <th style={headStyle}>Investigator's assessment</th>
               <th style={headStyle}>Outstanding uncertainty</th>
               <th style={headStyle}>Status</th>
             </tr>
