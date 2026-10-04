@@ -2198,7 +2198,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // across requests, or rows can be skipped or duplicated between
       // pages.
       const { data, error } = await fetchAllPages((from, to) => supabase.from('cases')
-        .select('id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,outcome_issued_at,outcome_notes,warning_duration_months,warning_expires_at,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides,fit_note_end_date,probation_review_date,oh_referral_date,oh_report_received_date,oh_process,suspension_review_date,investigation_paused,owner_id,manager,priority,appeal_text,disciplinary_decided_by')
+        .select('id,employee_id,employee_name,employee_email,meetings,evidence,stage,case_type,description,date_received,urgency,outcome,outcome_issued_at,outcome_notes,warning_duration_months,warning_expires_at,investigation_report,investigation_report_date,disciplinary_officer,disciplinary_officer_id,disciplinary_officer_email,investigating_manager,handoff_date,next_steps,location_id,estimated_weekly_pay,estimated_age_at_dismissal,assigned_to,created_by,created_at,updated_at,confidential,timeline_overrides,fit_note_end_date,probation_review_date,oh_referral_date,oh_report_received_date,oh_process,suspension_review_date,investigation_paused,owner_id,manager,priority,appeal_text,disciplinary_decided_by')
         .eq('org_id', org.id)
         .order('created_at', { ascending: false })
         .range(from, to));
@@ -8988,6 +8988,14 @@ Please produce:
     }
     if(msg.startsWith("APPEAL_HEARING_CHAIR_IMMUTABLE")) {
       return "This appeal hearing's record could not be saved because its recorded chair cannot be changed after saving.";
+    }
+    // 2026-10-04 — cases_employee_parentage_guard refuses an update that would
+    // clear a case's employee. The browser only ever reached that state by
+    // holding a stale copy, so "refresh and retry" is the real remedy and the
+    // user could not possibly infer it from the generic message. Worded without
+    // naming a table, a column or a trigger.
+    if(msg.includes("employee cannot be cleared once set")) {
+      return "This case's employee link is out of date in your browser. Refresh the page and try again.";
     }
     return "Couldn't save this meeting — please try again.";
   };
