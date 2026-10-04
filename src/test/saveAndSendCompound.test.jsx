@@ -23,12 +23,13 @@ import { getNextStep } from '../lib/nextStep.js';
 // ─────────────────────────────────────────────────────────────────────────
 
 const app = readFileSync('src/App.jsx', 'utf8');
-const review = readFileSync('src/screens/ReviewScreen.jsx', 'utf8');
 const strip = src => src.split('\n')
   .filter(l => { const t = l.trim(); return !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*'); })
   .join('\n');
 const appCode = strip(app);
-const reviewCode = strip(review);
+// `reviewCode` was removed with the source-string assertions it served: the
+// mutual-exclusivity invariant is now asserted by rendering each state and
+// counting the actions offered, which survives a gate gaining a conjunct.
 
 const CASE_ID = 'case-compound';
 const MID = 'meeting_compound_disciplinary';
@@ -311,14 +312,34 @@ describe('1/2/18. the rendered Review offers the right two choices', () => {
     expect(screen.queryByRole('button', { name: /Send for signature/ })).toBeNull();
   });
 
-  it('the two blocks are mutually exclusive in source', () => {
-    // Still mutually exclusive on signatureEligible; both additionally gated on
-    // !standalone since Phase 4C.3, because a standalone record cannot be
-    // confirmed onto a case or sent for signature at all.
-    expect(reviewCode).toContain('{!standalone&&!signatureEligible&&reviewOutput&&!editingRecord&&(');
-    expect(reviewCode).toContain('{!standalone&&signatureEligible&&reviewOutput&&!editingRecord&&(');
-    // And the standalone block is the third, mutually exclusive with both.
-    expect(reviewCode).toContain('{standalone&&reviewOutput&&!editingRecord&&(');
+  it('exactly one action block renders per state — asserted by rendering', () => {
+    // Was a source assertion pinning two exact gate strings. Trust Slice 1c added
+    // a FOURTH block (the fail-closed recovery state for a persisted record whose
+    // identity cannot be resolved), so the property is now asserted behaviourally:
+    // whatever the state, the user is offered exactly one thing.
+    const countActions = () => [
+      screen.queryByRole('button', { name: /Save & send for signature/ }),
+      screen.queryByRole('button', { name: /^Send for signature/ }),
+    ].filter(Boolean).length;
+
+    const states = [
+      { label: 'new record, not yet persisted', props: { signatureEligible: false }, expected: 1 },
+      { label: 'persisted and eligible', props: { signatureEligible: true }, expected: 1 },
+      { label: 'standalone', props: { standalone: true, signatureEligible: false }, expected: 0 },
+      { label: 'persisted but unidentifiable', props: { persistedIdentityMissing: true, signatureEligible: false }, expected: 0 },
+      { label: 'persisted, unidentifiable AND nominally eligible', props: { persistedIdentityMissing: true, signatureEligible: true }, expected: 0 },
+    ];
+    states.forEach(({ label, props, expected }) => {
+      const { unmount } = renderReview(props);
+      expect(countActions(), label).toBe(expected);
+      unmount();
+    });
+  });
+
+  it('the recovery state says what to do, and offers no action', () => {
+    renderReview({ persistedIdentityMissing: true, unresolvedRecordMessage: 'Return to the case and open it again.' });
+    expect(screen.getByText(/Return to the case and open it again/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /send for signature/i })).toBeNull();
   });
 });
 

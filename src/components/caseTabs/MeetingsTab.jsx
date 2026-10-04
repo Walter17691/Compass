@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { isGrievanceCase } from '../../lib/caseStage';
 import { isTerminalStatus, isConfirmationSettled, isExpired, signatureStatusLabel } from '../../lib/eSignature';
 import { confirmationSemantics, provenanceLine } from '../../lib/confirmationSemantics';
+import { canIssueFirstConfirmation } from '../../lib/meetingIdentity';
 import { meetingRecordState, meetingsSummary } from '../../lib/meetingRecordState';
 import { requestManualSignatureConfirmation } from '../../lib/humanOverride';
 import { SignedRecordModal } from '../SignedRecordModal';
@@ -177,7 +178,15 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
           {m.signStatus&&!isTerminalStatus(m.signStatus)&&<button onClick={()=>markMeetingSigned(m)} style={{fontSize:10,background:"#E8F5EE",border:"none",borderRadius:4,padding:"2px 8px",color:"#1A7A4A",cursor:"pointer",fontFamily:FONT.sans}}>Mark signed</button>}
           {m.notetakerNotesStatus==="submitted"&&<span style={{fontSize:10,color:"#B87520",background:"#FEF5E7",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Notetaker notes awaiting review</span>}
           {m.notetakerNotesStatus==="reviewed"&&<span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Notetaker notes reviewed</span>}
-          {m.record&&<button onClick={()=>onPresentMeetingRecord(m,{meetingType:meetingTypes.find(t=>t.label===m.type)||null,caseInfo:{employee:cs.employeeName,manager:m.manager||"",date:m.date}})} style={{fontSize:11,background:"none",border:"1px solid #E8EAF2",borderRadius:6,padding:"4px 10px",color:"#4A4E63",cursor:"pointer",fontFamily:FONT.sans}}>View notes</button>}
+          {m.record&&<button onClick={()=>onPresentMeetingRecord(m,{meetingType:meetingTypes.find(t=>t.label===m.type)||null,caseInfo:{employee:cs.employeeName,manager:m.manager||"",date:m.date,caseId:cs.id}})} style={{fontSize:11,background:"none",border:"1px solid #E8EAF2",borderRadius:6,padding:"4px 10px",color:"#4A4E63",cursor:"pointer",fontFamily:FONT.sans}}>View notes</button>}
+          {/* ── FIRST ISSUE ──────────────────────────────────────────────────
+              A completed record the participant has never been given was
+              previously undiscoverable: the only route was View notes, and the
+              button it led to was labelled for a record that had not been saved.
+              Opens the SAME review screen — deliberately, so the record is read
+              before it leaves the building — and the send control there is now
+              correctly offered because the identity resolves. */}
+          {canIssueFirstConfirmation(m)&&<button onClick={()=>onPresentMeetingRecord(m,{meetingType:meetingTypes.find(t=>t.label===m.type)||null,caseInfo:{employee:cs.employeeName,manager:m.manager||"",date:m.date,caseId:cs.id}})} style={{fontSize:11,background:COLOR.purple,border:"none",borderRadius:6,padding:"4px 10px",color:"#FFFFFF",cursor:"pointer",fontFamily:FONT.sans,fontWeight:600}}>Review &amp; send</button>}
           {/* Human UAT remediation, Batch 2, Part 9 — the only place the
               actual signature/acknowledgement was ever visible was the
               external, time-limited /sign/[id] link. "View notes" above

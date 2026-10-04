@@ -135,7 +135,10 @@ describe('C.1A — one entry point binds record and analysis', () => {
   it('App exposes a single presenter that sets the record AND its own analysis', () => {
     const i = app.indexOf('const presentMeetingRecord =');
     expect(i).toBeGreaterThan(-1);
-    const body = app.slice(i, i + 2000);
+    // Widened from 2000: Trust Slice 1c added the identity-resolution block to
+    // this presenter, pushing the setters past the old window. The assertion is
+    // unchanged — bounded by the next declaration rather than a magic number.
+    const body = app.slice(i, app.indexOf('const saveMeetingToCase', i));
     for (const setter of ['setReviewOutput(g.record)', 'setAdvisorNotes(g.advisorNotes)',
       'setMeetingSummary(g.summary)', 'setRiskScore(g.riskScore)', 'setAnalysisForRecord(']) {
       expect(body).toContain(setter);

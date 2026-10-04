@@ -4,6 +4,7 @@ import { toISODateLocal, isPastLocalDate } from '../lib/dates';
 import { appealInvitationLogistics } from '../lib/appealInvitation';
 import { getCurrentRisk, isGrievanceCase } from '../lib/caseStage';
 import { rollupInvestigationConclusions } from '../lib/investigationConclusion';
+import { persistedMeetingContext } from '../lib/meetingIdentity';
 // Imported directly rather than threaded through as a prop like getNextStep:
 // adding a callee inside App.jsx's component is what silently disabled lint
 // analysis in an earlier phase, and this file already imports from lib above.
@@ -537,7 +538,10 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
       }));
       setScreen(SCREENS.HOME+"_meeting");
     }
-    else if(nextStep.action==="send_signature"){const m=relevantMeeting();if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}}
+    // Trust Slice 1c — carries the persisted identity. Without it the sign modal
+    // opened, collected an address, and then sendForSignature's own gate refused
+    // because the ids were undefined: a dead end on a record that was eligible.
+    else if(nextStep.action==="send_signature"){const m=relevantMeeting();if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date,...persistedMeetingContext(m,{caseId:cs.id})}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}}
     // D1 completion — the workflow can now say "Record outcome", so the action
     // must land somewhere. Opens the Outcome destination, where the decision is
     // recorded; it does NOT record anything itself.

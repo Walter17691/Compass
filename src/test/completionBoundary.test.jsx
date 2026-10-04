@@ -229,12 +229,15 @@ describe('1/16. the rendered signature button respects the boundary', () => {
     // to confirm against, so neither send block may render for one. The
     // guarantee asserted here is unchanged — the gate is signatureEligible, not
     // merely the presence of generated text.
-    expect(reviewCode).toContain('{!standalone&&signatureEligible&&reviewOutput&&!editingRecord&&(');
+    // Trust Slice 1c added a THIRD conjunct, !persistedIdentityMissing: a
+    // persisted record whose identity cannot be resolved offers no action at all.
+    // The guarantee asserted here is unchanged and now strictly stronger.
+    expect(reviewCode).toContain('{!standalone&&!persistedIdentityMissing&&signatureEligible&&reviewOutput&&!editingRecord&&(');
     // and never ungated: every occurrence of that condition must carry the
     // eligibility prefix (a bare `not.toContain` would false-positive, because
     // the gated form contains the ungated string).
     const occurrences = reviewCode.split('{reviewOutput&&!editingRecord&&(').length - 1;
-    const gated = reviewCode.split('{!standalone&&signatureEligible&&reviewOutput&&!editingRecord&&(').length - 1;
+    const gated = reviewCode.split('{!standalone&&!persistedIdentityMissing&&signatureEligible&&reviewOutput&&!editingRecord&&(').length - 1;
     expect(occurrences).toBe(gated);
   });
 });

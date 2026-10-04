@@ -611,8 +611,11 @@ describe('F. review handoff and draft persistence', () => {
   it('a standalone record is not offered a confirm or signature action it cannot perform', () => {
     const review = readFileSync('src/screens/ReviewScreen.jsx', 'utf8');
     expect(review).toContain('{standalone&&reviewOutput&&!editingRecord&&(');
-    expect(review).toContain('{!standalone&&!signatureEligible&&reviewOutput&&!editingRecord&&(');
-    expect(review).toContain('{!standalone&&signatureEligible&&reviewOutput&&!editingRecord&&(');
+    expect(review).toContain('{!standalone&&!persistedIdentityMissing&&!signatureEligible&&reviewOutput&&!editingRecord&&(');
+    expect(review).toContain('{!standalone&&!persistedIdentityMissing&&signatureEligible&&reviewOutput&&!editingRecord&&(');
+    // Trust Slice 1c — the fourth, mutually exclusive block: a persisted record
+    // that cannot be identified is offered nothing, and told why.
+    expect(review).toContain('{!standalone&&persistedIdentityMissing&&reviewOutput&&!editingRecord&&(');
     expect(review).toContain('{!standalone && (<>');
     // And it says why, rather than leaving a missing button unexplained.
     expect(review).toContain("can't be confirmed or sent for signature yet");

@@ -477,6 +477,46 @@ describe('CaseViewScreen — Outcome tab "Draft outcome letter" route (Defect #1
     ],
   };
 
+  // Trust Slice 1c, brief test 4. The next-step send route previously set only
+  // display fields, so the sign modal opened, collected an address, and then
+  // sendForSignature's own gate refused because the ids were undefined — a dead
+  // end on an eligible record. Mutation P14 proved this was untested.
+  it('the send_signature next step carries the persisted caseId AND meetingId', async () => {
+    const user = userEvent.setup();
+    const setCaseInfo = vi.fn();
+    const setShowSignModal = vi.fn();
+    const caseWithIdentifiedMeeting = {
+      ...goldenPathShapedCase,
+      outcome: '', outcomeIssuedAt: null,
+      meetings: [{ id: 'meeting_abc', caseId: 'c1', type: 'Disciplinary', date: '2026-09-07',
+                   status: 'completed', record: 'the disciplinary hearing record', signStatus: null }],
+    };
+    render(<CaseViewScreen {...{
+      ...baseProps,
+      shell: {
+        ...baseProps.shell,
+        cases: [caseWithIdentifiedMeeting],
+        getCaseStage: () => 'disciplinary',
+        getNextStep: () => ({ label: 'Send hearing record for signature', action: 'send_signature', meetingType: 'disciplinary', primary: true }),
+        setCaseInfo, setReviewOutput: vi.fn(),
+      },
+      // setShowSignModal is a `header` prop, not a `shell` one.
+      header: { ...baseProps.header, setShowSignModal },
+    }} />);
+
+    const buttons = screen.getAllByRole('button', { name: /Send hearing record for signature/ });
+    await user.click(buttons[0]);
+
+    expect(setShowSignModal).toHaveBeenCalledWith(true);
+    expect(setCaseInfo).toHaveBeenCalled();
+    // setCaseInfo receives an updater; invoke it to see what it actually produces.
+    const updater = setCaseInfo.mock.calls.at(-1)[0];
+    const next = typeof updater === 'function' ? updater({}) : updater;
+    expect(next.caseId).toBe('c1');
+    expect(next.meetingId).toBe('meeting_abc');
+    expect(next.recordSource).toBe('persisted');
+  });
+
   it('is offered and, on click, grounds the letter from the case\'s own hearing meeting and drafts via the shared handleLetter pipeline — no signature send, no re-issue, no stage write required', async () => {
     const user = userEvent.setup();
     const handleLetter = vi.fn();

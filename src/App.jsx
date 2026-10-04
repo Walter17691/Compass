@@ -96,6 +96,7 @@ import { startStandaloneMeeting, endStandaloneMeeting, persistStandaloneReviewDr
 import { buildReviewDraft, restorableDraft, markDraftEdited, supersedeReviewDraft } from './lib/reviewDraft';
 import { splitMeetingRecord } from './lib/meetingRecordSections';
 import { employeeFacingSnapshot } from './lib/signedSnapshot';
+import { applyRecordIdentity, resolvePersistedMeeting, RESOLUTION, isPersistedIdentityMissing, describeUnresolvedPersistedRecord } from './lib/meetingIdentity';
 import { mergeSuggestions, suggestionKey } from './lib/suggestionIdentity';
 import { appealLinkCandidates } from './lib/appealLink';
 import { reconcileCaseEmployeeWrite, describeReconcileOutcome, shouldReloadAfter, correctCaseEmployeeWrite, describeCorrectionOutcome, CORRECT_RESULT } from './lib/reconciliationWrites';
@@ -9209,9 +9210,25 @@ Please produce:
   const reviewAskKey = askThreadKey({ meetingId: caseInfo.meetingId, caseId: caseInfo.caseId || caseInfo._linkedCaseId, surface: "review" }) || "review:none";
 
   const presentMeetingRecord = (source, { meetingType: mt = null, caseInfo: ci = null } = {}) => {
-    const g = (source && typeof source === "object")
+    const g = (!!source && typeof source === "object")
       ? groundingFromMeeting(source)
       : groundingFromRecord(source);
+    // ── IDENTITY IS RESOLVED HERE, ONCE, FOR EVERY CALLER ────────────────
+    //
+    // Trust Slice 1c. A persisted meeting had two identities: (case.id,
+    // meeting.id) where it was displayed, and caseInfo.caseId/meetingId where it
+    // was acted on — and only the in-session flow populated the second. Opening
+    // a saved record therefore left both undefined, ReviewScreen offered the
+    // new-record variant, and that path would have created a duplicate case.
+    //
+    // Resolved from the meeting OBJECT rather than at each call site, so every
+    // route that hands over a persisted meeting is fixed by construction and a
+    // future one cannot forget.
+    //
+    // And when the source is record TEXT (evidence, a witness statement), the ids
+    // are explicitly CLEARED. Leaving them would let a later action target the
+    // meeting that happened to be open before — the same bug in reverse.
+
     setReviewOutput(g.record);
     setReviewOutputOriginal(g.recordOriginal);
     setAdvisorNotes(g.advisorNotes);
@@ -9235,7 +9252,9 @@ Please produce:
     draftLastWrittenRef.current = g.record;
     setDraftStatus(null);
     if(mt) setMeetingType(mt);
-    if(ci) setCaseInfo(p => ({ ...p, ...ci }));
+    // applyRecordIdentity is a pure function in meetingIdentity.js, tested on its
+    // own, because this merge is precisely where the defect lived.
+    setCaseInfo(p => applyRecordIdentity(p, ci, source));
     setScreen(SCREENS.REVIEW);
   };
 
@@ -9507,6 +9526,22 @@ Please produce:
     // this preparation was grounded in" and is read by prep grounding and by
     // NEW-19's discovery gate. Parentage needs its own field so neither can
     // drift into the other's meaning.
+    // ── A PERSISTED RECORD NEVER FALLS THROUGH TO CREATE ─────────────────
+    //
+    // Trust Slice 1c. Below, `caseId = existing ? existing.id : crypto.randomUUID()`
+    // — a create path that a MISSING identity reached silently. For a record the
+    // user opened from a case, that produced a duplicate case rather than an
+    // error, which is the worst possible failure mode: it looks like success.
+    //
+    // So a persisted record that cannot be identified refuses here, before any
+    // write, and before the signing gate further on. Fails closed.
+    const persisted = resolvePersistedMeeting(cases, caseInfo);
+    if(persisted.kind === RESOLUTION.UNRESOLVABLE) {
+      console.error('saveMeetingToCase: unresolved persisted record', persisted.reason);
+      showToast(describeUnresolvedPersistedRecord(), "error");
+      return { ok:false, reason:"persisted_identity_unresolved" };
+    }
+
     const structuredCaseId = caseInfo.caseId || null;
     // One explicit, narrow exception. "Deal with informally" on a manager's
     // concern referral is a deliberate user action on a specific, named
@@ -12256,7 +12291,7 @@ Please produce:
 
       {/* ══ REVIEW ══ */}
       {screen===SCREENS.REVIEW&&(
-        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={threadFor(askThreads, reviewAskKey)} setAskCompassHistory={next=>setAskThreads(t=>({...t, [reviewAskKey]: typeof next === "function" ? next(threadFor(t, reviewAskKey)) : next}))} askCompass={(m,h,sh,sp)=>askCompass(m,h,sh,sp,{record:reviewOutput})} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} signatureEligible={signatureEligibleIn(cases, { caseId: caseInfo.caseId, meetingId: caseInfo.meetingId })} standalone={caseInfo.meetingHome===TABLE_HOME} onSaveAndSendForSignature={saveAndSendForSignature} draftStatus={draftStatus} onEditReviewRecord={onEditReviewRecord} onRetryReviewDraft={retryReviewDraft} advisorNotes={advisorNotes} reviewGaps={reviewGaps} riskScore={riskScore} analysisStale={isAnalysisStale({record:reviewOutput, analysisFor:analysisForRecord, hasAnalysis:!!(meetingSummary||advisorNotes||riskScore)})} reviewGenerationFailed={reviewGenerationFailed} onRetryGeneration={handleReview}
+        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={threadFor(askThreads, reviewAskKey)} setAskCompassHistory={next=>setAskThreads(t=>({...t, [reviewAskKey]: typeof next === "function" ? next(threadFor(t, reviewAskKey)) : next}))} askCompass={(m,h,sh,sp)=>askCompass(m,h,sh,sp,{record:reviewOutput})} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} signatureEligible={signatureEligibleIn(cases, { caseId: caseInfo.caseId, meetingId: caseInfo.meetingId })} persistedIdentityMissing={isPersistedIdentityMissing(cases, caseInfo)} unresolvedRecordMessage={describeUnresolvedPersistedRecord()} standalone={caseInfo.meetingHome===TABLE_HOME} onSaveAndSendForSignature={saveAndSendForSignature} draftStatus={draftStatus} onEditReviewRecord={onEditReviewRecord} onRetryReviewDraft={retryReviewDraft} advisorNotes={advisorNotes} reviewGaps={reviewGaps} riskScore={riskScore} analysisStale={isAnalysisStale({record:reviewOutput, analysisFor:analysisForRecord, hasAnalysis:!!(meetingSummary||advisorNotes||riskScore)})} reviewGenerationFailed={reviewGenerationFailed} onRetryGeneration={handleReview}
           meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion}
           meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion}
         />

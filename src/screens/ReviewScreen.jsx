@@ -49,7 +49,7 @@ import { conversationTurns } from '../lib/askConversation';
 // unchanged and still lives in exactly one place — this screen does not do its
 // own filtering, because a screen quietly disagreeing with the saved artefact is
 // worse than no filter at all.
-export function ReviewScreen({ caseInfo, meetingType, isHR, requestHrReview, reviewOutput, reviewOutputOriginal, meetingSummary, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, signatureEligible=false, standalone=false, onSaveAndSendForSignature, draftStatus=null, onEditReviewRecord, onRetryReviewDraft, advisorNotes="", reviewGaps=[], riskScore, reviewGenerationFailed, onRetryGeneration,
+export function ReviewScreen({ caseInfo, meetingType, isHR, requestHrReview, reviewOutput, reviewOutputOriginal, meetingSummary, confirmDialog, setShowShareModal, saveMeetingToCase, setScreen, showToast, askCompassInput, setAskCompassInput, askCompassHistory, setAskCompassHistory, askCompass, setAskCompassProcessing, askCompassProcessing, editProcessing, editRecord, editingRecord, setEditingRecord, aiProcessing, aiError, setReviewOutput, setShowSignModal, signatureEligible=false, standalone=false, onSaveAndSendForSignature, persistedIdentityMissing=false, unresolvedRecordMessage="", draftStatus=null, onEditReviewRecord, onRetryReviewDraft, advisorNotes="", reviewGaps=[], riskScore, reviewGenerationFailed, onRetryGeneration,
   meetingEvidenceSuggestions=[], onAcceptMeetingEvidenceSuggestion, onDismissMeetingEvidenceSuggestion,
   meetingActionSuggestions=[], onAcceptMeetingActionSuggestion, onDismissMeetingActionSuggestion,
   analysisStale=false,
@@ -251,7 +251,20 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, requestHrReview, rev
                 <span style={{...TYPE.metadata,color:COLOR.inkFaint}}>This record isn't part of a case, so it can't be confirmed or sent for signature yet. Your draft is saved automatically and will be here when you come back.</span>
               </div>
             )}
-            {!standalone&&!signatureEligible&&reviewOutput&&!editingRecord&&(
+            {/* Trust Slice 1c — a persisted record whose identity cannot be
+                resolved offers NO action at all. Previously this situation fell
+                into the "Save & send" variant below, whose save would have
+                created a duplicate case. Fails closed, and says what to do. */}
+            {!standalone&&persistedIdentityMissing&&reviewOutput&&!editingRecord&&(
+              <div role="status" style={{padding:"16px 28px",borderTop:`1px solid ${COLOR.borderFaint}`,background:COLOR.rail}}>
+                <span style={{...TYPE.metadata,color:COLOR.inkFaint}}>{unresolvedRecordMessage}</span>
+              </div>
+            )}
+            {/* The genuine new-record path: a record produced in this session that
+                is not yet on the case file. "Save & send" is accurate ONLY here —
+                for an already-persisted record it was a lie about what the button
+                does, which is how the duplicate-case path got reached. */}
+            {!standalone&&!persistedIdentityMissing&&!signatureEligible&&reviewOutput&&!editingRecord&&(
               <div style={{padding:"16px 28px",borderTop:`1px solid ${COLOR.borderFaint}`,background:COLOR.rail,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
                 <button onClick={()=>onSaveAndSendForSignature?.()} style={{...BUTTON.primary}}>
                   Save &amp; send for signature →
@@ -259,7 +272,7 @@ export function ReviewScreen({ caseInfo, meetingType, isHR, requestHrReview, rev
                 <span style={{...TYPE.metadata,color:COLOR.inkFaint}}>Confirms this record on the case file, then sends it to the employee for signature</span>
               </div>
             )}
-            {!standalone&&signatureEligible&&reviewOutput&&!editingRecord&&(
+            {!standalone&&!persistedIdentityMissing&&signatureEligible&&reviewOutput&&!editingRecord&&(
               <div style={{padding:"16px 28px",borderTop:`1px solid ${COLOR.borderFaint}`,background:COLOR.rail,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
                 <button onClick={()=>setShowSignModal(true)} style={{...BUTTON.primary}}>
                   Send for signature →
