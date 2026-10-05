@@ -12262,7 +12262,6 @@ Please produce:
 {/* ══ CASE VIEW ══ */}
       {screen===SCREENS.CASE_VIEW&&activeCaseId&&(
         <CaseViewScreen
-          onPresentMeetingRecord={presentMeetingRecord}
           onResumeMeeting={resumeMeeting}
           onStartScheduledMeeting={startScheduledMeeting} onOpenReviewForMeeting={openReviewForMeeting}
           onPrepareScheduledMeeting={prepareScheduledMeeting}
@@ -12297,8 +12296,8 @@ Please produce:
           shell={{
             cases, casesLoading, activeCaseId, setScreen, confirmDialog, getCaseStage, getNextStep, fmtDate,
             setActiveEmployeeId,
-            getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, orgMembers,
-            setCaseInfo, saveCases, setReviewOutput, setMeetingType, showToast, currentUser,
+            getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, getCaseEmployeeRecord, orgMembers,
+            setCaseInfo, saveCases, setReviewOutput, onPresentMeetingRecord: presentMeetingRecord, setMeetingType, showToast, currentUser,
             setLetterOutput, handleLetter, isHR, caseAccess, allegations, auditLog, caseTasks,
             createCaseTask, caseSignals, changeSignalStatus, toggleCaseTaskDone, setShowHandoffModal,
             setShowAppealOfficerModal,

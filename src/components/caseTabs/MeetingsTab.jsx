@@ -52,7 +52,7 @@ const SUGGESTION_LABEL = {
 // Investigation meetings list (their natural narrative position, and
 // disciplinary-only — a grievance case never shows them) rather than
 // moving to Outcome, which is specifically about the decision itself.
-export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, onPresentMeetingRecord, meetingTypes, fmtDate, attemptSubmitInvestigation, concludingInvestigation, investigationReportDraft, setShowHandoffModal, setLetterOutput, onAcceptSavedSuggestion, onDismissSavedSuggestion, promptDialog, audit, loadSignedSnapshot, loadRequestHistory, proceedWithoutConfirmation, onResendReminder }) {
+export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, onPresentMeetingRecord, showToast, meetingTypes, fmtDate, attemptSubmitInvestigation, concludingInvestigation, investigationReportDraft, setShowHandoffModal, setLetterOutput, onAcceptSavedSuggestion, onDismissSavedSuggestion, promptDialog, audit, loadSignedSnapshot, loadRequestHistory, proceedWithoutConfirmation, onResendReminder }) {
   const grievance = isGrievanceCase(cs);
   const meetings = cs.meetings||[];
   // Human UAT remediation, Batch 2, Part 9 — see SignedRecordModal's own
@@ -150,6 +150,32 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
     </div>
   );
 
+  // ── ONE OPENER FOR BOTH ROW CONTROLS ──────────────────────────────────
+  //
+  // Human UAT: "Review & send" did nothing at all — no navigation, no error, no
+  // toast. The cause was a PROP-GROUP MISMATCH one layer up: App passed
+  // onPresentMeetingRecord as a top-level prop of CaseViewScreen while
+  // CaseViewScreen destructures it from `shell`, so it arrived here as
+  // undefined and `onClick={()=>onPresentMeetingRecord(...)}` threw a
+  // TypeError. React does NOT route errors thrown in event handlers to error
+  // boundaries, so the throw went to window.onerror and the UI never moved.
+  //
+  // The mismatch is fixed at source and a structural test now pins the whole
+  // class. This is the second line of defence: a missing handler is reported to
+  // the manager instead of vanishing. A control that appears to accept a click
+  // must never do nothing.
+  const openMeetingRecord = (m) => {
+    if(typeof onPresentMeetingRecord !== "function") {
+      console.error("MeetingsTab: onPresentMeetingRecord was not provided");
+      showToast?.("Compass couldn't open that meeting record. Please reload the page and try again.", "error");
+      return;
+    }
+    onPresentMeetingRecord(m, {
+      meetingType: meetingTypes.find(t=>t.label===m.type)||null,
+      caseInfo: { employee:cs.employeeName, manager:m.manager||"", date:m.date, caseId:cs.id },
+    });
+  };
+
   const MeetingRow = ({m}) => {
     // Computed once per row. One canonical source for every label below, so a
     // status can never pick up a different meaning in two places.
@@ -178,7 +204,7 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
           {m.signStatus&&!isTerminalStatus(m.signStatus)&&<button onClick={()=>markMeetingSigned(m)} style={{fontSize:10,background:"#E8F5EE",border:"none",borderRadius:4,padding:"2px 8px",color:"#1A7A4A",cursor:"pointer",fontFamily:FONT.sans}}>Mark signed</button>}
           {m.notetakerNotesStatus==="submitted"&&<span style={{fontSize:10,color:"#B87520",background:"#FEF5E7",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Notetaker notes awaiting review</span>}
           {m.notetakerNotesStatus==="reviewed"&&<span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Notetaker notes reviewed</span>}
-          {m.record&&<button onClick={()=>onPresentMeetingRecord(m,{meetingType:meetingTypes.find(t=>t.label===m.type)||null,caseInfo:{employee:cs.employeeName,manager:m.manager||"",date:m.date,caseId:cs.id}})} style={{fontSize:11,background:"none",border:"1px solid #E8EAF2",borderRadius:6,padding:"4px 10px",color:"#4A4E63",cursor:"pointer",fontFamily:FONT.sans}}>View notes</button>}
+          {m.record&&<button onClick={()=>openMeetingRecord(m)} style={{fontSize:11,background:"none",border:"1px solid #E8EAF2",borderRadius:6,padding:"4px 10px",color:"#4A4E63",cursor:"pointer",fontFamily:FONT.sans}}>View notes</button>}
           {/* ── FIRST ISSUE ──────────────────────────────────────────────────
               A completed record the participant has never been given was
               previously undiscoverable: the only route was View notes, and the
@@ -186,7 +212,7 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
               Opens the SAME review screen — deliberately, so the record is read
               before it leaves the building — and the send control there is now
               correctly offered because the identity resolves. */}
-          {canIssueFirstConfirmation(m)&&<button onClick={()=>onPresentMeetingRecord(m,{meetingType:meetingTypes.find(t=>t.label===m.type)||null,caseInfo:{employee:cs.employeeName,manager:m.manager||"",date:m.date,caseId:cs.id}})} style={{fontSize:11,background:COLOR.purple,border:"none",borderRadius:6,padding:"4px 10px",color:"#FFFFFF",cursor:"pointer",fontFamily:FONT.sans,fontWeight:600}}>Review &amp; send</button>}
+          {canIssueFirstConfirmation(m)&&<button onClick={()=>openMeetingRecord(m)} style={{fontSize:11,background:COLOR.purple,border:"none",borderRadius:6,padding:"4px 10px",color:"#FFFFFF",cursor:"pointer",fontFamily:FONT.sans,fontWeight:600}}>Review &amp; send</button>}
           {/* Human UAT remediation, Batch 2, Part 9 — the only place the
               actual signature/acknowledgement was ever visible was the
               external, time-limited /sign/[id] link. "View notes" above

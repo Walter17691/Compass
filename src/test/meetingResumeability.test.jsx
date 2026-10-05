@@ -353,7 +353,10 @@ describe('first-issue eligibility', () => {
     const block = tab.slice(tab.indexOf('canIssueFirstConfirmation(m)'), tab.indexOf('canIssueFirstConfirmation(m)') + 700);
     // It navigates only. Authorisation remains where it already was: reaching the
     // case at all, plus requireOrgMembership on /api/signing.
-    expect(block).toMatch(/onPresentMeetingRecord/);
+    //
+    // Both row controls now route through openMeetingRecord — one opener that
+    // reports a missing handler instead of throwing a TypeError nobody sees.
+    expect(block).toMatch(/openMeetingRecord\(m\)/);
     expect(block).not.toMatch(/isHR|canDecide|role/);
   });
 });
