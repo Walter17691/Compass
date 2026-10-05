@@ -262,7 +262,7 @@ function disciplinaryNextStep(cs, stage, ctx = {}) {
       // means the participant said nothing, and silence must not unblock a
       // process. Settled means they engaged (signed/acknowledged/declined/
       // disputed) or a named human recorded a decision to proceed.
-      if(!isConfirmationSettled(lastInv?.signStatus)) return {label:"Send investigation record for signature", action:"send_signature", meetingType:"investigation", primary:true, reason:"The employee should confirm the record is accurate before it's relied on."};
+      if(!isConfirmationSettled(lastInv?.signStatus)) return {label:"Review & send investigation record", action:"send_signature", meetingType:"investigation", reviewMeetingId:lastInv?.id||null, primary:true, reason:"The employee should confirm the record is accurate before it's relied on."};
       return {label:"Generate investigation report", action:"inv_report", meetingType:"investigation", primary:true, reason:"Investigation meetings are complete — summarise findings before deciding next steps."};
     case "inv_report": {
       // ER Journey Slice 2. This branch used to offer BOTH "proceed to
@@ -313,7 +313,7 @@ function disciplinaryNextStep(cs, stage, ctx = {}) {
       // terminal, so an ignored request progressed the hearing on silence alone.
       // An expired request now asks for a reminder or an explicit decision to
       // proceed, which is the same rule the investigation branch above follows.
-      if(!isConfirmationSettled(lastDisc?.signStatus)) return {label:"Send hearing record for signature", action:"send_signature", meetingType:"disciplinary", primary:true, reason:"The employee should confirm the hearing record is accurate."};
+      if(!isConfirmationSettled(lastDisc?.signStatus)) return {label:"Review & send hearing record", action:"send_signature", meetingType:"disciplinary", reviewMeetingId:lastDisc?.id||null, primary:true, reason:"The employee should confirm the hearing record is accurate."};
       // D1 completion — the DECISION comes before its communication. This used
       // to jump straight to "Draft outcome letter" gated on hasDiscOutcome,
       // which is a LETTER check (hasLetterType) — so the workflow asked for a
@@ -360,7 +360,7 @@ function disciplinaryNextStep(cs, stage, ctx = {}) {
       // Same canonical predicate as every other confirmation gate — this branch
       // carried the identical `!== "signed"` defect and would have stranded an
       // appeal on a decline or an expiry forever.
-      if(!isConfirmationSettled(lastAppeal?.signStatus)) return {label:"Send appeal record for signature", action:"send_signature", meetingType:"appeal-disciplinary", primary:true, reason:"The employee should confirm the appeal hearing record is accurate."};
+      if(!isConfirmationSettled(lastAppeal?.signStatus)) return {label:"Review & send appeal record", action:"send_signature", meetingType:"appeal-disciplinary", reviewMeetingId:lastAppeal?.id||null, primary:true, reason:"The employee should confirm the appeal hearing record is accurate."};
       if(!hasAppealOutcome) return {label:"Draft appeal outcome letter", action:"appeal_letter", meetingType:"appeal-disciplinary", primary:true, reason:"ACAS Code: confirm the appeal decision in writing — this is the final stage of the internal process."};
       return {label:"Appeal outcome issued — close case", action:"close_case", meetingType:"appeal-disciplinary", primary:true, reason:"The appeal is the final stage — nothing further to issue."};
     }
@@ -393,7 +393,7 @@ function grievanceNextStep(cs, stage, ctx = {}) {
       if(!isMeetingComplete(lastHearing)) return {label:"Start grievance meeting", action:"start_hearing", meetingType:"grievance", primary:true, reason:"No grievance meeting recorded yet."};
       // isTerminalStatus let `expired` through here too, so an ignored request
       // progressed a grievance on silence alone. Same rule as everywhere else now.
-      if(!isConfirmationSettled(lastHearing?.signStatus)) return {label:"Send grievance record for signature", action:"send_signature", meetingType:"grievance", primary:true, reason:"The employee should confirm the record is accurate before it's relied on."};
+      if(!isConfirmationSettled(lastHearing?.signStatus)) return {label:"Review & send grievance record", action:"send_signature", meetingType:"grievance", reviewMeetingId:lastHearing?.id||null, primary:true, reason:"The employee should confirm the record is accurate before it's relied on."};
       if(!cs.outcome && !hasHearingOutcome) return {label:"Record outcome", action:"outcome", meetingType:"grievance", primary:true, reason:"The meeting is complete — record the decision before it is put in writing."};
       if(!hasHearingOutcome) return {label:"Draft grievance outcome letter", action:"outcome_letter", meetingType:"grievance", primary:true, reason:"ACAS Code: confirm the outcome in writing without unreasonable delay."};
       return {label:"Outcome issued — close or appeal", action:"post_outcome", meetingType:"grievance", primary:true, reason:"Outcome letter sent — wait out the appeal window or close the case."};
@@ -410,7 +410,7 @@ function grievanceNextStep(cs, stage, ctx = {}) {
       if(ctx.hasAppealManager && !hasAppealInvitation) return {label:"Draft appeal hearing invitation", action:"appeal_invite", meetingType:"appeal-grievance", primary:true, reason:"An appeal officer has been appointed — ACAS guidance expects the hearing invitation to confirm the grounds and the right to be accompanied before the hearing itself."};
       if(!isMeetingComplete(lastAppeal)) return {label:"Start appeal hearing", action:"start_appeal_meeting", meetingType:"appeal-grievance", primary:true, reason:"An appeal has been raised but not yet heard."};
       // As above — the grievance-appeal twin of the same defect.
-      if(!isConfirmationSettled(lastAppeal?.signStatus)) return {label:"Send appeal record for signature", action:"send_signature", meetingType:"appeal-grievance", primary:true, reason:"The employee should confirm the appeal hearing record is accurate."};
+      if(!isConfirmationSettled(lastAppeal?.signStatus)) return {label:"Review & send appeal record", action:"send_signature", meetingType:"appeal-grievance", reviewMeetingId:lastAppeal?.id||null, primary:true, reason:"The employee should confirm the appeal hearing record is accurate."};
       if(!hasAppealOutcome) return {label:"Draft appeal outcome letter", action:"appeal_letter", meetingType:"appeal-grievance", primary:true, reason:"ACAS Code: confirm the appeal decision in writing — this is the final stage of the internal process."};
       return {label:"Appeal outcome issued — close case", action:"close_case", meetingType:"appeal-grievance", primary:true, reason:"The appeal is the final stage — nothing further to issue."};
     }

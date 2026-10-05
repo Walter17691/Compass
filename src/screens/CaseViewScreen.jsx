@@ -4,7 +4,7 @@ import { toISODateLocal, isPastLocalDate } from '../lib/dates';
 import { appealInvitationLogistics } from '../lib/appealInvitation';
 import { getCurrentRisk, isGrievanceCase } from '../lib/caseStage';
 import { rollupInvestigationConclusions } from '../lib/investigationConclusion';
-import { persistedMeetingContext } from '../lib/meetingIdentity';
+import { resolveNextStepMeeting, describeUnresolvedNextStep, NEXT_STEP_TARGET } from '../lib/nextStepTarget';
 // Imported directly rather than threaded through as a prop like getNextStep:
 // adding a callee inside App.jsx's component is what silently disabled lint
 // analysis in an earlier phase, and this file already imports from lib above.
@@ -106,7 +106,7 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   } = shell;
   const {
     showAppealInput, setShowAppealInput, appealText, setAppealText, recordAppealReceived, setShowReassignModal,
-    setShowAssignInvestigatorModal, setShowOutcomeModal, setShowSignModal, letterOutput,
+    setShowAssignInvestigatorModal, setShowOutcomeModal, letterOutput,
     letterValidationIssues = [],
     aiProcessing, aiError, toggleNextStepDone, concludingInvestigation, investigationReportDraft, attemptSubmitInvestigation,
     openEscalateModal, openHrInterventionModal, generateNextBestAction, nextActionLoading,
@@ -541,7 +541,33 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
     // Trust Slice 1c — carries the persisted identity. Without it the sign modal
     // opened, collected an address, and then sendForSignature's own gate refused
     // because the ids were undefined: a dead end on a record that was eligible.
-    else if(nextStep.action==="send_signature"){const m=relevantMeeting();if(m?.record){setReviewOutput(m.record);setCaseInfo(p=>({...p,employee:cs.employeeName,manager:cs.manager||"",date:m.date,...persistedMeetingContext(m,{caseId:cs.id})}));setMeetingType(MEETING_TYPES.find(t=>t.label===m.type)||null);setShowSignModal(true);}}
+    // ── REVIEW & SEND — BY EXACT MEETING IDENTITY ────────────────────────
+    //
+    // Human UAT: this CTA did NOTHING. It resolved the meeting with
+    // relevantMeeting() — FIRST type match by array position — while the engine
+    // had reasoned about lastGenuineMeeting. On a case with three Investigation
+    // meetings those are different meetings, and the one [0] found was a
+    // review_draft with an empty record, so `if(m?.record)` fell through a guard
+    // with no else and the click was swallowed.
+    //
+    // Now: the step NAMES the meeting, this resolves that id and nothing else,
+    // and every failure says so out loud. It also opens REVIEW rather than the
+    // signature modal — reopening and issuing are separate decisions, and the
+    // record is read before it leaves the building. presentMeetingRecord is the
+    // same authoritative path the Meetings tab uses, so both surfaces agree on
+    // one meeting and one grounding.
+    else if(nextStep.action==="send_signature"){
+      const target = resolveNextStepMeeting(cs, nextStep);
+      if(target.kind !== NEXT_STEP_TARGET.RESOLVED) {
+        showToast?.(describeUnresolvedNextStep(target.kind), "error");
+        return;
+      }
+      const m = target.meeting;
+      onPresentMeetingRecord?.(m, {
+        meetingType: MEETING_TYPES.find(t=>t.label===m.type)||null,
+        caseInfo: { employee:cs.employeeName, manager:m.manager||cs.manager||"", date:m.date, caseId:cs.id },
+      });
+    }
     // D1 completion — the workflow can now say "Record outcome", so the action
     // must land somewhere. Opens the Outcome destination, where the decision is
     // recorded; it does NOT record anything itself.

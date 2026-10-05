@@ -135,7 +135,10 @@ describe('2. the outstanding signature coexists and cannot hide it', () => {
     expect(isMeetingComplete(completedInvestigation())).toBe(true);
     const step = getNextStep(cs, { isHR: true });
     expect(step.action).toBe('send_signature');
-    expect(step.label).toBe('Send investigation record for signature');
+    expect(step.label).toBe('Review & send investigation record');
+    // The step must NAME the meeting it reasoned about — resolving it again by
+    // type and array position is what made this CTA dead in human UAT.
+    expect(step.reviewMeetingId).toBe(completedInvestigation().id);
   });
 
   it('2.2 the signature step does NOT consume or rewrite the scheduled meeting', () => {

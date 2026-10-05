@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CaseViewScreen } from '../screens/CaseViewScreen.jsx';
+import { applyRecordIdentity } from '../lib/meetingIdentity.js';
 
 // Phase 6.5 hardening (Batch 10b, task #205) — CaseViewScreen had zero test
 // coverage before this, despite being the single largest prop surface in
@@ -481,40 +482,103 @@ describe('CaseViewScreen — Outcome tab "Draft outcome letter" route (Defect #1
   // display fields, so the sign modal opened, collected an address, and then
   // sendForSignature's own gate refused because the ids were undefined — a dead
   // end on an eligible record. Mutation P14 proved this was untested.
-  it('the send_signature next step carries the persisted caseId AND meetingId', async () => {
+  // REWRITTEN for the UAT resume defect. The invariant is the same — the send
+  // route must carry the persisted caseId AND meetingId — but it is now met by
+  // routing through presentMeetingRecord, which applies identity via
+  // applyRecordIdentity, instead of poking caseInfo and opening the sign modal.
+  // Reopening and issuing are separate decisions, so the modal is NOT opened
+  // here; Review offers the send once the record has been read.
+  it('the send_signature next step resolves the EXACT named meeting and opens Review', async () => {
     const user = userEvent.setup();
-    const setCaseInfo = vi.fn();
+    const onPresentMeetingRecord = vi.fn();
     const setShowSignModal = vi.fn();
+    const showToast = vi.fn();
+    const theMeeting = { id: 'meeting_abc', caseId: 'c1', type: 'Disciplinary', date: '2026-09-07',
+                         status: 'completed', record: 'the disciplinary hearing record', signStatus: null };
     const caseWithIdentifiedMeeting = {
       ...goldenPathShapedCase,
       outcome: '', outcomeIssuedAt: null,
-      meetings: [{ id: 'meeting_abc', caseId: 'c1', type: 'Disciplinary', date: '2026-09-07',
-                   status: 'completed', record: 'the disciplinary hearing record', signStatus: null }],
+      // A DECOY of the same type, earlier in the array and with no record —
+      // exactly the shape that made the old first-type-match resolver dead.
+      meetings: [{ id: 'meeting_decoy', caseId: 'c1', type: 'Disciplinary', date: '2026-09-01',
+                   status: 'review_draft', record: '', signStatus: null }, theMeeting],
     };
     render(<CaseViewScreen {...{
       ...baseProps,
       shell: {
         ...baseProps.shell,
+        // onPresentMeetingRecord is a `shell` prop, not a top-level one.
+        onPresentMeetingRecord,
         cases: [caseWithIdentifiedMeeting],
         getCaseStage: () => 'disciplinary',
-        getNextStep: () => ({ label: 'Send hearing record for signature', action: 'send_signature', meetingType: 'disciplinary', primary: true }),
-        setCaseInfo, setReviewOutput: vi.fn(),
+        getNextStep: () => ({ label: 'Review & send hearing record', action: 'send_signature', meetingType: 'disciplinary', reviewMeetingId: 'meeting_abc', primary: true }),
+        setCaseInfo: vi.fn(), setReviewOutput: vi.fn(), showToast,
       },
-      // setShowSignModal is a `header` prop, not a `shell` one.
       header: { ...baseProps.header, setShowSignModal },
     }} />);
 
-    const buttons = screen.getAllByRole('button', { name: /Send hearing record for signature/ });
-    await user.click(buttons[0]);
+    await user.click(screen.getAllByRole('button', { name: /Review & send hearing record/ })[0]);
 
-    expect(setShowSignModal).toHaveBeenCalledWith(true);
-    expect(setCaseInfo).toHaveBeenCalled();
-    // setCaseInfo receives an updater; invoke it to see what it actually produces.
-    const updater = setCaseInfo.mock.calls.at(-1)[0];
-    const next = typeof updater === 'function' ? updater({}) : updater;
-    expect(next.caseId).toBe('c1');
-    expect(next.meetingId).toBe('meeting_abc');
-    expect(next.recordSource).toBe('persisted');
+    expect(onPresentMeetingRecord).toHaveBeenCalledTimes(1);
+    const [source, opts] = onPresentMeetingRecord.mock.calls[0];
+    expect(source.id).toBe('meeting_abc');          // the NAMED meeting
+    expect(source.id).not.toBe('meeting_decoy');    // never the first type match
+    expect(opts.caseInfo.caseId).toBe('c1');
+    // Reopening is not issuing.
+    expect(setShowSignModal).not.toHaveBeenCalled();
+    expect(showToast).not.toHaveBeenCalled();
+  });
+
+  it('a send_signature step that names no meeting says so instead of doing nothing', async () => {
+    const user = userEvent.setup();
+    const onPresentMeetingRecord = vi.fn();
+    const showToast = vi.fn();
+    render(<CaseViewScreen {...{
+      ...baseProps,
+      shell: {
+        ...baseProps.shell,
+        // onPresentMeetingRecord is a `shell` prop, not a top-level one.
+        onPresentMeetingRecord,
+        cases: [{ ...goldenPathShapedCase, outcome: '', outcomeIssuedAt: null,
+                  meetings: [{ id: 'm1', caseId: 'c1', type: 'Disciplinary', date: '2026-09-07', status: 'completed', record: 'r', signStatus: null }] }],
+        getCaseStage: () => 'disciplinary',
+        getNextStep: () => ({ label: 'Review & send hearing record', action: 'send_signature', meetingType: 'disciplinary', primary: true }),
+        setCaseInfo: vi.fn(), setReviewOutput: vi.fn(), showToast,
+      },
+    }} />);
+    await user.click(screen.getAllByRole('button', { name: /Review & send hearing record/ })[0]);
+    expect(onPresentMeetingRecord).not.toHaveBeenCalled();
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('Meetings tab'), 'error');
+  });
+
+  it('LEGACY NAME KEPT: the route still carries persisted identity', async () => {
+    const user = userEvent.setup();
+    const onPresentMeetingRecord = vi.fn();
+    render(<CaseViewScreen {...{
+      ...baseProps,
+      shell: {
+        ...baseProps.shell,
+        // onPresentMeetingRecord is a `shell` prop, not a top-level one.
+        onPresentMeetingRecord,
+        cases: [{ ...goldenPathShapedCase, outcome: '', outcomeIssuedAt: null,
+                  meetings: [{ id: 'meeting_abc', caseId: 'c1', type: 'Disciplinary', date: '2026-09-07', status: 'completed', record: 'r', signStatus: null }] }],
+        getCaseStage: () => 'disciplinary',
+        getNextStep: () => ({ label: 'Review & send hearing record', action: 'send_signature', meetingType: 'disciplinary', reviewMeetingId: 'meeting_abc', primary: true }),
+        setCaseInfo: vi.fn(), setReviewOutput: vi.fn(), showToast: vi.fn(),
+      },
+    }} />);
+    await user.click(screen.getAllByRole('button', { name: /Review & send hearing record/ })[0]);
+    // Identity is no longer applied by this screen: it hands over the meeting
+    // OBJECT plus the caseId, and presentMeetingRecord applies identity through
+    // applyRecordIdentity — which is where the Slice 1c seam is tested
+    // (meetingResumeability.test.jsx, "THE SEAM"). What this screen owes is the
+    // exact meeting and the case it belongs to.
+    const [source, opts] = onPresentMeetingRecord.mock.calls[0];
+    expect(source.id).toBe('meeting_abc');
+    expect(opts.caseInfo.caseId).toBe('c1');
+    expect(applyRecordIdentity({}, opts.caseInfo, source)).toMatchObject({
+      caseId: 'c1', meetingId: 'meeting_abc', recordSource: 'persisted',
+    });
   });
 
   it('is offered and, on click, grounds the letter from the case\'s own hearing meeting and drafts via the shared handleLetter pipeline — no signature send, no re-issue, no stage write required', async () => {

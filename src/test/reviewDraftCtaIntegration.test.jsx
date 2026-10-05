@@ -205,7 +205,10 @@ describe('the other states still dispatch correctly', () => {
 
   it('completed still offers the downstream signature step, not Review', () => {
     renderCase(makeCase(completedMeeting()));
-    expect(ctas('Send hearing record for signature').length).toBeGreaterThan(0);
+    // Relabelled: the CTA opens Review, where the send is offered. The
+    // invariant under test is that COMPLETED still routes to the signature
+    // step rather than back to Review-the-draft, and that is unchanged.
+    expect(ctas('Review & send hearing record').length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: /^Review meeting record( →)?$/ })).toBeNull();
   });
 });
