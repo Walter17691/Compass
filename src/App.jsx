@@ -98,6 +98,7 @@ import { splitMeetingRecord } from './lib/meetingRecordSections';
 import { employeeFacingSnapshot } from './lib/signedSnapshot';
 import { applyRecordIdentity, resolvePersistedMeeting, RESOLUTION, isPersistedIdentityMissing, describeUnresolvedPersistedRecord } from './lib/meetingIdentity';
 import { CAPTURE_CHANNEL, isSegmentable, pendingCapture, attributeCapture, reconcileCapture } from './lib/noteCapture';
+import { useScrollToTopOnEnter } from './lib/screenScroll';
 import { sourceFidelity, dialoguePermitted, discussionHeading, discussionInstruction, participantInitials, applyFidelityGuard, describeFidelityFallback } from './lib/recordFidelity';
 import { mergeSuggestions, suggestionKey } from './lib/suggestionIdentity';
 import { appealLinkCandidates } from './lib/appealLink';
@@ -7284,6 +7285,24 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if(screen === SCREENS.RECORD && !meetingStartTime && !recordRecovery) setMeetingStartTime(new Date().toISOString());
   }, [screen, meetingStartTime, recordRecovery]);
+
+  // ── ENTERING REVIEW STARTS AT THE TOP ────────────────────────────────
+  //
+  // Human UAT: opening Review from the Meetings row landed part-way down the
+  // meeting record, because Compass swaps a subtree on `screen` and nothing in
+  // the app had ever reset the document scroll. Review inherited however far
+  // down the Meetings tab the manager had scrolled.
+  //
+  // ONE central boundary rather than a scrollTo on each button: every route
+  // into Review — Review & send, View notes, End meeting, resume, standalone
+  // continue — arrives here because they all end in setScreen(SCREENS.REVIEW).
+  //
+  // `screen` is the ONLY dependency, which is what makes this a NAVIGATION
+  // event and not a render event. Editing the record, switching
+  // Summary/Advice/Ask, approving a Compass proposal and saving while staying
+  // on Review all re-render with `screen` unchanged, so none of them re-runs
+  // this and none of them moves the manager's reading position.
+  useScrollToTopOnEnter(screen, SCREENS.REVIEW);
 
   // Autosave the in-progress meeting to localStorage — transcript/inputText
   // were plain React state with zero persistence, meaning a crashed tab or
