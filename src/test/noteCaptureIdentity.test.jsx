@@ -433,7 +433,7 @@ describe('H. the composer, rendered: one Enter is one capture', () => {
     // There is one path — the composer's newline detection — and this proves it.
     const addUtterance = vi.fn();
     render(<Live addUtterance={addUtterance} />);
-    const box = screen.getByLabelText('Capture a note');
+    const box = screen.getByLabelText('Meeting notepad');
     await userEvent.type(box, 'Asked Sam about the stock count.{Enter}');
     expect(addUtterance).toHaveBeenCalledTimes(1);
     expect(addUtterance.mock.calls[0][0]).toBe('Asked Sam about the stock count.');
@@ -442,7 +442,7 @@ describe('H. the composer, rendered: one Enter is one capture', () => {
   it('37. a second Enter is a second, separate capture — not a re-submission', async () => {
     const addUtterance = vi.fn();
     render(<Live addUtterance={addUtterance} />);
-    const box = screen.getByLabelText('Capture a note');
+    const box = screen.getByLabelText('Meeting notepad');
     await userEvent.type(box, 'One.{Enter}');
     await userEvent.type(box, 'Two.{Enter}');
     expect(addUtterance).toHaveBeenCalledTimes(2);
@@ -452,7 +452,7 @@ describe('H. the composer, rendered: one Enter is one capture', () => {
   it('38. the composer declares no channel, so it gets the atomic default', async () => {
     const addUtterance = vi.fn();
     render(<Live addUtterance={addUtterance} />);
-    await userEvent.type(screen.getByLabelText('Capture a note'), 'A note.{Enter}');
+    await userEvent.type(screen.getByLabelText('Meeting notepad'), 'A note.{Enter}');
     expect(isSegmentable(addUtterance.mock.calls[0][1])).toBe(false);
   });
 

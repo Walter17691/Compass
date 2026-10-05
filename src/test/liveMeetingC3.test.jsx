@@ -196,7 +196,7 @@ describe('C3 — ONE support surface, not nine', () => {
     await user.click(screen.getByRole('button', { name: 'Hide Compass support' }));
     expect(screen.queryByRole('complementary', { name: 'Compass support' })).not.toBeInTheDocument();
     // The conversation is still there — hiding support never hides the meeting.
-    expect(screen.getByLabelText('Capture a note')).toBeInTheDocument();
+    expect(screen.getByLabelText('Meeting notepad')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Show Compass support' }));
     expect(screen.getByRole('complementary', { name: 'Compass support' })).toBeInTheDocument();
   });
@@ -321,7 +321,7 @@ describe('C3 — narrow viewport, accessibility, palette', () => {
       expect(aside.style.width).not.toBe('320px');
       expect(aside.style.maxHeight).toBeTruthy();
     }
-    expect(screen.getByLabelText('Capture a note')).toBeInTheDocument();
+    expect(screen.getByLabelText('Meeting notepad')).toBeInTheDocument();
     setWidth(1440);
   });
 

@@ -11,6 +11,9 @@ import {
   SUPPORT_CATEGORY, SUPPORT_LABEL, supportCounts, defaultSupportCategory,
   elapsedSince, captureState,
 } from '../lib/liveMeetingSupport';
+import {
+  shouldFollowLatest, noteMeta, latestCommitted, clickShouldFocusLiveLine,
+} from '../lib/notepad';
 
 // ─────────────────────────────────────────────────────────────────────────
 // WAVE C3 — the conversation is the screen.
@@ -130,6 +133,11 @@ export function RecordScreen({ recovering=false, meetingType, caseInfo, isListen
   const [category, setCategory] = useState(null);
   const [now, setNow] = useState(() => new Date());
   const conversationRef = useRef(null);
+  // UX-06 — whether the notepad is still tracking the newest line. Set on every
+  // scroll, read when a capture lands. A ref, not state: it must not re-render
+  // the notepad while the manager is scrolling through it.
+  const followLatestRef = useRef(true);
+  const newestNote = latestCommitted(transcript);
 
   // The clock the header shows. One interval, cleared on unmount.
   useEffect(() => {
@@ -137,11 +145,29 @@ export function RecordScreen({ recovering=false, meetingType, caseInfo, isListen
     return () => clearInterval(t);
   }, []);
 
-  // Keep the newest captured line in view, the way a conversation reads.
+  // Keep the live line in view — but only if the manager has not deliberately
+  // scrolled up to re-read something. Previously unconditional, which yanked
+  // the page back down mid-read on every capture.
   useEffect(() => {
     const el = conversationRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el && followLatestRef.current) el.scrollTop = el.scrollHeight;
   }, [transcript.length]);
+
+  // The live line grows with what is being typed, so a long note reads as a
+  // paragraph in the page rather than scrolling inside a two-row box.
+  useEffect(() => {
+    // Reached through the LOCAL container ref rather than through inputRef,
+    // which is a prop App owns — react-hooks/immutability rightly refuses
+    // mutation of anything arriving as a prop. There is exactly one live line
+    // inside the notepad; Ask Compass's input lives in the aside, outside it.
+    const el = conversationRef.current?.querySelector('[data-notepad-live="true"]');
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+    if (followLatestRef.current && conversationRef.current) {
+      conversationRef.current.scrollTop = conversationRef.current.scrollHeight;
+    }
+  }, [inputText]);
 
   const nudgeKey = meetingIntelligence?.possibleInconsistency
     ? `${meetingIntelligence.possibleInconsistency.earlier}|${meetingIntelligence.possibleInconsistency.later}` : null;
@@ -427,56 +453,110 @@ export function RecordScreen({ recovering=false, meetingType, caseInfo, isListen
       {/* ── BODY ─────────────────────────────────────────────────────────── */}
       <div style={{flex:1,display:"flex",flexDirection:narrow?"column":"row",overflow:"hidden",minHeight:0}}>
 
-        {/* THE CONVERSATION — what was actually said. This did not exist. */}
-        <main style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
-          <div ref={conversationRef} aria-label="Captured conversation"
-            style={{flex:1,overflowY:"auto",padding:narrow?"18px 18px 8px":"28px 36px 12px"}}>
-            {transcript.length===0 ? (
-              <p style={{...TYPE.rowContext,color:COLOR.inkQuiet,maxWidth:520,lineHeight:1.7}}>
-                Nothing captured yet. Type below and press Enter, or turn on the microphone —
-                what you capture appears here as you go.
-              </p>
-            ) : (
-              <ol style={{listStyle:"none",margin:0,padding:0,maxWidth:720}}>
-                {transcript.map(u=>(
-                  <li key={u.id} style={{display:"flex",gap:12,padding:"6px 0",opacity:u.pending?0.55:1}}>
-                    <span style={{...TYPE.metadata,color:COLOR.inkQuiet,flexShrink:0,width:58,fontVariantNumeric:"tabular-nums"}}>{u.ts}</span>
-                    <span style={{fontSize:14,color:COLOR.ink,lineHeight:1.65,minWidth:0}}>
-                      {u.speaker&&u.speaker!=="You"&&(
-                        <span style={{...TYPE.metadata,color:COLOR.inkFaint,marginRight:6}}>{u.speaker}</span>
-                      )}
-                      {u.text}
-                    </span>
-                  </li>
-                ))}
+        {/* ── THE NOTEPAD ───────────────────────────────────────────────
+            UX-06. ONE continuous surface: committed lines, then the live line
+            the manager is typing into. Not a transcript with a message bar
+            underneath — the writing happens inside the page.
+
+            The live line is the LAST child of the same scroll container, shares
+            the committed lines' typography and gutter, and has no border or
+            background of its own. That is the whole difference between "taking
+            notes" and "sending messages". */}
+        <main style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0,background:COLOR.paper}}>
+          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions --
+              This div is a TEXT SURFACE, not a control. Clicking the blank page
+              puts the caret in the live line, the way clicking any notepad does.
+              The real control is the native <textarea> below, which is already
+              in the tab order — so there is nothing a keyboard handler here
+              would add, and adding a role would misdescribe the element. */}
+          <div
+            ref={conversationRef}
+            onScroll={e=>{ followLatestRef.current = shouldFollowLatest(e.currentTarget); }}
+            onClick={e=>{ if(clickShouldFocusLiveLine(e.target, conversationRef.current)) inputRef.current?.focus(); }}
+            style={{flex:1,overflowY:"auto",padding:narrow?"20px 18px 24px":"32px 36px 40px",cursor:"text"}}>
+            <div data-notepad-blank="true" style={{maxWidth:720,minHeight:"100%"}}>
+
+              {/* COMMITTED CAPTURES. Each is an event, not editable text. */}
+              <ol aria-label="Notes captured so far" style={{listStyle:"none",margin:0,padding:0}}>
+                {transcript.map((u,i)=>{
+                  const meta = noteMeta(u, transcript[i-1]);
+                  return (
+                    <li key={u.id} style={{display:"flex",gap:14,padding:"9px 0",opacity:meta.pending?0.5:1}}>
+                      <span aria-hidden={!meta.ts}
+                        style={{...TYPE.metadata,fontSize:11,color:COLOR.inkFaint,flexShrink:0,width:46,
+                                textAlign:"right",fontVariantNumeric:"tabular-nums",paddingTop:3,userSelect:"none"}}>
+                        {meta.ts}
+                      </span>
+                      <span style={{minWidth:0,flex:1}}>
+                        {(meta.speaker||meta.source)&&(
+                          <span style={{...TYPE.metadata,fontSize:11,color:COLOR.inkFaint,display:"block",marginBottom:2}}>
+                            {meta.speaker}
+                            {meta.speaker&&meta.source?" · ":""}
+                            {meta.source}
+                          </span>
+                        )}
+                        <span style={{fontSize:15,color:COLOR.ink,lineHeight:1.7,whiteSpace:"pre-wrap"}}>{u.text}</span>
+                      </span>
+                    </li>
+                  );
+                })}
               </ol>
-            )}
+
+              {/* THE LIVE LINE. Same gutter, same type, no chrome. */}
+              <div style={{display:"flex",gap:14,padding:"9px 0"}}>
+                <span aria-hidden="true"
+                  style={{flexShrink:0,width:46,display:"flex",justifyContent:"flex-end",paddingTop:7}}>
+                  <span style={{width:2,height:15,background:COLOR.purple,borderRadius:1,opacity:0.55}}/>
+                </span>
+                <textarea
+                  aria-label="Meeting notepad"
+                  aria-describedby="notepad-hint"
+                  data-notepad-live="true"
+                  ref={inputRef}
+                  value={inputText}
+                  rows={1}
+                  style={{flex:1,minWidth:0,background:"none",border:"none",outline:"none",padding:0,
+                          fontSize:15,lineHeight:1.7,color:COLOR.ink,resize:"none",overflow:"hidden",
+                          fontFamily:FONT.sans,boxSizing:"border-box"}}
+                  onChange={e=>{
+                    // THE CANONICAL CAPTURE PATH, BYTE FOR BYTE. Identical to the
+                    // handler the duplication UAT proved: newline detection, one
+                    // addUtterance per line, then clear. No second capture path
+                    // exists and addUtterance is not forked.
+                    const val = e.target.value;
+                    if(val.endsWith(String.fromCharCode(10))) {
+                      const ls=val.split(String.fromCharCode(10)).filter(l=>l.trim());
+                      ls.forEach(line=>addUtterance(line.trim()));
+                      setInputText("");
+                      updateLiveContext(val);
+                      updateMeetingIntelligence(val);
+                    } else {
+                      setInputText(val);
+                    }
+                  }}
+                  placeholder={transcript.length?"":"Start typing your notes…"}
+                />
+              </div>
+
+              {/* One quiet hint, only while the notepad is empty. */}
+              <p id="notepad-hint" style={{...TYPE.metadata,fontSize:11,color:COLOR.inkFaint,
+                      margin:"2px 0 0 60px",...(transcript.length?{position:"absolute",width:1,height:1,overflow:"hidden",clip:"rect(0 0 0 0)",whiteSpace:"nowrap"}:{})}}>
+                Press Enter to save each line.
+              </p>
+            </div>
           </div>
 
-          {/* COMPOSER */}
-          <div style={{borderTop:`1px solid ${COLOR.borderFaint}`,padding:narrow?"10px 18px":"12px 36px",flexShrink:0,background:COLOR.surface}}>
-            <textarea
-              aria-label="Capture a note"
-              ref={inputRef}
-              value={inputText}
-              rows={2}
-              style={{width:"100%",background:"none",border:"none",outline:"none",fontSize:15,lineHeight:1.7,
-                      color:COLOR.ink,resize:"none",fontFamily:FONT.sans,boxSizing:"border-box"}}
-              onChange={e=>{
-                const val = e.target.value;
-                if(val.endsWith(String.fromCharCode(10))) {
-                  const ls=val.split(String.fromCharCode(10)).filter(l=>l.trim());
-                  ls.forEach(line=>addUtterance(line.trim()));
-                  setInputText("");
-                  updateLiveContext(val);
-                  updateMeetingIntelligence(val);
-                } else {
-                  setInputText(val);
-                }
-              }}
-              placeholder="Capture what is being said — press Enter to save a line."
-            />
-            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:6}}>
+          {/* Newly committed notes, announced once, without re-reading the page. */}
+          <div aria-live="polite" aria-atomic="true"
+            style={{position:"absolute",width:1,height:1,overflow:"hidden",clip:"rect(0 0 0 0)",whiteSpace:"nowrap"}}>
+            {newestNote ? `Note saved: ${newestNote.text}` : ""}
+          </div>
+
+          {/* ── CAPTURE CONTROLS ─────────────────────────────────────────
+              Tools, below the writing surface. Deliberately NOT wrapped around
+              the typing area: a toolbar under a text field reads as a composer. */}
+          <div style={{borderTop:`1px solid ${COLOR.borderFaint}`,padding:narrow?"10px 18px":"10px 36px",flexShrink:0,background:COLOR.paper}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
               <button onClick={isListening?stopSpeech:startSpeech}
                 aria-pressed={isListening}
                 style={{display:"flex",alignItems:"center",gap:6,background:"none",border:`1px solid ${isListening?COLOR.amber:COLOR.border}`,borderRadius:RADIUS.card,padding:"7px 14px",cursor:"pointer",...TYPE.metadata,color:isListening?COLOR.amber:COLOR.inkSoft,fontFamily:FONT.sans,minHeight:36}}>

@@ -174,7 +174,7 @@ describe('RecordScreen — Ask Compass cannot crash the meeting workspace (Batch
     // Wave C3 — the full-page notepad became a composer beneath the visible
     // conversation, so the placeholder changed. Located by its accessible label,
     // which is what a keyboard or screen-reader user actually has.
-    expect(screen.getByLabelText('Capture a note')).toBeInTheDocument();
+    expect(screen.getByLabelText('Meeting notepad')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /End meeting/ })).toBeInTheDocument();
   });
 
