@@ -2,7 +2,8 @@ import { useRef, useState, useEffect } from 'react';
 import { MDRenderer } from './MDRenderer';
 import { useModalA11y } from '../hooks/useModalA11y';
 import { snapshotDivergence } from '../lib/signedSnapshot';
-import { confirmationSemantics, provenanceLine } from '../lib/confirmationSemantics';
+import { confirmationSemantics, confirmationSemanticsFor, provenanceLine } from '../lib/confirmationSemantics';
+import { fmtSignatureInstant } from '../lib/meetingTiming';
 
 // ─────────────────────────────────────────────────────────────────────────
 // WHAT THE PARTICIPANT ACTUALLY SIGNED.
@@ -70,9 +71,16 @@ export function SignedRecordModal({ meeting, fmtDate, onClose, loadSignedSnapsho
   // ONE exhaustive map, no ternary chain and no default that implies agreement.
   // The previous version fell through to "Signed copy" for `expired` and
   // `proceeded`, rendering silence as a signature — see confirmationSemantics.js.
-  const semantics = confirmationSemantics(meeting.signStatus);
+  // TRUST-SIG-02 — comment-aware. A signature WITH a response must not read as
+  // an unqualified one. The snapshot is preferred because it is the
+  // authoritative row; the mirrored meeting fields are a convenience copy.
+  const semantics = confirmationSemanticsFor(meeting.signStatus, snapshot || meeting);
   const heading = semantics.heading;
-  const showSignatureImage = semantics.impliesAgreement;
+  // Gated on what Compass actually HOLDS, not on whether the state implies
+  // agreement. Those were one flag; a signature with comments needs the image
+  // shown while not reading as agreement, and `signed_externally` needs the
+  // opposite — a real signature Compass does not hold.
+  const showSignatureImage = semantics.signatureCaptured;
 
   // Provenance comes from the SNAPSHOT where the snapshot loaded, because that
   // row is the authoritative one; the mirrored meeting fields are a convenience
@@ -95,8 +103,18 @@ export function SignedRecordModal({ meeting, fmtDate, onClose, loadSignedSnapsho
         <div style={{fontSize:11,fontWeight:700,color: semantics.impliesAgreement ? "#1A7A4A" : "#B87520",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>{heading}</div>
         <h3 id="signed-record-title" style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:6,fontWeight:400}}>{meeting.type || "Meeting"} — {fmtDate(meeting.date)}</h3>
         <p style={{fontSize:13,color:"#6B6375",marginBottom:20}}>
-          {provenanceLine(meeting.signStatus, { name: signerName, at: signedAt, fmtDate })}
-          {commentAt ? ` — they responded on ${fmtDate(commentAt)}` : ""}
+          {provenanceLine(meeting.signStatus, { name: signerName, at: signedAt, fmtDate, fmtInstant: fmtSignatureInstant })}
+          {/* §4 — the comment and the signature arrive in ONE atomic submission
+              (api/signing.js builds a single patch and both timestamps come from
+              the same server clock), so presenting two dates implied two
+              independently verified events. Where the instants differ the second
+              IS a separate fact and is still shown. */}
+          {commentAt && signedAt && commentAt !== signedAt
+            ? ` — comments recorded ${fmtSignatureInstant(commentAt)}`
+            : ""}
+          {commentAt && (!signedAt || commentAt === signedAt)
+            ? " — submitted with comments"
+            : ""}
         </p>
         {/* The manager's own decision, shown SEPARATELY from participant
             provenance so "proceeded" can never read as something the
@@ -145,7 +163,7 @@ export function SignedRecordModal({ meeting, fmtDate, onClose, loadSignedSnapsho
           <div style={{...panel, marginBottom:20, borderColor:"#F5E6C4", background:"#FFFDF8"}}>
             <div style={{fontSize:10,fontWeight:700,color:"#7A5C1A",letterSpacing:0.5,textTransform:"uppercase",marginBottom:8}}>
               {signerName ? `${signerName}'s comments` : "Participant's comments"}
-              {commentAt ? ` — ${fmtDate(commentAt)}` : ""}
+              {commentAt ? ` — ${fmtSignatureInstant(commentAt)}` : ""}
             </div>
             <div style={{fontSize:13,color:"#1A1535",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{comment}</div>
             <div style={{fontSize:11,color:"#9B9098",marginTop:10}}>

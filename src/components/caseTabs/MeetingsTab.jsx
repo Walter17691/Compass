@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { isGrievanceCase } from '../../lib/caseStage';
-import { isTerminalStatus, isConfirmationSettled, isExpired, signatureStatusLabel, EXTERNAL_SIGNATURE_STATUS } from '../../lib/eSignature';
-import { confirmationSemantics, confirmationSemanticsFor, provenanceLine } from '../../lib/confirmationSemantics';
+import { isTerminalStatus, isConfirmationSettled, isExpired, EXTERNAL_SIGNATURE_STATUS } from '../../lib/eSignature';
+import { confirmationSemantics, confirmationSemanticsFor, provenanceLine, TONE } from '../../lib/confirmationSemantics';
 import { canIssueFirstConfirmation } from '../../lib/meetingIdentity';
 import { meetingRecordState, meetingsSummary } from '../../lib/meetingRecordState';
 import { requestManualSignatureConfirmation } from '../../lib/humanOverride';
@@ -23,13 +23,19 @@ const RECORD_TONE = {
   muted:     { color:"#8A8EA3", bg:"#F0F1F7" },
 };
 
-const SIGN_STATUS_STYLE = {
-  sent: { color: "#B87520", bg: "#FEF5E7" },
-  opened: { color: "#B87520", bg: "#FEF5E7" },
-  signed: { color: "#1A7A4A", bg: "#E8F5EE" },
-  acknowledged: { color: "#1A7A4A", bg: "#E8F5EE" },
-  declined: { color: "#C84B2F", bg: "#FEF0EB" },
-  expired: { color: "#4A4E63", bg: "#F0F1F7" },
+// Colour by TONE, not by status. The status-keyed version was missing three of
+// the nine states, so they silently rendered no badge; a tone map cannot fall
+// out of date because confirmationSemantics assigns every entry a tone.
+//
+// ATTENTION is amber, never red: a comment may be a correction, context or a
+// clarification as easily as a disagreement, and Compass does not classify the
+// employee's intent. Only an actual refusal is red.
+const TONE_STYLE = {
+  [TONE.DONE]:      { color: "#1A7A4A", bg: "#E8F5EE" },
+  [TONE.ATTENTION]: { color: "#B87520", bg: "#FEF5E7" },
+  [TONE.PENDING]:   { color: "#B87520", bg: "#FEF5E7" },
+  [TONE.REFUSED]:   { color: "#C84B2F", bg: "#FEF0EB" },
+  [TONE.MUTED]:     { color: "#4A4E63", bg: "#F0F1F7" },
 };
 
 // IP18, §12 — display text for an unresolved post-meeting suggestion,
@@ -221,7 +227,15 @@ export function MeetingsTab({ cs, cases, saveCases, currentUser, activeCaseStage
                           color: RECORD_TONE[rs.tone].color, background: RECORD_TONE[rs.tone].bg}}>{rs.label}</span>
           ) : null; })()}
           {m.riskScore?.rating&&m.riskScore.rating!=="UNKNOWN"&&<span style={{fontSize:10,fontWeight:600,color:m.riskScore.rating==="HIGH"?"#C84B2F":"#B87520",background:m.riskScore.rating==="HIGH"?"#FEF0EB":"#FEF5E7",borderRadius:4,padding:"2px 7px"}}>{m.riskScore.rating}</span>}
-          {m.signStatus&&SIGN_STATUS_STYLE[m.signStatus]&&<span style={{fontSize:10,color:SIGN_STATUS_STYLE[m.signStatus].color,background:SIGN_STATUS_STYLE[m.signStatus].bg,borderRadius:4,padding:"2px 7px",fontWeight:600}}>{signatureStatusLabel(m.signStatus)}{(m.signStatus==="sent"||m.signStatus==="opened")?" — awaiting signature":""}</span>}
+          {/* ── TRUST-SIG-02 ────────────────────────────────────────────────
+              This badge was keyed on STATUS ALONE, through two partial maps
+              (signatureStatusLabel + SIGN_STATUS_STYLE). The employee's response
+              lives in a separate column, so a record signed WITH a dispute
+              rendered as a plain green "Signed" — and `disputed`, `proceeded`
+              and `signed_externally` were absent from SIGN_STATUS_STYLE
+              entirely, so they rendered NO badge at all.
+              One authority now supplies both the words and the tone. */}
+          {m.signStatus&&TONE_STYLE[sem.tone]&&<span style={{fontSize:10,color:TONE_STYLE[sem.tone].color,background:TONE_STYLE[sem.tone].bg,borderRadius:4,padding:"2px 7px",fontWeight:600}}>{sem.badgeLabel||sem.stateLine}</span>}
           {m.signStatus&&!isTerminalStatus(m.signStatus)&&<button onClick={()=>markMeetingSigned(m)} style={{fontSize:10,background:"#E8F5EE",border:"none",borderRadius:4,padding:"2px 8px",color:"#1A7A4A",cursor:"pointer",fontFamily:FONT.sans}}>Mark signed</button>}
           {m.notetakerNotesStatus==="submitted"&&<span style={{fontSize:10,color:"#B87520",background:"#FEF5E7",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Notetaker notes awaiting review</span>}
           {m.notetakerNotesStatus==="reviewed"&&<span style={{fontSize:10,color:"#1A7A4A",background:"#E8F5EE",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Notetaker notes reviewed</span>}

@@ -259,16 +259,68 @@ describe('MeetingsTab — signed record retrieval (Batch 2, Part 9)', () => {
 // declined/expired), replacing the old pending/signed-only badge.
 describe('MeetingsTab — e-signature status badges (Phase 5, IP27)', () => {
   it.each([
-    ['sent', 'Sent — awaiting signature'],
+    ['sent', 'Awaiting signature'],
     ['opened', 'Opened — awaiting signature'],
     ['signed', 'Signed'],
     ['acknowledged', 'Acknowledged'],
     ['declined', 'Declined'],
     ['expired', 'Expired'],
   ])('shows the right badge text for signStatus "%s"', (signStatus, expectedText) => {
-    const cs = caseWithMeeting({ signStatus, signId: 'sign-1' });
+    // sendAcceptedAt present: Compass can genuinely say the record reached them,
+    // so the badge reads the participant state. Without it the badge must NOT
+    // claim "Awaiting signature" — see the two cases below.
+    const cs = caseWithMeeting({ signStatus, signId: 'sign-1', sendAttemptedAt: 'T', sendAcceptedAt: 'T' });
     render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
     expect(screen.getByText(expectedText)).toBeInTheDocument();
+  });
+
+  // TRUST-SIG-02 at the badge. These are the rows the old badge lied about.
+  it('a record with NO send evidence is not badged as awaiting a signature', () => {
+    const cs = caseWithMeeting({ signStatus: 'sent', signId: 'sign-1' });   // legacy: UNKNOWN
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+    expect(screen.queryByText('Awaiting signature')).not.toBeInTheDocument();
+    expect(screen.getByText('Issued')).toBeInTheDocument();
+  });
+
+  it('a record whose email FAILED says so on the badge', () => {
+    const cs = caseWithMeeting({ signStatus: 'sent', signId: 'sign-1', sendAttemptedAt: 'T', sendError: 'Invalid address' });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+    expect(screen.getByText('Not emailed')).toBeInTheDocument();
+    expect(screen.queryByText('Awaiting signature')).not.toBeInTheDocument();
+  });
+
+  // ── TRUST-SIG-02, the headline finding ────────────────────────────────────
+  it('a signature WITH employee comments is not badged as a plain "Signed"', () => {
+    const cs = caseWithMeeting({
+      signStatus: 'signed', signId: 'sign-1', sendAttemptedAt: 'T', sendAcceptedAt: 'T',
+      participantComment: 'I do not agree that i was responsible for the stock count.',
+    });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+    expect(screen.getByText('Signed with comments')).toBeInTheDocument();
+    expect(screen.queryByText('Signed')).not.toBeInTheDocument();
+  });
+
+  it('a signature with NO comments is still a plain "Signed"', () => {
+    const cs = caseWithMeeting({ signStatus: 'signed', signId: 'sign-1', sendAttemptedAt: 'T', sendAcceptedAt: 'T' });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+    expect(screen.getByText('Signed')).toBeInTheDocument();
+    expect(screen.queryByText('Signed with comments')).not.toBeInTheDocument();
+  });
+
+  it('a whitespace-only comment is not a response', () => {
+    const cs = caseWithMeeting({ signStatus: 'signed', signId: 'sign-1', sendAttemptedAt: 'T', sendAcceptedAt: 'T', participantComment: '   ' });
+    render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+    expect(screen.getByText('Signed')).toBeInTheDocument();
+  });
+
+  it('disputed and proceeded are badged at all — they rendered NOTHING before', () => {
+    // SIGN_STATUS_STYLE had no entry for either, and the badge required one.
+    for (const [signStatus, text] of [['disputed', 'Responded with comments'], ['proceeded', 'Proceeded without confirmation']]) {
+      const cs = caseWithMeeting({ signStatus, signId: 'sign-1', sendAttemptedAt: 'T', sendAcceptedAt: 'T' });
+      const { unmount } = render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} />);
+      expect(screen.getByText(text), signStatus).toBeInTheDocument();
+      unmount();
+    }
   });
 
   it('shows no badge at all when the meeting was never sent for signature', () => {
