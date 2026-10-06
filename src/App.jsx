@@ -73,6 +73,7 @@ import { canAnalyseEvidence, buildAnalysisContent } from './lib/documentIngestio
 import { OH_REPORT_SYSTEM_PROMPT, buildOhFindings, ohFindingTaskName } from './lib/ohReportIntelligence';
 import { isTerminalStatus, isExpired, signatureStatusLabel } from './lib/eSignature';
 import { hasBeenIssued, confirmationSemantics } from './lib/confirmationSemantics';
+import { resolutionLabel, RESPONSE_TYPE } from './lib/employeeResponse';
 import { parseCommitmentDueDate, suggestTaskOwner } from './lib/taskDueDateParsing';
 import { derivePeopleForCase } from './lib/casePeople';
 import { matchCaseByEmployeeName, matchCaseByEmployeeNameWithConfidence } from './lib/globalAssistant';
@@ -1745,6 +1746,46 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       console.error('proceedWithoutConfirmation', e);
       showToast("Couldn't record that decision — please try again.", "error");
       return false;
+    }
+  };
+
+  // TRUST-SIG-03 — record the employer's conclusion on a challenged record.
+  //
+  // Only the conclusion is written. The record the employee signed, and the words
+  // they wrote about it, are not in the patch the server builds — neither side
+  // can erase the other, which is the whole point of reviewing rather than
+  // editing. The server re-validates with the same module and applies the change
+  // conditionally on the response still being unresolved.
+  const resolveSignatureResponse = async (cs, meeting, { signId, resolution, reason, addendum }) => {
+    const id = signId || meeting?.signId;
+    if(!id) { showToast("This record has no response to review.", "error"); return { ok:false, error:"No response to review." }; }
+    try {
+      const res = await authedFetch("/api/signing", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+          signId: id, resolveResponse: true, resolution,
+          resolutionReason: reason || "", resolutionAddendum: addendum || "", orgId: org?.id,
+        }),
+      });
+      const data = await res.json().catch(()=>({}));
+      if(!res.ok) {
+        const error = data.error || "Couldn't record that conclusion — please try again.";
+        showToast(error, "error");
+        return { ok:false, error };
+      }
+      // The audit entry names the conclusion AND whether text was added, because
+      // "we kept the record as written" and "we added a correction to it" are
+      // materially different decisions about someone's employment record.
+      audit("Employee response reviewed",
+        `${meeting?.type || "Meeting"} record — ${resolutionLabel(resolution) || resolution}` +
+        `${reason ? ` — reason: ${reason}` : ""}${addendum ? " — addendum added to the record" : ""}`,
+        cs?.id || null);
+      showToast("Conclusion recorded — the employee's response stays on the record.");
+      return { ok:true, request: data.request || null };
+    } catch(e) {
+      console.error('resolveSignatureResponse', e);
+      showToast("Couldn't record that conclusion — please try again.", "error");
+      return { ok:false, error:"Couldn't record that conclusion — please try again." };
     }
   };
 
@@ -3887,7 +3928,13 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
             // the signature state, so every renderer can tell "issued" from
             // "actually emailed" without a second fetch.
             || (data.send_accepted_at || null) !== (m.sendAcceptedAt || null)
-            || (data.send_error || null) !== (m.sendError || null);
+            || (data.send_error || null) !== (m.sendError || null)
+            // TRUST-SIG-03 — what the employee said about ACCURACY and what the
+            // employer concluded. Both are needed client-side: the meeting badge
+            // reads the classification, and the investigation quality check reads
+            // whether a challenge is still outstanding.
+            || (data.response_type || null) !== (m.responseType || null)
+            || (data.response_resolution || null) !== (m.responseResolution || null);
           return data.status && changed
             ? { id: m.id, status: data.status, signedAt: data.signed_at || data.declined_at || null, signature: data.signature || null, signerName: data.employee_name || null, declineReason: data.decline_reason || null,
                 expiresAt: data.expires_at || null,
@@ -3899,14 +3946,23 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
                 supersededAt: data.superseded_at || null,
                 sendAttemptedAt: data.send_attempted_at || null,
                 sendAcceptedAt: data.send_accepted_at || null,
-                sendError: data.send_error || null }
+                sendError: data.send_error || null,
+                responseType: data.response_type || null,
+                proposedCorrection: data.proposed_correction || null,
+                responseResolution: data.response_resolution || null,
+                responseResolutionReason: data.response_resolution_reason || null,
+                responseResolvedAt: data.response_resolved_at || null,
+                responseAddendum: data.response_addendum || null }
+                // response_resolved_by is deliberately NOT mirrored. It is an
+                // internal auth.users id, and the case record is the wrong place
+                // for one — the audit trail already names who reviewed.
             : null;
         } catch { return null; }
       }))).filter(Boolean);
       if (cancelled || !changes.length) return;
       const changeMap = new Map(changes.map(c => [c.id, c]));
       const updated = cases.map(c => c.id === activeCaseId
-        ? { ...c, meetings: c.meetings.map(m => changeMap.has(m.id) ? { ...m, signStatus: changeMap.get(m.id).status, signedAt: changeMap.get(m.id).signedAt, signature: changeMap.get(m.id).signature, signerName: changeMap.get(m.id).signerName, declineReason: changeMap.get(m.id).declineReason, expiresAt: changeMap.get(m.id).expiresAt, participantComment: changeMap.get(m.id).participantComment, participantCommentAt: changeMap.get(m.id).participantCommentAt, proceededAt: changeMap.get(m.id).proceededAt, proceedReason: changeMap.get(m.id).proceedReason, proceededFromStatus: changeMap.get(m.id).proceededFromStatus, supersededAt: changeMap.get(m.id).supersededAt, sendAttemptedAt: changeMap.get(m.id).sendAttemptedAt, sendAcceptedAt: changeMap.get(m.id).sendAcceptedAt, sendError: changeMap.get(m.id).sendError } : m) }
+        ? { ...c, meetings: c.meetings.map(m => changeMap.has(m.id) ? { ...m, signStatus: changeMap.get(m.id).status, signedAt: changeMap.get(m.id).signedAt, signature: changeMap.get(m.id).signature, signerName: changeMap.get(m.id).signerName, declineReason: changeMap.get(m.id).declineReason, expiresAt: changeMap.get(m.id).expiresAt, participantComment: changeMap.get(m.id).participantComment, participantCommentAt: changeMap.get(m.id).participantCommentAt, proceededAt: changeMap.get(m.id).proceededAt, proceedReason: changeMap.get(m.id).proceedReason, proceededFromStatus: changeMap.get(m.id).proceededFromStatus, supersededAt: changeMap.get(m.id).supersededAt, sendAttemptedAt: changeMap.get(m.id).sendAttemptedAt, sendAcceptedAt: changeMap.get(m.id).sendAcceptedAt, sendError: changeMap.get(m.id).sendError, responseType: changeMap.get(m.id).responseType, proposedCorrection: changeMap.get(m.id).proposedCorrection, responseResolution: changeMap.get(m.id).responseResolution, responseResolutionReason: changeMap.get(m.id).responseResolutionReason, responseResolvedAt: changeMap.get(m.id).responseResolvedAt, responseAddendum: changeMap.get(m.id).responseAddendum } : m) }
         : c);
       // Human UAT remediation, Batch 1, Issue 3 — signature completion had
       // no notification/activity/Timeline event at all. Logged here, not
@@ -3926,11 +3982,24 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // double-log the same transition.
       saveCases(updated, activeCaseId).then(result => {
         if (!result?.ok || cancelled) return;
-        changes.forEach(({ id, status }) => {
+        changes.forEach(({ id, status, responseType }) => {
           if (!isTerminalStatus(status)) return; // "opened" isn't a completion — only signed/acknowledged/declined are
           const m = pending.find(p => p.id === id);
           const outcomeText = status === "signed" ? "signed" : status === "acknowledged" ? "acknowledged" : status === "declined" ? "declined to sign" : status;
-          audit(`${m?.type || "Meeting"} notes ${outcomeText}`, cs.employeeName, activeCaseId);
+          // TRUST-SIG-03 — what the employee DID about signing and what they SAID
+          // about accuracy are logged as the two separate facts they are. A
+          // signature is still a signature when the employee disputes the
+          // content, and the log must not let either fact hide the other.
+          const accuracyText = responseType === RESPONSE_TYPE.ACCURATE ? " — employee confirmed the record is accurate"
+            : responseType === RESPONSE_TYPE.COMMENT ? " — employee added comments; not a dispute"
+            : responseType === RESPONSE_TYPE.DISPUTED ? " — employee says the record is inaccurate or incomplete" : "";
+          audit(`${m?.type || "Meeting"} notes ${outcomeText}`, `${cs.employeeName}${accuracyText}`, activeCaseId);
+          // A separate, findable entry for the one outcome that creates work.
+          if (responseType === RESPONSE_TYPE.DISPUTED) {
+            audit("Meeting record accuracy disputed",
+              `${cs.employeeName} — ${m?.type || "Meeting"} record — awaiting employer review. The record as issued is unchanged.`,
+              activeCaseId);
+          }
         });
       });
     })();
@@ -12429,7 +12498,7 @@ Please produce:
             processTemplates, unansweredCovered, unansweredLoading, generateUnansweredQuestions,
             generateInconsistencies, inconsistencyLoading, ohReportFindings, ohReportAnalysisLoading,
             onAnalyseOhReport: analyseOhReport, onAcceptOhFinding: acceptOhFinding, onDismissOhFinding: dismissOhFinding,
-            onSendForSignature: sendDocumentForSignature, automationLevels, onResendReminder: resendSignatureReminder, loadSignedSnapshot, loadRequestHistory, proceedWithoutConfirmation,
+            onSendForSignature: sendDocumentForSignature, automationLevels, onResendReminder: resendSignatureReminder, loadSignedSnapshot, loadRequestHistory, proceedWithoutConfirmation, resolveSignatureResponse,
           }}
           timeline={{ toggleTimelineExclude, editTimelineDescription, generateTimelineRelevance, timelineRelevanceLoading, loadJsPDF }}
           allegationsTab={{

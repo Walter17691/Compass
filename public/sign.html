@@ -61,6 +61,10 @@
     .btn:focus-visible, .btn-ghost:focus-visible, .btn-download:focus-visible, .btn-decline:focus-visible, textarea:focus-visible, canvas:focus-visible {
       outline: 2px solid var(--purple); outline-offset: 2px;
     }
+    .choice { display:flex; align-items:flex-start; gap:10px; padding:12px 14px; border:1px solid var(--border); border-radius:8px; margin-bottom:8px; cursor:pointer; font-size:14px; line-height:1.5; }
+    .choice:hover { border-color: var(--ink-soft); }
+    .choice input { margin-top:3px; flex-shrink:0; }
+    .choice strong { font-weight:600; }
     textarea { width: 100%; background: var(--paper); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 13px; color: var(--ink); font-family: inherit; resize: vertical; margin-bottom: 12px; }
     h2 { font-family: "DM Serif Display", Georgia, serif; font-size: 20px; color: var(--ink); margin-bottom: 16px; font-weight: 400; }
     .signed-badge { display: inline-block; background: var(--green-tint); border: 1px solid var(--green); color: var(--green); padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; margin-bottom: 16px; }
@@ -127,10 +131,22 @@
            available with every outcome, and is explicit that the record itself
            is not rewritten by it. -->
       <div id="comment-section" class="card no-print">
-        <h2>Anything you want to add?</h2>
-        <p style="font-size:13px;color:var(--ink-soft);margin-bottom:12px">Optional. If something here is wrong, incomplete, or not how you remember it, say so. Your comments are kept with this record and shown to your employer alongside it. The record itself will not be changed or rewritten.</p>
-        <label class="label" for="participant-comment" style="margin-bottom:8px">Your comments</label>
-        <textarea id="participant-comment" rows="4" placeholder="e.g. I did say I had asked for the rota change in writing, and that is not in the notes"></textarea>
+        <h2>Is this an accurate record of the meeting?</h2>
+        <p style="font-size:13px;color:var(--ink-soft);margin-bottom:14px">Your answer is kept with this record and shown to your employer alongside it. The record itself will not be changed or rewritten — anything you add is stored separately, in your own words.</p>
+        <div id="accuracy-choices" role="radiogroup" aria-label="Is this an accurate record of the meeting?">
+          <label class="choice"><input type="radio" name="accuracy" value="accurate" onchange="onAccuracyChange()"><span><strong>Yes, this is an accurate record</strong></span></label>
+          <label class="choice"><input type="radio" name="accuracy" value="comment" onchange="onAccuracyChange()"><span><strong>It is broadly accurate, but I want to add something</strong></span></label>
+          <label class="choice"><input type="radio" name="accuracy" value="disputed" onchange="onAccuracyChange()"><span><strong>I believe something is inaccurate or missing</strong></span></label>
+        </div>
+        <div id="comment-wrap" style="display:none;margin-top:14px">
+          <label class="label" for="participant-comment" style="margin-bottom:8px"><span id="comment-label">What would you like to add?</span></label>
+          <textarea id="participant-comment" rows="4" placeholder="e.g. I did say I had asked for the rota change in writing, and that is not in the notes"></textarea>
+        </div>
+        <div id="correction-wrap" style="display:none">
+          <label class="label" for="proposed-correction" style="margin-bottom:8px">What should the record say instead?</label>
+          <textarea id="proposed-correction" rows="3" placeholder="e.g. It should say that I told my manager on 1 October that I would not be available"></textarea>
+        </div>
+        <p id="accuracy-error" role="alert" style="display:none;font-size:13px;color:#C84B2F;margin-bottom:10px"></p>
       </div>
 
       <div id="sign-section" class="card no-print">
@@ -404,6 +420,10 @@
     }
 
     function submitSignature() {
+      // TRUST-SIG-03 — the accuracy answer comes BEFORE the signature, so a
+      // record is never signed without Compass knowing what the employee thinks
+      // of it. The server validates the same shapes.
+      if (!accuracyReady()) return;
       if (!sigData) { alert('Please sign before submitting.'); return; }
       const btn = document.getElementById('submit-btn');
       btn.disabled = true;
@@ -411,7 +431,7 @@
       fetch('/api/signing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signId, signature: sigData, signedAt: new Date().toISOString(), participantComment: participantComment() })
+        body: JSON.stringify({ signId, signature: sigData, signedAt: new Date().toISOString(), participantComment: participantComment(), responseType: accuracyChoice(), proposedCorrection: proposedCorrection() })
       })
       .then(r => r.json())
       .then(() => {
@@ -424,13 +444,17 @@
     }
 
     function submitAcknowledgement() {
+      // TRUST-SIG-03 — the accuracy answer comes BEFORE the signature, so a
+      // record is never signed without Compass knowing what the employee thinks
+      // of it. The server validates the same shapes.
+      if (!accuracyReady()) return;
       const btn = document.getElementById('ack-btn');
       btn.disabled = true;
       btn.textContent = 'Submitting...';
       fetch('/api/signing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signId, acknowledged: true, signedAt: new Date().toISOString(), participantComment: participantComment() })
+        body: JSON.stringify({ signId, acknowledged: true, signedAt: new Date().toISOString(), participantComment: participantComment(), responseType: accuracyChoice(), proposedCorrection: proposedCorrection() })
       })
       .then(r => r.json())
       .then(() => {
@@ -449,6 +473,61 @@
       return el ? el.value.trim().slice(0, 5000) : '';
     }
 
+    // ── TRUST-SIG-03 — WHAT THE EMPLOYEE SAYS ABOUT ACCURACY ────────────────
+    //
+    // Three answers, kept separate from the signature itself. Signing still
+    // means "I confirm I have read and received this record" and never "I agree
+    // with everything in it" — which is why a disputed record can still be
+    // signed, and why signing it does not make it accurate.
+    function accuracyChoice() {
+      const el = document.querySelector('input[name="accuracy"]:checked');
+      return el ? el.value : '';
+    }
+    function proposedCorrection() {
+      const el = document.getElementById('proposed-correction');
+      return el ? el.value.trim().slice(0, 5000) : '';
+    }
+    function onAccuracyChange() {
+      const v = accuracyChoice();
+      const wants = v === 'comment' || v === 'disputed';
+      document.getElementById('comment-wrap').style.display = wants ? 'block' : 'none';
+      document.getElementById('correction-wrap').style.display = v === 'disputed' ? 'block' : 'none';
+      document.getElementById('comment-label').textContent = v === 'disputed'
+        ? 'What do you believe is inaccurate or missing?'
+        : 'What would you like to add?';
+      hideAccuracyError();
+    }
+    function showAccuracyError(msg, focusId) {
+      const el = document.getElementById('accuracy-error');
+      el.textContent = msg; el.style.display = 'block';
+      if (focusId) { const f = document.getElementById(focusId); if (f) f.focus(); }
+    }
+    function hideAccuracyError() {
+      const el = document.getElementById('accuracy-error');
+      if (el) { el.style.display = 'none'; el.textContent = ''; }
+    }
+
+    // Mirrors validateEmployeeResponse in src/lib/employeeResponse.js. The SERVER
+    // is the authority and refuses the same shapes; this is only so the employee
+    // is told before a round trip.
+    function accuracyReady() {
+      const v = accuracyChoice();
+      if (!v) { showAccuracyError('Please tell us whether this is an accurate record.'); return false; }
+      if (v === 'accurate') return true;
+      if (!participantComment()) {
+        showAccuracyError(v === 'disputed'
+          ? 'Please say what you believe is inaccurate or missing.'
+          : 'Please say what you would like to add.', 'participant-comment');
+        return false;
+      }
+      if (v === 'disputed' && !proposedCorrection()) {
+        showAccuracyError('Please say what the record should say instead.', 'proposed-correction');
+        return false;
+      }
+      hideAccuracyError();
+      return true;
+    }
+
     // RECEIVED, BUT NOT AGREED. The outcome that did not exist: previously a
     // participant who disagreed had to either decline outright (which reads as
     // refusing the process) or sign something they thought was wrong.
@@ -456,19 +535,23 @@
     // A comment is REQUIRED here — "I disagree" with nothing after it gives the
     // employer nothing to act on, and the server enforces the same rule.
     function submitDispute() {
-      const comment = participantComment();
-      if (!comment) {
-        document.getElementById('participant-comment').focus();
-        alert('Please say what you disagree with in the comments box above, then submit again.');
-        return;
+      // This button is the RESPOND-WITHOUT-SIGNING route and remains available.
+      // It implies the strongest classification, so it is pre-selected if the
+      // employee has not chosen one — they are plainly telling us something is
+      // wrong — and then validated like any other response.
+      if (!accuracyChoice()) {
+        const el = document.querySelector('input[name="accuracy"][value="disputed"]');
+        if (el) { el.checked = true; onAccuracyChange(); }
       }
+      if (!accuracyReady()) return;
+      const comment = participantComment();
       const btn = document.getElementById('dispute-btn');
       btn.disabled = true;
       btn.textContent = 'Submitting...';
       fetch('/api/signing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signId, disputed: true, participantComment: comment, signedAt: new Date().toISOString() })
+        body: JSON.stringify({ signId, disputed: true, participantComment: comment, responseType: accuracyChoice(), proposedCorrection: proposedCorrection() })
       })
       .then(r => r.json().then(d => ({ ok: r.ok, d })))
       .then(({ ok, d }) => {
@@ -496,7 +579,7 @@
       fetch('/api/signing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signId, declined: true, declineReason: reason, signedAt: new Date().toISOString(), participantComment: participantComment() })
+        body: JSON.stringify({ signId, declined: true, declineReason: reason, signedAt: new Date().toISOString(), participantComment: participantComment(), responseType: accuracyChoice(), proposedCorrection: proposedCorrection() })
       })
       .then(r => r.json())
       .then(() => { showDeclined(); })

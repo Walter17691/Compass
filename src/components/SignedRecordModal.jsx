@@ -4,6 +4,8 @@ import { useModalA11y } from '../hooks/useModalA11y';
 import { snapshotDivergence } from '../lib/signedSnapshot';
 import { confirmationSemantics, confirmationSemanticsFor, provenanceLine } from '../lib/confirmationSemantics';
 import { fmtSignatureInstant } from '../lib/meetingTiming';
+import { challengesAccuracy, awaitsEmployerReview, resolutionLabel } from '../lib/employeeResponse';
+import { ResponseReviewForm } from './ResponseReviewForm';
 
 // ─────────────────────────────────────────────────────────────────────────
 // WHAT THE PARTICIPANT ACTUALLY SIGNED.
@@ -34,7 +36,7 @@ import { fmtSignatureInstant } from '../lib/meetingTiming';
 
 const LOAD = { PENDING: 'pending', OK: 'ok', FAILED: 'failed', UNAVAILABLE: 'unavailable' };
 
-export function SignedRecordModal({ meeting, fmtDate, onClose, loadSignedSnapshot }) {
+export function SignedRecordModal({ meeting, fmtDate, onClose, loadSignedSnapshot, onResolveResponse }) {
   const containerRef = useRef(null);
   useModalA11y(containerRef, onClose);
 
@@ -44,6 +46,12 @@ export function SignedRecordModal({ meeting, fmtDate, onClose, loadSignedSnapsho
   const canLoad = !!meeting?.signId && typeof loadSignedSnapshot === 'function';
   const [state, setState] = useState(canLoad ? LOAD.PENDING : LOAD.UNAVAILABLE);
   const [snapshot, setSnapshot] = useState(null);
+  // TRUST-SIG-03 — the resolution recorded in THIS session, so the modal shows
+  // the outcome immediately. It only ever ADDS what the server confirmed; the
+  // stored row remains the authority and a reopen reads it afresh.
+  const [recorded, setRecorded] = useState(null);
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const [reviewError, setReviewError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -74,7 +82,13 @@ export function SignedRecordModal({ meeting, fmtDate, onClose, loadSignedSnapsho
   // TRUST-SIG-02 — comment-aware. A signature WITH a response must not read as
   // an unqualified one. The snapshot is preferred because it is the
   // authoritative row; the mirrored meeting fields are a convenience copy.
-  const semantics = confirmationSemanticsFor(meeting.signStatus, snapshot || meeting);
+  // TRUST-SIG-03 — and resolution-aware, so the heading moves from "requires
+  // review" to "reviewed" the moment a conclusion is recorded. `source` is the
+  // stored row plus anything this session recorded on top; it is built here, not
+  // further down, precisely so the semantics and the panels below cannot drift
+  // apart by reading two different objects.
+  const source = { ...(snapshot || meeting), ...(recorded || {}) };
+  const semantics = confirmationSemanticsFor(meeting.signStatus, source);
   const heading = semantics.heading;
   // Gated on what Compass actually HOLDS, not on whether the state implies
   // agreement. Those were one flag; a signature with comments needs the image
@@ -89,6 +103,36 @@ export function SignedRecordModal({ meeting, fmtDate, onClose, loadSignedSnapsho
   const signedAt = snapshot?.signed_at || meeting.signedAt;
   const signatureImg = snapshot?.signature || meeting.signature;
   const comment = snapshot?.participant_comment || meeting.participantComment || null;
+  // TRUST-SIG-03 — the rest of the evidential chain, read off `source` above.
+  const correction = snapshot?.proposed_correction || meeting.proposedCorrection || null;
+  const resolution = source.response_resolution || meeting.responseResolution || null;
+  const resolutionReason = source.response_resolution_reason || meeting.responseResolutionReason || null;
+  const resolvedAt = source.response_resolved_at || meeting.responseResolvedAt || null;
+  const addendum = source.response_addendum || meeting.responseAddendum || null;
+  const disputed = challengesAccuracy(source);
+  const awaitsReview = awaitsEmployerReview(source);
+  const canReview = awaitsReview && typeof onResolveResponse === 'function' && !!meeting?.signId;
+
+  async function recordResolution(decision) {
+    setReviewBusy(true);
+    setReviewError('');
+    try {
+      const saved = await onResolveResponse({ signId: meeting.signId, ...decision });
+      if (saved && saved.ok === false) throw new Error(saved.error || 'Could not record this conclusion.');
+      // Trust only what came back where it came back; otherwise reflect the
+      // decision we know was accepted. Either way the row is the authority.
+      setRecorded(saved?.request || {
+        response_resolution: decision.resolution,
+        response_resolution_reason: decision.reason || null,
+        response_addendum: decision.addendum || null,
+      });
+    } catch (err) {
+      console.error('Recording the review conclusion failed:', err);
+      setReviewError(err?.message || 'Could not record this conclusion. Try again in a moment.');
+    } finally {
+      setReviewBusy(false);
+    }
+  }
   const commentAt = snapshot?.participant_comment_at || meeting.participantCommentAt || null;
 
   const divergence = state === LOAD.OK ? snapshotDivergence(snapshot.document, meeting.record) : null;
@@ -159,6 +203,20 @@ export function SignedRecordModal({ meeting, fmtDate, onClose, loadSignedSnapsho
           </div>
         )}
 
+        {awaitsReview && (
+          <div role="status" style={{...notice, background:"#FEF5E7", border:"1px solid #F5E6C4", color:"#7A5C1A"}}>
+            <strong>{signerName || "The employee"} says this record is inaccurate or incomplete.</strong>{" "}
+            They signed to confirm they received and read it — that is not agreement with its
+            contents. Review their response below and record a conclusion. The record itself
+            stays exactly as issued either way.
+          </div>
+        )}
+
+        {/* ── THE EVIDENTIAL CHAIN ──────────────────────────────────────────
+            Record · employee response · proposed correction · employer
+            resolution · addendum. Each in its own panel, in that order, so
+            employee wording is never merged into employer-authored notes and
+            the original is never silently replaced. */}
         {comment && (
           <div style={{...panel, marginBottom:20, borderColor:"#F5E6C4", background:"#FFFDF8"}}>
             <div style={{fontSize:10,fontWeight:700,color:"#7A5C1A",letterSpacing:0.5,textTransform:"uppercase",marginBottom:8}}>
@@ -168,6 +226,59 @@ export function SignedRecordModal({ meeting, fmtDate, onClose, loadSignedSnapsho
             <div style={{fontSize:13,color:"#1A1535",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{comment}</div>
             <div style={{fontSize:11,color:"#9B9098",marginTop:10}}>
               Recorded alongside the document above. The record itself was not changed by this comment.
+            </div>
+          </div>
+        )}
+
+        {disputed && (
+          <div style={{...panel, marginBottom:20, borderColor:"#F5E6C4", background:"#FFFDF8"}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#7A5C1A",letterSpacing:0.5,textTransform:"uppercase",marginBottom:8}}>
+              What {signerName || "the employee"} says the record should say instead
+            </div>
+            {correction
+              ? <div style={{fontSize:13,color:"#1A1535",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{correction}</div>
+              : <div style={{fontSize:13,color:"#6B6370",lineHeight:1.7}}>
+                  No proposed wording was given — see their response above.
+                </div>}
+            <div style={{fontSize:11,color:"#9B9098",marginTop:10}}>
+              Their words, recorded as written. Nothing here has been applied to the record.
+            </div>
+          </div>
+        )}
+
+        {canReview && (
+          <ResponseReviewForm onSubmit={recordResolution} busy={reviewBusy}/>
+        )}
+
+        {reviewError && (
+          <div role="alert" style={{...notice, background:"#FDF2F2", border:"1px solid #F0D5D5", color:"#8A2C2C"}}>
+            {reviewError}
+          </div>
+        )}
+
+        {resolution && (
+          <div style={{...panel, marginBottom:20}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#6B6370",letterSpacing:0.5,textTransform:"uppercase",marginBottom:8}}>
+              Employer review{resolvedAt ? ` — ${fmtSignatureInstant(resolvedAt)}` : ""}
+            </div>
+            <div style={{fontSize:13,fontWeight:600,color:"#1A1535",marginBottom:resolutionReason?8:0}}>
+              {resolutionLabel(resolution) || resolution}
+            </div>
+            {resolutionReason && (
+              <div style={{fontSize:13,color:"#1A1535",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{resolutionReason}</div>
+            )}
+          </div>
+        )}
+
+        {addendum && (
+          <div style={{...panel, marginBottom:20}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#6B6370",letterSpacing:0.5,textTransform:"uppercase",marginBottom:8}}>
+              Addendum to the record
+            </div>
+            <div style={{fontSize:13,color:"#1A1535",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{addendum}</div>
+            <div style={{fontSize:11,color:"#9B9098",marginTop:10}}>
+              Added after review. The original record above is unchanged — read together, they
+              are the full record of this meeting.
             </div>
           </div>
         )}

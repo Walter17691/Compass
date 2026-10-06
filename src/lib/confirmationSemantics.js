@@ -1,5 +1,6 @@
 import { ESIGNATURE_STATUS, LEGACY_PENDING_STATUS, EXTERNAL_SIGNATURE_STATUS } from './eSignature';
 import { communicationEvidence, COMMUNICATION } from './communicationEvidence';
+import { challengesAccuracy, confirmsAccuracy, isResolved } from './employeeResponse';
 
 // ─────────────────────────────────────────────────────────────────────────
 // WHAT EACH CONFIRMATION STATE MEANS TO A HUMAN — ONE EXHAUSTIVE MAP.
@@ -61,6 +62,7 @@ export const TONE = Object.freeze({
 const entry = (o) => Object.freeze({
   signatureCaptured: false,
   participantResponded: false,
+  responseAwaitsReview: false,
   tone: TONE.MUTED,
   ...o,
 });
@@ -292,6 +294,43 @@ export function confirmationSemantics(status) {
  * not a block.
  */
 function withResponse(base, status, request) {
+  // ── TRUST-SIG-03 — WHAT THEY SAID ABOUT ACCURACY ────────────────────────
+  //
+  // An EXPLICIT classification outweighs the mere presence of words, because it
+  // is the thing the employee actually chose. Three outcomes, and none of them
+  // is "the employee agreed with the employer's conclusions":
+  //
+  //   accurate  they confirm the notes read correctly   -> ordinary Signed
+  //   comment   broadly accurate, plus something        -> Signed with comments
+  //   disputed  something is inaccurate or missing      -> Signed — notes disputed
+  //
+  // Signing never converts a disputed record into an accepted one: the dispute
+  // is carried in the wording, before AND after review.
+  if (base.participantEngaged && challengesAccuracy(request)) {
+    const reviewed = isResolved(request);
+    return Object.freeze({
+      ...base,
+      heading: reviewed
+        ? `${base.heading} — employee response reviewed`
+        : `${base.heading} — employee response requires review`,
+      stateLine: reviewed ? 'Signed — response reviewed' : 'Signed — notes disputed',
+      badgeLabel: reviewed ? 'Signed — response reviewed' : 'Signed — notes disputed',
+      tone: TONE.ATTENTION,
+      // They signed for receipt; they did not agree the notes are right.
+      impliesAgreement: false,
+      participantResponded: true,
+      // Surfaced, never a block: a dispute must not give the employee a veto,
+      // so settlesProgression is inherited unchanged. managerActionRequired is
+      // what makes it impossible to overlook before review.
+      managerActionRequired: !reviewed,
+      responseAwaitsReview: !reviewed,
+    });
+  }
+
+  // An explicit "this is accurate" is an ordinary signature, and must not be
+  // dressed up as agreement with findings, allegations or decisions.
+  if (confirmsAccuracy(request) && !hasParticipantResponse(request)) return base;
+
   if (!hasParticipantResponse(request)) return base;
   if (status === ESIGNATURE_STATUS.DISPUTED || status === ESIGNATURE_STATUS.DECLINED) return base;
   if (!base.participantEngaged) return base;

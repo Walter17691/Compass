@@ -82,6 +82,15 @@ export const WITHHELD_FIELDS = Object.freeze({
   send_accepted_at: 'internal communication evidence',
   send_error: 'internal provider failure detail',
   provider_message_id: "the email provider's own id",
+  // TRUST-SIG-03. Default for a new column is NOT PUBLIC, and each of these has
+  // its own reason beyond that default.
+  response_type: 'the classification is derivable by the page from what the participant themselves just submitted; re-serving it adds nothing and makes a new column public by habit',
+  proposed_correction: 'their own words — same rule as participant_comment: stored, never re-served over an unauthenticated link',
+  response_resolution: "the EMPLOYER'S conclusion. It reaches the employee through the process (a reply, a revised record, an outcome letter), not by appearing on a link they may have forwarded",
+  response_resolution_reason: "the employer's internal reasoning for that conclusion",
+  response_resolved_by: 'an internal auth.users id — SIG-SEC-03',
+  response_resolved_at: 'internal timing of an employer-side decision',
+  response_addendum: 'employer-authored text about this record; it is communicated deliberately, not leaked through the signing link',
 });
 
 /**

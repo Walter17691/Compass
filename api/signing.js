@@ -4,6 +4,7 @@ import { escapeHtml as esc } from './_html.js';
 import { checkRateLimit } from './_rateLimit.js';
 import { computeExpiresAt, isExpired, isTerminalStatus, isParticipantResponse, isPastPublicViewWindow, documentTypeLabel } from '../src/lib/eSignature.js';
 import { assessParticipantResponse, participantResponsePatch, ACTIONABLE_FILTER, RESPONSE_REFUSAL } from '../src/lib/participantResponse.js';
+import { validateEmployeeResponse, validateResolution, resolutionPatch, challengesAccuracy, isResolved } from '../src/lib/employeeResponse.js';
 import { publicSigningView, restrictedSigningView } from '../src/lib/publicSigningView.js';
 
 // signing_requests has zero client-facing RLS policies by design (same
@@ -32,7 +33,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   if (req.method === 'POST') {
-    const { document, employeeEmail, employeeName, managerName, managerEmail, meetingType, meetingDate, documentType, requiresSignature, signature, acknowledged, declined, declineReason, disputed, participantComment, proceed, proceedReason, meetingId } = req.body;
+    const { document, employeeEmail, employeeName, managerName, managerEmail, meetingType, meetingDate, documentType, requiresSignature, signature, acknowledged, declined, declineReason, disputed, participantComment, proceed, proceedReason, meetingId, responseType, proposedCorrection, resolveResponse, resolution, resolutionReason, resolutionAddendum } = req.body;
     const signId = req.body.signId;
     // NOTE: req.body.signedAt is deliberately NOT destructured. SIG-SEC-05 — the
     // holder of a signing link used to choose the evidential timestamp on their
@@ -102,8 +103,17 @@ export default async function handler(req, res) {
         // arrived in this anonymous body, so the holder of a link chose the time
         // on their own signature and a backdated value was accepted without
         // question. The body value is now ignored entirely.
+        // TRUST-SIG-03 — the accuracy classification is validated BEFORE the
+        // write, so a malformed response is refused rather than half-recorded.
+        // An unclassified response is permitted and stays NULL.
+        const classification = validateEmployeeResponse({
+          responseType, comment: commentText, proposedCorrection,
+        });
+        if (!classification.ok) return res.status(400).json({ error: classification.error });
+
         const patch = participantResponsePatch(outcome, {
           signature, declineReason, comment: commentText,
+          responseType: classification.responseType, proposedCorrection,
         });
         // A dispute with no words is not a dispute anybody can act on.
         if (outcome === 'disputed' && !commentText) {
@@ -190,6 +200,66 @@ export default async function handler(req, res) {
         // the caller belongs to the org that owns this request; the actor and
         // timestamp are then taken from that verified session, never from the
         // request body. A client-supplied proceeded_by is ignored entirely.
+        // ── TRUST-SIG-03 — THE EMPLOYER RESOLVES A CHALLENGE ──────────────
+        //
+        // A third artefact, recorded ALONGSIDE the record and the response. It
+        // writes no change to `document`, `participant_comment` or
+        // `proposed_correction`: neither side can make the other disappear.
+        //
+        // Normal authenticated case authority, with the actor and the time
+        // derived from the verified session and the server clock — never from
+        // this body. Same rule proceed-without-confirmation follows.
+        if (resolveResponse) {
+          const { orgId: resolveOrgId } = req.body;
+          const resolveAuth = await requireOrgMembership(req, res, resolveOrgId);
+          if (!resolveAuth) return;
+          if (!signId) return res.status(400).json({ error: 'Which response are you resolving?' });
+          const valid = validateResolution({ resolution, reason: resolutionReason, addendum: resolutionAddendum });
+          if (!valid.ok) return res.status(400).json({ error: valid.error });
+
+          const rowRes = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}&select=*`);
+          const [row] = await rowRes.json();
+          if (!row) return res.status(404).json({ error: 'Signing request not found' });
+          if (row.org_id !== resolveOrgId) return res.status(403).json({ error: 'Not authorised for this signing request' });
+          // Only an actual challenge is reviewable. A plain comment needs no
+          // adjudication, and inventing one would imply the employee disputed
+          // something they did not.
+          if (!challengesAccuracy(row)) {
+            return res.status(409).json({ error: 'There is no disputed response on this record to resolve.' });
+          }
+          if (isResolved(row)) {
+            return res.status(409).json({ error: 'This response has already been reviewed.', alreadyResolved: true });
+          }
+
+          // Conditional on still being unresolved, so two reviewers cannot both
+          // record a conclusion.
+          const patchRes = await supabaseRequest(
+            `signing_requests?sign_id=eq.${encodeURIComponent(signId)}&response_resolution=is.null`, {
+            method: 'PATCH', headers: { 'Prefer': 'return=representation' },
+            body: JSON.stringify(resolutionPatch({
+              resolution, reason: resolutionReason, addendum: resolutionAddendum,
+              actorId: resolveAuth.user.id,
+            })),
+          });
+          if (!patchRes.ok) return res.status(500).json({ error: await patchRes.text() });
+          const [resolved] = await patchRes.json();
+          if (!resolved) return res.status(409).json({ error: 'This response has already been reviewed.', alreadyResolved: true });
+          // The four resolution fields the modal renders, and nothing else. Not
+          // the whole row: response_resolved_by is an internal auth.users uuid
+          // and the client already knows everything else it needs.
+          return res.status(200).json({
+            success: true,
+            resolution: resolved.response_resolution,
+            resolvedAt: resolved.response_resolved_at,
+            request: {
+              response_resolution: resolved.response_resolution,
+              response_resolution_reason: resolved.response_resolution_reason,
+              response_addendum: resolved.response_addendum,
+              response_resolved_at: resolved.response_resolved_at,
+            },
+          });
+        }
+
         if (proceed) {
           const { orgId: proceedOrgId } = req.body;
           const proceedAuth = await requireOrgMembership(req, res, proceedOrgId);

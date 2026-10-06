@@ -608,8 +608,22 @@ describe('I. nothing established was regressed', () => {
   it('66. signature NEVER means agreement', () => {
     const agreeing = Object.entries(CONFIRMATION_SEMANTICS).filter(([, v]) => v.impliesAgreement);
     expect(agreeing.map(([k]) => k)).toEqual([ESIGNATURE_STATUS.SIGNED]);
-    const lib = readFileSync('src/lib/confirmationSemantics.js', 'utf8');
+    // TRUST-SIG-03 — this assertion used to read the RAW source and so matched
+    // the module's own explanatory prose ("none of them is 'the employee agreed
+    // with the employer's conclusions'"), i.e. it would have failed on a comment
+    // SAYING THE RIGHT THING. The claim is about what Compass puts on screen, so
+    // it is made against the code with comments stripped.
+    const raw = readFileSync('src/lib/confirmationSemantics.js', 'utf8');
+    const lib = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    expect(lib.length).toBeLessThan(raw.length); // the strip must have done something
     expect(lib).not.toMatch(/employee agreed|agrees with/i);
+    // And it still has teeth: the phrase IS detectable in code when present.
+    expect(`${lib}\n  const x = "the employee agreed";`).toMatch(/employee agreed/i);
+    // The real guarantee, stated behaviourally: no state's user-facing wording
+    // claims agreement, whatever the comments say.
+    for (const v of Object.values(CONFIRMATION_SEMANTICS)) {
+      expect(`${v.heading} ${v.stateLine} ${v.detail || ''}`).not.toMatch(/agreed with|agrees with/i);
+    }
   });
 
   it('67. document immutability — no handler writes `document` after insert', () => {

@@ -58,7 +58,7 @@ const SUGGESTION_LABEL = {
 // Investigation meetings list (their natural narrative position, and
 // disciplinary-only — a grievance case never shows them) rather than
 // moving to Outcome, which is specifically about the decision itself.
-export function MeetingsTab({ cs, cases, saveCases, currentUser, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, onPresentMeetingRecord, showToast, meetingTypes, fmtDate, attemptSubmitInvestigation, concludingInvestigation, investigationReportDraft, setShowHandoffModal, setLetterOutput, onAcceptSavedSuggestion, onDismissSavedSuggestion, promptDialog, audit, loadSignedSnapshot, loadRequestHistory, proceedWithoutConfirmation, onResendReminder }) {
+export function MeetingsTab({ cs, cases, saveCases, currentUser, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, onPresentMeetingRecord, showToast, meetingTypes, fmtDate, attemptSubmitInvestigation, concludingInvestigation, investigationReportDraft, setShowHandoffModal, setLetterOutput, onAcceptSavedSuggestion, onDismissSavedSuggestion, promptDialog, audit, loadSignedSnapshot, loadRequestHistory, proceedWithoutConfirmation, resolveSignatureResponse, onResendReminder }) {
   const grievance = isGrievanceCase(cs);
   const meetings = cs.meetings||[];
   // Human UAT remediation, Batch 2, Part 9 — see SignedRecordModal's own
@@ -457,7 +457,12 @@ export function MeetingsTab({ cs, cases, saveCases, currentUser, activeCaseStage
           )}
         </>
       )}
-      {viewingSignedMeeting&&<SignedRecordModal meeting={viewingSignedMeeting} fmtDate={fmtDate} loadSignedSnapshot={loadSignedSnapshot} onClose={()=>setViewingSignedMeeting(null)}/>}
+      {viewingSignedMeeting&&<SignedRecordModal meeting={viewingSignedMeeting} fmtDate={fmtDate} loadSignedSnapshot={loadSignedSnapshot}
+        /* TRUST-SIG-03 — the review action exists only because the handler is
+           passed; without it the modal stays read-only, which is the correct
+           behaviour anywhere the manager should not be adjudicating. */
+        onResolveResponse={resolveSignatureResponse?(decision)=>resolveSignatureResponse(cs,viewingSignedMeeting,decision):undefined}
+        onClose={()=>setViewingSignedMeeting(null)}/>}
     </>
   );
 }

@@ -110,7 +110,7 @@ export function assessParticipantResponse(existing, { now = new Date() } = {}) {
  *
  * `outcome` is one of signed | acknowledged | declined | disputed.
  */
-export function participantResponsePatch(outcome, { signature = null, declineReason = '', comment = '', now = new Date() } = {}) {
+export function participantResponsePatch(outcome, { signature = null, declineReason = '', comment = '', responseType = null, proposedCorrection = '', now = new Date() } = {}) {
   const at = now.toISOString();
   const patch = outcome === 'declined'
     ? { status: 'declined', declined_at: at, decline_reason: declineReason || '' }
@@ -123,6 +123,17 @@ export function participantResponsePatch(outcome, { signature = null, declineRea
   if (text) {
     patch.participant_comment = text;
     patch.participant_comment_at = at;
+  }
+  // TRUST-SIG-03 — what the employee said about ACCURACY, a separate axis from
+  // what they did about signing. Written only when the page actually classified
+  // it: an older cached build sends nothing, and a signature must never be lost
+  // because a new field was missing, so NULL stays a valid answer.
+  if (responseType) {
+    patch.response_type = responseType;
+    const correction = typeof proposedCorrection === 'string' ? proposedCorrection.trim() : '';
+    // Scoped by signing_requests_proposed_correction_scope as well as here: a
+    // correction only means anything against a challenge.
+    if (correction && responseType === 'disputed') patch.proposed_correction = correction;
   }
   return patch;
 }
