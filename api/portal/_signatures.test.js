@@ -25,7 +25,17 @@ function stubFetch({ authOk = true, authUser = { id: 'user-1' }, account = null,
     }
     if (u.includes('/rest/v1/signing_requests')) {
       if (options.method === 'PATCH') {
-        return Promise.resolve({ ok: patchOk, text: () => Promise.resolve(patchOk ? '' : 'update failed'), json: () => Promise.resolve([]) });
+        // Trust Slice 2A — the stub now MODELS the conditional update. The real
+        // PATCH carries status=in.(sent,opened)&superseded_at=is.null, so it
+        // matches nothing when the row has already been answered or replaced.
+        // Returning a canned empty array regardless made every accepted
+        // signature look like a lost race.
+        const conditional = u.includes('status=in.(sent,opened)') && u.includes('superseded_at=is.null');
+        const matches = !conditional || (signingRequest
+          && ['sent', 'opened'].includes(signingRequest.status)
+          && !signingRequest.superseded_at);
+        const rows = matches ? [{ ...signingRequest, status: 'signed' }] : [];
+        return Promise.resolve({ ok: patchOk, text: () => Promise.resolve(patchOk ? '' : 'update failed'), json: () => Promise.resolve(rows) });
       }
       // GET (list) — requires org_id + employee_email in the query, not employee_name.
       if (u.includes('sign_id=eq.')) {
@@ -98,6 +108,66 @@ describe('portal signatures — POST (sign)', () => {
   beforeEach(() => { originalFetch = global.fetch; });
   afterEach(() => { global.fetch = originalFetch; });
 
+  // ── SIG-SEC-01 (HIGH) — the hole this slice closes ─────────────────────
+  it('refuses a SUPERSEDED request — the portal could sign one before', async () => {
+    stubFetch({
+      account: { org_id: 'org-1', employee_name: 'Sam Employee', employee_email: 'sam@acme.com' },
+      signingRequest: { sign_id: 's1', org_id: 'org-1', employee_email: 'sam@acme.com',
+                        status: 'sent', superseded_at: '2026-10-06T00:00:00.000Z', document: 'x' },
+    });
+    const res = mockRes();
+    await signatures(req('POST', { signId: 's1', signature: 'data:image/png;base64,AAA' }), res);
+    expect(res.statusCode).toBe(409);
+    expect(res.body.superseded).toBe(true);
+    expect(res.body.error).toMatch(/replaced by a newer version/i);
+  });
+
+  it('refuses a DISPUTED request — it was actionable before', async () => {
+    stubFetch({
+      account: { org_id: 'org-1', employee_name: 'Sam Employee', employee_email: 'sam@acme.com' },
+      signingRequest: { sign_id: 's1', org_id: 'org-1', employee_email: 'sam@acme.com', status: 'disputed', document: 'x' },
+    });
+    const res = mockRes();
+    await signatures(req('POST', { signId: 's1', signature: 'data:image/png;base64,AAA' }), res);
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('CONCURRENCY: a response that loses the conditional update gets an honest 409', async () => {
+    // The row was still 'sent' at read time but another response landed first,
+    // so the conditional UPDATE matches nothing. Before this slice the portal
+    // read then wrote unconditionally and both responses could succeed.
+    stubFetch({
+      account: { org_id: 'org-1', employee_name: 'Sam Employee', employee_email: 'sam@acme.com' },
+      signingRequest: { sign_id: 's1', org_id: 'org-1', employee_email: 'sam@acme.com', status: 'sent', document: 'x' },
+    });
+    const original = global.fetch;
+    global.fetch = vi.fn((url, options = {}) => {
+      if (String(url).includes('signing_requests') && options.method === 'PATCH') {
+        return Promise.resolve({ ok: true, text: () => Promise.resolve(''), json: () => Promise.resolve([]) });
+      }
+      return original(url, options);
+    });
+    const res = mockRes();
+    await signatures(req('POST', { signId: 's1', signature: 'data:image/png;base64,AAA' }), res);
+    expect(res.statusCode).toBe(409);
+    expect(res.body.error).toMatch(/already been actioned/i);
+  });
+
+  it('the portal signature is SERVER-timed, like the emailed-link path', async () => {
+    stubFetch({
+      account: { org_id: 'org-1', employee_name: 'Sam Employee', employee_email: 'sam@acme.com' },
+      signingRequest: { sign_id: 's1', org_id: 'org-1', employee_email: 'sam@acme.com', status: 'sent', document: 'x' },
+    });
+    const res = mockRes();
+    await signatures(req('POST', { signId: 's1', signature: 'data:image/png;base64,AAA', signedAt: '1999-01-01T00:00:00.000Z' }), res);
+    expect(res.statusCode).toBe(200);
+    const patch = global.fetch.mock.calls.find(([, o]) => o && o.method === 'PATCH');
+    const body = JSON.parse(patch[1].body);
+    expect(body.signed_at).not.toBe('1999-01-01T00:00:00.000Z');
+    expect(new Date(body.signed_at).getFullYear()).toBeGreaterThan(2020);
+    expect(body).not.toHaveProperty('document');
+  });
+
   it('400s when signId or signature is missing', async () => {
     stubFetch({ account: { org_id: 'org-1', employee_name: 'Sam', employee_email: 'sam@acme.com' } });
     const res = mockRes();
@@ -141,11 +211,13 @@ describe('portal signatures — POST (sign)', () => {
 
   it('rejects re-signing an already-actioned request', async () => {
     const account = { org_id: 'org-1', employee_name: 'Sam', employee_email: 'sam@acme.com' };
+    // Re-signing is a CONFLICT with the current state (409), which is what the
+    // emailed-link path has always returned. The portal used 400; they now match.
     const signingRequest = { sign_id: 's1', org_id: 'org-1', employee_email: 'sam@acme.com', status: 'signed' };
     stubFetch({ account, signingRequest });
     const res = mockRes();
     await signatures(req('POST', { signId: 's1', signature: 'data:...' }), res);
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(409);
   });
 
   it('accepts a genuine own-document signature', async () => {
@@ -168,7 +240,7 @@ describe('portal signatures — POST (sign)', () => {
     stubFetch({ account, signingRequest });
     const res = mockRes();
     await signatures(req('POST', { signId: 's1', signature: 'data:...' }), res);
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(409);
   });
 
   it('accepts signing a request with an expiry still in the future', async () => {

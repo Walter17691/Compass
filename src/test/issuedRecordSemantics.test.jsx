@@ -1,3 +1,5 @@
+import { assessParticipantResponse, ACTIONABLE_FILTER } from '../lib/participantResponse.js';
+import { PUBLIC_FIELDS, WITHHELD_FIELDS } from '../lib/publicSigningView.js';
 import { describe, it, expect } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { readFileSync } from 'fs';
@@ -6,7 +8,7 @@ import {
   CONFIRMATION_SEMANTICS, NEUTRAL_SEMANTICS, PROVENANCE_KIND,
   confirmationSemantics, provenanceLine, hasBeenIssued,
 } from '../lib/confirmationSemantics.js';
-import { ESIGNATURE_STATUS, LEGACY_PENDING_STATUS, isConfirmationSettled } from '../lib/eSignature.js';
+import { ESIGNATURE_STATUS, LEGACY_PENDING_STATUS, isConfirmationSettled, EXTERNAL_SIGNATURE_STATUS } from '../lib/eSignature.js';
 import { getNextStep } from '../lib/nextStep.js';
 import { MEETING_STATUS, isMeetingComplete } from '../lib/meetingLifecycle.js';
 
@@ -173,13 +175,34 @@ describe('every allowed status has explicit semantics', () => {
     expect(agreeing).toEqual([ESIGNATURE_STATUS.SIGNED]);
   });
 
-  it('no heading or state line anywhere in the map says "Signed" except SIGNED', () => {
-    Object.entries(CONFIRMATION_SEMANTICS).forEach(([status, sem]) => {
-      if (status === ESIGNATURE_STATUS.SIGNED) return;
-      expect(sem.heading, status).not.toMatch(/signed/i);
-      expect(sem.viewLabel, status).not.toMatch(/signed/i);
-    });
+  it('no heading or state line claims a COMPASS-CAPTURED signature except SIGNED', () => {
+    // Widened for SIG-SEC-06. `signed_externally` legitimately says "Signed
+    // outside Compass" — a paper signature is a real signature — but it must
+    // never read as one Compass holds. So the test is about the CLAIM, not the
+    // word: only PROVENANCE_KIND.SIGNED may produce signature wording, and only
+    // `signed` carries it.
+    const signedKinds = Object.entries(CONFIRMATION_SEMANTICS)
+      .filter(([, v]) => v.provenanceKind === PROVENANCE_KIND.SIGNED)
+      .map(([k]) => k);
+    expect(signedKinds).toEqual([ESIGNATURE_STATUS.SIGNED]);
+
+    const ext = CONFIRMATION_SEMANTICS[EXTERNAL_SIGNATURE_STATUS];
+    expect(ext.provenanceKind).toBe(PROVENANCE_KIND.EXTERNAL);
+    expect(ext.impliesAgreement).toBe(false);
+    expect(ext.heading).toMatch(/outside Compass/);
+
+    // Every OTHER entry may MENTION signing — `declined` says "signature
+    // declined", which is the whole point of it — but none may CLAIM one was
+    // given, and none may imply agreement.
+    for (const [status, v] of Object.entries(CONFIRMATION_SEMANTICS)) {
+      if (status === ESIGNATURE_STATUS.SIGNED || status === EXTERNAL_SIGNATURE_STATUS) continue;
+      expect(v.provenanceKind, status).not.toBe(PROVENANCE_KIND.SIGNED);
+      expect(v.provenanceKind, status).not.toBe(PROVENANCE_KIND.EXTERNAL);
+      expect(v.impliesAgreement, status).toBe(false);
+      expect(provenanceLine(status, { name: 'X' }), status).not.toMatch(/^Signed by/);
+    }
   });
+
 
   it('semantics agree with the progression predicate — one source of truth', () => {
     ALL_STATUSES.forEach(s =>
@@ -299,21 +322,34 @@ describe('re-issue supersedes rather than silently replacing', () => {
     expect(stripSql(MIG())).toMatch(/create unique index/);
   });
 
-  it('a superseded request can no longer be actioned', () => {
+  it('a superseded request can no longer be actioned — on EITHER path', () => {
+    // Trust Slice 2A moved this guard into ONE shared authority, because the
+    // employee-portal path never had it (SIG-SEC-01, HIGH): an older request
+    // stayed signable there, and that response would never have reached Compass.
     const a = stripJs(api());
-    expect(a).toMatch(/if \(existing\.superseded_at\) \{/);
-    expect(a).toMatch(/This version has been replaced by a newer record/);
+    expect(a).toContain('assessParticipantResponse(existing)');
+    expect(stripJs(readFileSync('api/portal/_signatures.js', 'utf8')))
+      .toContain('assessParticipantResponse(existing)');
+    // The authority refuses it, with wording that names no successor token.
+    const v = assessParticipantResponse({ status: 'sent', superseded_at: 'T', expires_at: null });
+    expect(v.ok).toBe(false);
+    expect(v.error).toMatch(/replaced by a newer version/i);
     // And the write itself excludes superseded rows, so the check cannot be raced.
-    expect(a).toMatch(/status=in\.\(sent,opened\)&superseded_at=is\.null/);
+    expect(ACTIONABLE_FILTER).toMatch(/status=in\.\(sent,opened\)&superseded_at=is\.null/);
+    expect(a).toContain('${ACTIONABLE_FILTER}');
   });
 
   it('the old link NEVER receives the successor\'s token', () => {
     const a = stripJs(api());
-    // Behavioural shape rather than one exact spelling: the public view must
-    // DELETE both the successor token and the internal actor id.
-    expect(a).toMatch(/delete publicView\.superseded_by_sign_id/);
-    expect(a).toMatch(/delete publicView\.superseded_by;/);
+    // SIG-SEC-03 — the public response is now built UP from an allow-list rather
+    // than spread-and-deleted. That is strictly stronger: the successor token is
+    // withheld because it was never included, and so is every future column.
+    expect(a).toContain('publicSigningView(existing)');
     expect(a).toMatch(/if \(!isInternalStatusCheck\) \{/);
+    expect(PUBLIC_FIELDS).not.toContain('superseded_by_sign_id');
+    expect(PUBLIC_FIELDS).not.toContain('superseded_by');
+    expect(WITHHELD_FIELDS).toHaveProperty('superseded_by_sign_id');
+    expect(WITHHELD_FIELDS).toHaveProperty('superseded_by');
     const page = readFileSync('public/sign.html', 'utf8');
     expect(page).not.toMatch(/superseded_by_sign_id/);
   });

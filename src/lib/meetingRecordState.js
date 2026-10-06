@@ -1,4 +1,5 @@
 import { isGenuineMeeting, declaredStatus, MEETING_STATUS } from './meetingLifecycle.js';
+import { EXTERNAL_SIGNATURE_STATUS } from './eSignature.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // WAVE B.2 corrective — what state is this meeting record actually in?
@@ -52,6 +53,18 @@ export function meetingRecordState(m) {
 // meeting. Separate on purpose: a completed record that was never sent for
 // signature is not "awaiting" anything, and conflating the two is how a record
 // ends up looking unfinished when it is simply not a signing document.
+// ┌─ SIG-UX-01: THIS MAP WENT OUT OF DATE AND A STATE VANISHED ─────────────┐
+// │ Trust Slice 1 added `disputed` and Slice 1b added `proceeded` to the      │
+// │ persisted vocabulary. Neither was added here. meetingSignatureState       │
+// │ returns null for an unknown value — correct, it refuses to relabel — so    │
+// │ the chip SILENTLY DISAPPEARED in InvestigationTab for exactly the two      │
+// │ states a manager most needs to see: the employee disputed the record, or   │
+// │ the organisation proceeded without them.                                 │
+// │                                                                         │
+// │ Every value in the persisted CHECK is now present, plus the external      │
+// │ signature. A structural test asserts this map stays exhaustive, so the    │
+// │ next status added to the vocabulary fails a test instead of vanishing.    │
+// └─────────────────────────────────────────────────────────────────────────┘
 const SIGN_STATE = Object.freeze({
   pending:      { key: "sign_pending",  label: "Awaiting signature",  tone: "pending" },
   sent:         { key: "sign_sent",     label: "Awaiting signature",  tone: "pending" },
@@ -60,7 +73,15 @@ const SIGN_STATE = Object.freeze({
   acknowledged: { key: "sign_ack",      label: "Acknowledged",        tone: "done" },
   declined:     { key: "sign_declined", label: "Declined",            tone: "attention" },
   expired:      { key: "sign_expired",  label: "Signature link expired", tone: "muted" },
+  // Says what the EMPLOYEE did. Not a failure, and not agreement either.
+  disputed:     { key: "sign_disputed", label: "Disputed by employee", tone: "attention" },
+  // Says what the ORGANISATION did, which is why it is not toned as agreement.
+  proceeded:    { key: "sign_proceeded", label: "Proceeded without confirmation", tone: "attention" },
+  // SIG-SEC-06 — a real signature Compass did not capture.
+  [EXTERNAL_SIGNATURE_STATUS]: { key: "sign_external", label: "Signed outside Compass", tone: "done" },
 });
+
+export const SIGNATURE_STATE_KEYS = Object.freeze(Object.keys(SIGN_STATE));
 
 export function meetingSignatureState(m) {
   const raw = m && typeof m.signStatus === "string" ? m.signStatus.trim() : "";

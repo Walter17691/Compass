@@ -240,8 +240,12 @@ describe('8/9/10. signature cannot complete, and a failed send is non-destructiv
     expect(body).not.toContain('rollback');
     // and Stage 2 only runs after Stage 1 reports ok
     expect(body).toContain('if(!saved?.ok) return saved;');
+    // Stage 2 now goes through openSignModal, which prefills the recipient from
+    // the employee record before showing the dialog (SIG-SEC-04). The ORDERING
+    // under test is unchanged: save first, collect the address second.
+    expect(body).toContain('openSignModal(true);');
     expect(body.indexOf('const saved = await saveMeetingToCase();'))
-      .toBeLessThan(body.indexOf('setShowSignModal(true);'));
+      .toBeLessThan(body.indexOf('openSignModal(true);'));
   });
 
   it('there is ONE authoritative save — the compound action reuses it', () => {

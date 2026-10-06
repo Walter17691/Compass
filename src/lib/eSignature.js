@@ -27,6 +27,16 @@ export const ESIGNATURE_STATUS = {
 // is recognised here as legacy and treated as NOT settled — the safe reading.
 export const LEGACY_PENDING_STATUS = "pending";
 
+// SIG-SEC-06. A signature obtained OUTSIDE Compass, recorded by a manager.
+//
+// Deliberately NOT a signing_requests.status value and NOT in
+// signing_requests_status_valid: no participant ever acted on a Compass link,
+// so there is no request to put it on. It lives only on the meeting mirror
+// (cases.meetings[].signStatus), which is jsonb and carries no CHECK — so this
+// adds a rendering vocabulary without widening the database's participant
+// vocabulary or touching the 27 legacy rows.
+export const EXTERNAL_SIGNATURE_STATUS = "signed_externally";
+
 const TERMINAL_STATUSES = [
   ESIGNATURE_STATUS.SIGNED, ESIGNATURE_STATUS.ACKNOWLEDGED, ESIGNATURE_STATUS.DECLINED,
   ESIGNATURE_STATUS.EXPIRED, ESIGNATURE_STATUS.DISPUTED, ESIGNATURE_STATUS.PROCEEDED,

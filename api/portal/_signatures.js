@@ -1,6 +1,6 @@
 import { supabaseRequest } from './_supabase.js';
 import { verifyCaller } from '../_auth.js';
-import { isExpired } from '../../src/lib/eSignature.js';
+import { assessParticipantResponse, participantResponsePatch, ACTIONABLE_FILTER, RESPONSE_REFUSAL } from '../../src/lib/participantResponse.js';
 
 function normEmail(e) {
   return (e || '').trim().toLowerCase();
@@ -49,28 +49,60 @@ export async function signatures(req, res) {
       // caller happens to pass in. Both org_id and employee_email must be
       // present and matching — a missing email on either side fails
       // closed (403), never falls through to a permissive match.
-      const reqRes = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}&select=org_id,employee_email,status,expires_at`);
+      // superseded_at is now selected — SIG-SEC-01. Without it this path could
+      // not even see that a request had been replaced.
+      const reqRes = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}&select=org_id,employee_email,status,expires_at,superseded_at`);
       const reqs = await reqRes.json();
       const existing = reqs[0];
       const existingEmail = normEmail(existing?.employee_email);
+      // Tenancy and recipient binding FIRST, so a caller who has no business
+      // with this request learns nothing about its lifecycle state.
       if (!existing || !existingEmail || existing.org_id !== account.org_id || existingEmail !== accountEmail) {
         return res.status(403).json({ error: 'You do not have access to this signature request' });
       }
-      if (existing.status === 'signed' || existing.status === 'acknowledged' || existing.status === 'declined') return res.status(400).json({ error: 'Already signed' });
-      // Phase 6.5 hardening (closes Prompt 11 audit finding 2.8, MEDIUM) —
-      // unlike api/signing.js's own POST handler, this path never checked
-      // expires_at at all, so a portal user could sign a document well
-      // past its 7-day expiry window, silently bypassing the same
-      // freshness guarantee every other signing path enforces.
-      if (isExpired(existing.expires_at)) return res.status(400).json({ error: 'This signing request has expired' });
 
-      const updateRes = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}`, {
+      // ── SIG-SEC-01 / SIG-SEC-02 — PARITY WITH THE EMAILED-LINK PATH ──────
+      //
+      // This path used to reject only signed | acknowledged | declined. It did
+      // NOT check superseded_at, so Slice 1b's invariant — "an older request
+      // stayed live and SIGNABLE, and because the client polls only
+      // meetings[].signId that signature would never appear in Compass" — was
+      // still open through the portal. `disputed` and `proceeded` were not
+      // rejected either, so a disputed record could be re-signed.
+      //
+      // assessParticipantResponse is the SAME function api/signing.js calls, so
+      // the two paths cannot drift again.
+      const verdict = assessParticipantResponse(existing);
+      if (!verdict.ok) {
+        return res.status(verdict.httpStatus).json({
+          error: verdict.error,
+          ...(verdict.refusal === RESPONSE_REFUSAL.SUPERSEDED ? { superseded: true } : {}),
+        });
+      }
+
+      // SIG-SEC-02 — the actionable test is folded into the UPDATE's own WHERE,
+      // exactly as the emailed-link path does it. Previously this read then
+      // wrote with nothing in between, so two competing responses could both
+      // succeed and leave a self-contradictory row. Postgres row locking now
+      // means only the request that genuinely observes the row awaiting a
+      // response can apply its patch; the loser gets an honest 409.
+      //
+      // The patch itself comes from the shared builder, so a portal signature
+      // and an emailed-link signature are byte-identical in shape and both are
+      // server-timed (SIG-SEC-05).
+      const updateRes = await supabaseRequest(
+        `signing_requests?sign_id=eq.${encodeURIComponent(signId)}&${ACTIONABLE_FILTER}`, {
         method: 'PATCH',
-        body: JSON.stringify({ signature, status: 'signed', signed_at: new Date().toISOString() }),
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify(participantResponsePatch('signed', { signature })),
       });
       if (!updateRes.ok) {
         console.error('signing_requests update failed:', await updateRes.text());
         return res.status(500).json({ error: 'Failed to save signature' });
+      }
+      const updatedRows = await updateRes.json();
+      if (!updatedRows.length) {
+        return res.status(409).json({ error: 'This document has already been actioned' });
       }
       return res.status(200).json({ success: true });
     }

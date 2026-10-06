@@ -99,6 +99,7 @@ import { employeeFacingSnapshot } from './lib/signedSnapshot';
 import { applyRecordIdentity, resolvePersistedMeeting, RESOLUTION, isPersistedIdentityMissing, describeUnresolvedPersistedRecord } from './lib/meetingIdentity';
 import { CAPTURE_CHANNEL, isSegmentable, pendingCapture, attributeCapture, reconcileCapture } from './lib/noteCapture';
 import { useScrollToTopOnEnter } from './lib/screenScroll';
+import { resolveRecipient, isAddressOverride, isValidRecipientEmail, describeAddressOverride, RECIPIENT_SOURCE } from './lib/recipientResolution';
 import { sourceFidelity, dialoguePermitted, discussionHeading, discussionInstruction, participantInitials, applyFidelityGuard, describeFidelityFallback } from './lib/recordFidelity';
 import { mergeSuggestions, suggestionKey } from './lib/suggestionIdentity';
 import { appealLinkCandidates } from './lib/appealLink';
@@ -1877,6 +1878,26 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
 
   const sendForSignature = async (employeeEmail) => {
     if(!employeeEmail||!reviewOutput) return;
+    // ── §6 RECIPIENT SAFETY (SIG-SEC-04) ───────────────────────────────────
+    //
+    // The address was validated by includes("@"), so a typo emailed a full ER
+    // meeting record to a stranger. Proper validation now, and an address that
+    // differs from the one held for this employee is an explicit, audited
+    // override — never silent, and never a write back to the employee record.
+    if(!isValidRecipientEmail(employeeEmail)) {
+      showToast("That does not look like a valid email address — please check it", "error");
+      return;
+    }
+    const resolvedRecipient = resolveRecipient({ employeeName: caseInfo.employee, employeeRecords });
+    if(isAddressOverride(resolvedRecipient, employeeEmail)) {
+      const ok = await confirmDialog({
+        title: "Send to a different address?",
+        message: `${resolvedRecipient.name} has ${resolvedRecipient.email} on their employee record. This will go to ${employeeEmail} instead. The employee record will not be changed.`,
+        confirmLabel: "Send to this address",
+      });
+      if(!ok) return;
+      audit("Signature request address overridden", describeAddressOverride(resolvedRecipient, employeeEmail), activeCaseId);
+    }
     // Phase 3B slice 1 — defence in depth for NEW-36. Hiding the button is not
     // enough: this checks the persisted meeting itself BEFORE any signing row is
     // created and before any email leaves. Signature may attach signId to an
@@ -1913,9 +1934,21 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       documentDate: fmtDate(caseInfo.date)||new Date().toLocaleDateString("en-GB"),
       caseId: activeCaseId,
     });
-    if(!success) return;
     setShowSignModal(false);
     setPendingSignature(null);
+    // ── §5 ORPHAN BEHAVIOUR ────────────────────────────────────────────────
+    //
+    // This used to `return` on email failure, leaving a signing_requests row
+    // that said 'sent' with NOTHING on the meeting pointing at it and no audit
+    // entry — an orphan claiming to have been sent.
+    //
+    // The request IS a truthful artefact: it was prepared, and the failure is
+    // now persisted on it (send_error). So the signId is attached either way,
+    // which is what lets every renderer read the real communication evidence
+    // and say "Record prepared — could not be emailed" instead of "Awaiting
+    // signature". A retry supersedes it, so no contradictory current request
+    // accumulates. Nothing is deleted: the attempt is history.
+    if(!signId) return;
     // The meeting is ALREADY completed, so this only attaches the signing state.
     // allowedFrom [completed] makes that explicit and idempotent: signature can
     // never be what completes a meeting. Routing back through saveMeetingToCase
@@ -1924,7 +1957,9 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     const attached = await transitionMeeting({
       cases: casesRef.current, caseId: ids.caseId, meetingId: ids.meetingId,
       allowedFrom: [MEETING_STATUS.COMPLETED], toStatus: MEETING_STATUS.COMPLETED,
-      patch: { signId, signStatus: "sent" }, saveCases,
+      patch: { signId, signStatus: "sent",
+               sendAcceptedAt: success ? new Date().toISOString() : null,
+               sendError: success ? null : "Email could not be sent" }, saveCases,
     });
     if(!attached?.ok) {
       // The email has already gone; the record is already authoritative. Say so
@@ -1932,7 +1967,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       reportMeetingWriteFailure(attached, "The record was sent, but Compass couldn't record that on the case — please refresh");
       return;
     }
-    audit(`${meetingType?.label||"Meeting"} notes sent for signature`, caseInfo.employee, ids.caseId);
+    // §9 — the audit entry states what Compass actually knows. A failed send is
+    // recorded as a failed send, not as a send.
+    audit(
+      success
+        ? `${meetingType?.label||"Meeting"} notes sent for signature`
+        : `${meetingType?.label||"Meeting"} notes prepared — email could not be sent`,
+      success ? caseInfo.employee : `${caseInfo.employee} — record prepared but the email was not accepted; retry from the meeting`,
+      ids.caseId);
+    if(!success) return;
   };
 
   const sendLiveChat = async () => {
@@ -3839,7 +3882,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
             || (data.expires_at || null) !== (m.expiresAt || null)
             || (data.participant_comment || null) !== (m.participantComment || null)
             || (data.proceeded_at || null) !== (m.proceededAt || null)
-            || (data.superseded_at || null) !== (m.supersededAt || null);
+            || (data.superseded_at || null) !== (m.supersededAt || null)
+            // Trust Slice 2A — communication evidence travels with the rest of
+            // the signature state, so every renderer can tell "issued" from
+            // "actually emailed" without a second fetch.
+            || (data.send_accepted_at || null) !== (m.sendAcceptedAt || null)
+            || (data.send_error || null) !== (m.sendError || null);
           return data.status && changed
             ? { id: m.id, status: data.status, signedAt: data.signed_at || data.declined_at || null, signature: data.signature || null, signerName: data.employee_name || null, declineReason: data.decline_reason || null,
                 expiresAt: data.expires_at || null,
@@ -3848,14 +3896,17 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
                 proceededAt: data.proceeded_at || null,
                 proceedReason: data.proceed_reason || null,
                 proceededFromStatus: data.proceeded_from_status || null,
-                supersededAt: data.superseded_at || null }
+                supersededAt: data.superseded_at || null,
+                sendAttemptedAt: data.send_attempted_at || null,
+                sendAcceptedAt: data.send_accepted_at || null,
+                sendError: data.send_error || null }
             : null;
         } catch { return null; }
       }))).filter(Boolean);
       if (cancelled || !changes.length) return;
       const changeMap = new Map(changes.map(c => [c.id, c]));
       const updated = cases.map(c => c.id === activeCaseId
-        ? { ...c, meetings: c.meetings.map(m => changeMap.has(m.id) ? { ...m, signStatus: changeMap.get(m.id).status, signedAt: changeMap.get(m.id).signedAt, signature: changeMap.get(m.id).signature, signerName: changeMap.get(m.id).signerName, declineReason: changeMap.get(m.id).declineReason, expiresAt: changeMap.get(m.id).expiresAt, participantComment: changeMap.get(m.id).participantComment, participantCommentAt: changeMap.get(m.id).participantCommentAt, proceededAt: changeMap.get(m.id).proceededAt, proceedReason: changeMap.get(m.id).proceedReason, proceededFromStatus: changeMap.get(m.id).proceededFromStatus, supersededAt: changeMap.get(m.id).supersededAt } : m) }
+        ? { ...c, meetings: c.meetings.map(m => changeMap.has(m.id) ? { ...m, signStatus: changeMap.get(m.id).status, signedAt: changeMap.get(m.id).signedAt, signature: changeMap.get(m.id).signature, signerName: changeMap.get(m.id).signerName, declineReason: changeMap.get(m.id).declineReason, expiresAt: changeMap.get(m.id).expiresAt, participantComment: changeMap.get(m.id).participantComment, participantCommentAt: changeMap.get(m.id).participantCommentAt, proceededAt: changeMap.get(m.id).proceededAt, proceedReason: changeMap.get(m.id).proceedReason, proceededFromStatus: changeMap.get(m.id).proceededFromStatus, supersededAt: changeMap.get(m.id).supersededAt, sendAttemptedAt: changeMap.get(m.id).sendAttemptedAt, sendAcceptedAt: changeMap.get(m.id).sendAcceptedAt, sendError: changeMap.get(m.id).sendError } : m) }
         : c);
       // Human UAT remediation, Batch 1, Issue 3 — signature completion had
       // no notification/activity/Timeline event at all. Logged here, not
@@ -7304,6 +7355,23 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // this and none of them moves the manager's reading position.
   useScrollToTopOnEnter(screen, SCREENS.REVIEW);
 
+  // §6 — the recipient Compass holds for this employee, resolved for display
+  // and for the override comparison.
+  const signRecipient = resolveRecipient({ employeeName: caseInfo.employee, employeeRecords });
+
+  // Opening the send modal PREFILLS the canonical address, so the manager
+  // confirms an address rather than typing one from memory. Done at the point
+  // of intent rather than in an effect reacting to the modal being open: that
+  // is what it actually is, and it keeps the prefill out of the render path.
+  // Only ever fills an empty field — a manager who has typed something keeps it.
+  const openSignModal = (open = true) => {
+    if(open) {
+      const r = resolveRecipient({ employeeName: caseInfo.employee, employeeRecords });
+      if(r.email) setSignEmail(prev => prev || r.email);
+    }
+    setShowSignModal(open);
+  };
+
   // Autosave the in-progress meeting to localStorage — transcript/inputText
   // were plain React state with zero persistence, meaning a crashed tab or
   // dead laptop 40 minutes into a real disciplinary hearing lost everything
@@ -9410,7 +9478,7 @@ Please produce:
     const saved = await saveMeetingToCase();
     if(!saved?.ok) return saved;            // Stage 1 failed — nothing is sent
     setPendingSignature(ids);
-    setShowSignModal(true);                 // Stage 2 collects the address
+    openSignModal(true);                    // Stage 2 confirms the address
     return saved;
   };
 
@@ -11596,15 +11664,35 @@ Please produce:
         <div role="dialog" aria-modal="true" ref={signModalRef} tabIndex={-1} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:16,padding:28,width:"100%",maxWidth:440}}>
             <h3 style={{fontFamily:"DM Serif Display,Georgia,serif",fontSize:18,color:"#1A1535",marginBottom:8,fontWeight:400}}>Send for signature</h3>
-            <p style={{fontSize:13,color:"#6B6375",marginBottom:20}}>The employee will receive an email with a link to read and sign the meeting record.</p>
+            <p style={{fontSize:13,color:"#6B6375",marginBottom:16}}>They will receive an email with a link to read the record and confirm it. Signing confirms they have received it — it does not record agreement with its contents.</p>
+            {/* §6 — WHO is about to receive an ER meeting record, stated before
+                sending rather than inferred from an address the manager typed. */}
+            <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 12px",marginBottom:16}}>
+              <div style={{fontSize:12,color:"#1A1535",fontWeight:600}}>{signRecipient.name || caseInfo.employee || "Recipient"}</div>
+              <div style={{fontSize:11,color:"#6B6375",marginTop:2}}>
+                {signRecipient.source===RECIPIENT_SOURCE.CANONICAL
+                  ? "Address from their employee record"
+                  : signRecipient.source===RECIPIENT_SOURCE.CANONICAL_NO_EMAIL
+                    ? "No email on their employee record — enter one below"
+                    : "No employee record matched — enter the recipient's address below"}
+              </div>
+              {isAddressOverride(signRecipient, signEmail)&&(
+                <div style={{fontSize:11,color:"#B87520",marginTop:6,fontWeight:600}}>
+                  This differs from the address on their employee record. You will be asked to confirm.
+                </div>
+              )}
+            </div>
             <label htmlFor="sign-email" style={{display:"block",fontSize:10,fontWeight:600,color:"#6B6375",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Employee email</label>
             <input id="sign-email" value={signEmail} onChange={e=>setSignEmail(e.target.value)}
-              onKeyDown={e=>e.key==="Enter"&&signEmail.includes("@")&&(sendForSignature(signEmail),setShowSignModal(false),setSignEmail(""))}
+              onKeyDown={e=>e.key==="Enter"&&isValidRecipientEmail(signEmail)&&(sendForSignature(signEmail),setSignEmail(""))}
               placeholder="employee@company.com"
               style={{width:"100%",background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 16px",fontSize:14,outline:"none",color:"#1A1535",boxSizing:"border-box",marginBottom:16}}/>
             <div style={{display:"flex",gap:10}}>
-              <Btn onClick={()=>{if(signEmail.includes("@")){sendForSignature(signEmail);setShowSignModal(false);setSignEmail("");}}}
-                disabled={!signEmail.includes("@")}
+              {/* The modal is closed by sendForSignature itself, AFTER the
+                  override confirmation — closing it here dismissed the dialog
+                  the confirmation needed. */}
+              <Btn onClick={()=>{if(isValidRecipientEmail(signEmail)){sendForSignature(signEmail);setSignEmail("");}}}
+                disabled={!isValidRecipientEmail(signEmail)}
                 style={{flex:1}}>
                 Send email
               </Btn>
@@ -12394,7 +12482,7 @@ Please produce:
 
       {/* ══ REVIEW ══ */}
       {screen===SCREENS.REVIEW&&(
-        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={threadFor(askThreads, reviewAskKey)} setAskCompassHistory={next=>setAskThreads(t=>({...t, [reviewAskKey]: typeof next === "function" ? next(threadFor(t, reviewAskKey)) : next}))} askCompass={(m,h,sh,sp)=>askCompass(m,h,sh,sp,{record:reviewOutput})} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={setShowSignModal} signatureEligible={signatureEligibleIn(cases, { caseId: caseInfo.caseId, meetingId: caseInfo.meetingId })} persistedIdentityMissing={isPersistedIdentityMissing(cases, caseInfo)} unresolvedRecordMessage={describeUnresolvedPersistedRecord()} standalone={caseInfo.meetingHome===TABLE_HOME} onSaveAndSendForSignature={saveAndSendForSignature} draftStatus={draftStatus} onEditReviewRecord={onEditReviewRecord} onRetryReviewDraft={retryReviewDraft} advisorNotes={advisorNotes} reviewGaps={reviewGaps} riskScore={riskScore} analysisStale={isAnalysisStale({record:reviewOutput, analysisFor:analysisForRecord, hasAnalysis:!!(meetingSummary||advisorNotes||riskScore)})} reviewGenerationFailed={reviewGenerationFailed} onRetryGeneration={handleReview}
+        <ReviewScreen caseInfo={caseInfo} meetingType={meetingType} isHR={isHR} requestHrReview={requestHrReview} reviewOutput={reviewOutput} reviewOutputOriginal={reviewOutputOriginal} meetingSummary={meetingSummary} confirmDialog={confirmDialog} setShowShareModal={setShowShareModal} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} showToast={showToast} askCompassInput={askCompassInput} setAskCompassInput={setAskCompassInput} askCompassHistory={threadFor(askThreads, reviewAskKey)} setAskCompassHistory={next=>setAskThreads(t=>({...t, [reviewAskKey]: typeof next === "function" ? next(threadFor(t, reviewAskKey)) : next}))} askCompass={(m,h,sh,sp)=>askCompass(m,h,sh,sp,{record:reviewOutput})} setAskCompassProcessing={setAskCompassProcessing} askCompassProcessing={askCompassProcessing} editProcessing={editProcessing} editRecord={editRecord} editingRecord={editingRecord} setEditingRecord={setEditingRecord} aiProcessing={aiProcessing} aiError={aiError} setReviewOutput={setReviewOutput} setShowSignModal={openSignModal} signatureEligible={signatureEligibleIn(cases, { caseId: caseInfo.caseId, meetingId: caseInfo.meetingId })} persistedIdentityMissing={isPersistedIdentityMissing(cases, caseInfo)} unresolvedRecordMessage={describeUnresolvedPersistedRecord()} standalone={caseInfo.meetingHome===TABLE_HOME} onSaveAndSendForSignature={saveAndSendForSignature} draftStatus={draftStatus} onEditReviewRecord={onEditReviewRecord} onRetryReviewDraft={retryReviewDraft} advisorNotes={advisorNotes} reviewGaps={reviewGaps} riskScore={riskScore} analysisStale={isAnalysisStale({record:reviewOutput, analysisFor:analysisForRecord, hasAnalysis:!!(meetingSummary||advisorNotes||riskScore)})} reviewGenerationFailed={reviewGenerationFailed} onRetryGeneration={handleReview}
           meetingEvidenceSuggestions={meetingEvidenceSuggestions} onAcceptMeetingEvidenceSuggestion={acceptMeetingEvidenceSuggestion} onDismissMeetingEvidenceSuggestion={dismissMeetingEvidenceSuggestion}
           meetingActionSuggestions={meetingActionSuggestions} onAcceptMeetingActionSuggestion={acceptMeetingActionSuggestion} onDismissMeetingActionSuggestion={dismissMeetingActionSuggestion}
         />

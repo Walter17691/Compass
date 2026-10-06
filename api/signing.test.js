@@ -209,11 +209,25 @@ describe('api/signing — GET (view by sign_id)', () => {
   });
 
   it('returns a real signing request by its unguessable sign_id alone', async () => {
-    stubFetch({ signingRequest: { sign_id: 's1', status: 'opened', expires_at: null } });
+    stubFetch({ signingRequest: { sign_id: 's1', status: 'opened', expires_at: null,
+                                  document: 'THE ISSUED RECORD', employee_name: 'Sam',
+                                  org_id: 'org-1', manager_email: 'chair@acme.com',
+                                  proceed_reason: 'internal reasoning', proceeded_by: 'user-uuid' } });
     const res = mockRes();
     await handler({ method: 'GET', headers: {}, query: { signId: 's1' } }, res);
     expect(res.statusCode).toBe(200);
-    expect(res.body.sign_id).toBe('s1');
+    // The participant gets the record and their own context...
+    expect(res.body.document).toBe('THE ISSUED RECORD');
+    expect(res.body.employee_name).toBe('Sam');
+    // ...and NONE of the internal fields that used to ride along.
+    for (const k of ['org_id', 'manager_email', 'proceed_reason', 'proceeded_by']) {
+      expect(res.body, k).not.toHaveProperty(k);
+    }
+    // SIG-SEC-03 — the response is an ALLOW-LIST now. sign_id is withheld:
+    // the participant already holds it in their own URL, and echoing internal
+    // identifiers back over an unauthenticated link is what leaked
+    // proceeded_by and proceed_reason. The document still arrives.
+    expect(res.body.sign_id).toBeUndefined();
   });
 
   // Phase 6.5 hardening (structural remediation, Prompt 12 — Signature

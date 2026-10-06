@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { isGrievanceCase } from '../../lib/caseStage';
-import { isTerminalStatus, isConfirmationSettled, isExpired, signatureStatusLabel } from '../../lib/eSignature';
-import { confirmationSemantics, provenanceLine } from '../../lib/confirmationSemantics';
+import { isTerminalStatus, isConfirmationSettled, isExpired, signatureStatusLabel, EXTERNAL_SIGNATURE_STATUS } from '../../lib/eSignature';
+import { confirmationSemantics, confirmationSemanticsFor, provenanceLine } from '../../lib/confirmationSemantics';
 import { canIssueFirstConfirmation } from '../../lib/meetingIdentity';
 import { meetingRecordState, meetingsSummary } from '../../lib/meetingRecordState';
 import { requestManualSignatureConfirmation } from '../../lib/humanOverride';
@@ -52,7 +52,7 @@ const SUGGESTION_LABEL = {
 // Investigation meetings list (their natural narrative position, and
 // disciplinary-only — a grievance case never shows them) rather than
 // moving to Outcome, which is specifically about the decision itself.
-export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, onPresentMeetingRecord, showToast, meetingTypes, fmtDate, attemptSubmitInvestigation, concludingInvestigation, investigationReportDraft, setShowHandoffModal, setLetterOutput, onAcceptSavedSuggestion, onDismissSavedSuggestion, promptDialog, audit, loadSignedSnapshot, loadRequestHistory, proceedWithoutConfirmation, onResendReminder }) {
+export function MeetingsTab({ cs, cases, saveCases, currentUser, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, onPresentMeetingRecord, showToast, meetingTypes, fmtDate, attemptSubmitInvestigation, concludingInvestigation, investigationReportDraft, setShowHandoffModal, setLetterOutput, onAcceptSavedSuggestion, onDismissSavedSuggestion, promptDialog, audit, loadSignedSnapshot, loadRequestHistory, proceedWithoutConfirmation, onResendReminder }) {
   const grievance = isGrievanceCase(cs);
   const meetings = cs.meetings||[];
   // Human UAT remediation, Batch 2, Part 9 — see SignedRecordModal's own
@@ -82,7 +82,25 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
   const markMeetingSigned = async m => {
     const ok = await requestManualSignatureConfirmation(promptDialog, audit, { itemLabel: `${m.type||"Meeting"} record — ${fmtDate(m.date)}`, caseId: cs.id });
     if(!ok) return;
-    saveCases(cases.map(x=>x.id===cs.id?{...x,meetings:x.meetings.map(mt=>mt.id===m.id?{...mt,signStatus:"signed"}:mt)}:x));
+    // ── SIG-SEC-06 — "SIGNED OUTSIDE COMPASS" IS ITS OWN STATE ───────────
+    //
+    // This wrote signStatus:"signed", which is the value Compass uses for a
+    // signature IT CAPTURED. So a paper signature recorded by a manager became
+    // indistinguishable from one the employee drew on the signing page — and,
+    // because `signed` carries provenanceKind SIGNED, the UI offered to show a
+    // signature image that does not exist.
+    //
+    // The capability stays: people really do sign paper. What goes is the claim
+    // to Compass's own evidence. EXTERNAL_SIGNATURE_STATUS settles progression
+    // exactly as `signed` does, renders "Signed outside Compass — recorded by
+    // <manager>", and never offers a signature image. signing_requests is NOT
+    // touched, so the authoritative request keeps saying what the participant
+    // actually did through Compass: nothing.
+    saveCases(cases.map(x=>x.id===cs.id?{...x,meetings:x.meetings.map(mt=>mt.id===m.id?{...mt,
+      signStatus: EXTERNAL_SIGNATURE_STATUS,
+      externalSignatureRecordedBy: currentUser?.name || null,
+      externalSignatureRecordedAt: new Date().toISOString(),
+    }:mt)}:x));
   };
   const invMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("investigation")).sort((a,b)=>new Date(b.date)-new Date(a.date));
   const discMeetings = meetings.filter(m=>(m.type||"").toLowerCase().includes("disciplinary")).sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -179,7 +197,10 @@ export function MeetingsTab({ cs, cases, saveCases, activeCaseStage, setActiveCa
   const MeetingRow = ({m}) => {
     // Computed once per row. One canonical source for every label below, so a
     // status can never pick up a different meaning in two places.
-    const sem = confirmationSemantics(m.signStatus);
+    // TRUST-SIG-02 — semantics that REFUSE to say a record reached the employee
+    // when Compass has no evidence that it did. The meeting mirror carries the
+    // communication evidence, so this needs no extra fetch.
+    const sem = confirmationSemanticsFor(m.signStatus, m);
     const agreed = sem.impliesAgreement;
     return (
     <div style={{padding:"12px 0",borderBottom:"1px solid #F0F1F7"}}>

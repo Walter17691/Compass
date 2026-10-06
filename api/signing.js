@@ -3,6 +3,8 @@ import { requireOrgMembership } from './_auth.js';
 import { escapeHtml as esc } from './_html.js';
 import { checkRateLimit } from './_rateLimit.js';
 import { computeExpiresAt, isExpired, isTerminalStatus, isParticipantResponse, isPastPublicViewWindow, documentTypeLabel } from '../src/lib/eSignature.js';
+import { assessParticipantResponse, participantResponsePatch, ACTIONABLE_FILTER, RESPONSE_REFUSAL } from '../src/lib/participantResponse.js';
+import { publicSigningView, restrictedSigningView } from '../src/lib/publicSigningView.js';
 
 // signing_requests has zero client-facing RLS policies by design (same
 // pattern as employee_portal_accounts) — the signer isn't a logged-in
@@ -30,8 +32,12 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   if (req.method === 'POST') {
-    const { document, employeeEmail, employeeName, managerName, managerEmail, meetingType, meetingDate, documentType, requiresSignature, signature, acknowledged, declined, declineReason, signedAt, disputed, participantComment, proceed, proceedReason, meetingId } = req.body;
+    const { document, employeeEmail, employeeName, managerName, managerEmail, meetingType, meetingDate, documentType, requiresSignature, signature, acknowledged, declined, declineReason, disputed, participantComment, proceed, proceedReason, meetingId } = req.body;
     const signId = req.body.signId;
+    // NOTE: req.body.signedAt is deliberately NOT destructured. SIG-SEC-05 — the
+    // holder of a signing link used to choose the evidential timestamp on their
+    // own signature. Participant times are now server-derived in
+    // participantResponsePatch, and a body value is ignored rather than trusted.
 
     try {
       if (signature || acknowledged || declined || disputed) {
@@ -54,21 +60,17 @@ export default async function handler(req, res) {
         // arbitrary managerEmail from Compass's own verified sending domain.
         const existingRes = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}&select=*`);
         const [existing] = await existingRes.json();
-        if (!existing) return res.status(404).json({ error: 'Signing request not found' });
-        if (isTerminalStatus(existing.status)) return res.status(409).json({ error: 'This document has already been actioned' });
-        // Slice 1b — a SUPERSEDED request can no longer be actioned. Before this,
-        // an older link stayed live and signable, and because the client polls
-        // only meetings[].signId that response would never have appeared in
-        // Compass: a real participant action, invisible to the case.
-        //
-        // The message is neutral and names no replacement token.
-        if (existing.superseded_at) {
-          return res.status(409).json({
-            error: 'This version has been replaced by a newer record. Please use the most recent request you received.',
-            superseded: true,
+        // Trust Slice 2A — ONE authority, shared with api/portal/_signatures.js.
+        // These four conditions were inline here and only PARTLY inline there,
+        // which is how the portal ended up able to sign a SUPERSEDED request
+        // (SIG-SEC-01, HIGH). The refusal names no replacement token.
+        const verdict = assessParticipantResponse(existing);
+        if (!verdict.ok) {
+          return res.status(verdict.httpStatus).json({
+            error: verdict.error,
+            ...(verdict.refusal === RESPONSE_REFUSAL.SUPERSEDED ? { superseded: true } : {}),
           });
         }
-        if (isExpired(existing.expires_at)) return res.status(409).json({ error: 'This signing link has expired' });
 
         // Pre-V1 Trust Slice — `disputed` joins the outcomes. It is a RESPONSE,
         // not agreement: the participant received the record and disagrees with
@@ -96,24 +98,19 @@ export default async function handler(req, res) {
         // locking: only the request that genuinely observes the row still
         // pending can ever apply its patch, and a loser gets a real,
         // honest 409 instead of silently corrupting the record.
-        const patch = outcome === 'declined'
-          ? { status: 'declined', declined_at: signedAt, decline_reason: declineReason || '' }
-          : outcome === 'disputed'
-            // No signature and no signed_at: nothing was agreed. The response
-            // time is recorded as the comment time, which is the only thing that
-            // actually happened.
-            ? { status: 'disputed' }
-            : { status: outcome, signature: signature || null, signed_at: signedAt };
-        if (commentText) {
-          patch.participant_comment = commentText;
-          patch.participant_comment_at = signedAt || new Date().toISOString();
-        }
+        // SIG-SEC-05 — the evidential timestamp is SERVER-derived. `signedAt`
+        // arrived in this anonymous body, so the holder of a link chose the time
+        // on their own signature and a backdated value was accepted without
+        // question. The body value is now ignored entirely.
+        const patch = participantResponsePatch(outcome, {
+          signature, declineReason, comment: commentText,
+        });
         // A dispute with no words is not a dispute anybody can act on.
         if (outcome === 'disputed' && !commentText) {
           return res.status(400).json({ error: 'Please say what you disagree with before submitting.' });
         }
 
-        const r = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}&status=in.(sent,opened)&superseded_at=is.null`, {
+        const r = await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}&${ACTIONABLE_FILTER}`, {
           method: 'PATCH',
           headers: { 'Prefer': 'return=representation' },
           body: JSON.stringify(patch)
@@ -411,7 +408,7 @@ export default async function handler(req, res) {
       // generous window for the signer to revisit and download their own
       // copy now gets status only, not the underlying content.
       if (!isInternalStatusCheck && isTerminalStatus(existing.status) && isPastPublicViewWindow(existing)) {
-        return res.status(200).json({ status: existing.status, restricted: true });
+        return res.status(200).json(restrictedSigningView(existing));
       }
 
       // superseded_by_sign_id IS the successor's signing token. An authenticated
@@ -419,12 +416,14 @@ export default async function handler(req, res) {
       // org); an anonymous link holder must never, or an old email would become
       // a route to the current document.
       if (!isInternalStatusCheck) {
-        const publicView = { ...existing, superseded: !!existing.superseded_at };
-        // Removed rather than destructured-away, so the intent reads as a
-        // deliberate withholding rather than two unused bindings.
-        delete publicView.superseded_by_sign_id;   // the successor's TOKEN
-        delete publicView.superseded_by;           // an internal actor id
-        return res.status(200).json(publicView);
+        // SIG-SEC-03 — an explicit ALLOW-LIST, built UP from what
+        // public/sign.html actually reads. Spreading the row and deleting two
+        // keys sent org_id, manager_email, meeting_id, proceeded_by (an internal
+        // auth.users id) and proceed_reason (the manager's own reasoning for
+        // proceeding WITHOUT this person) to the link holder — and made every
+        // future column public by default. Four were added in the two slices
+        // before this one.
+        return res.status(200).json(publicSigningView(existing));
       }
       return res.status(200).json(existing);
     } catch(e) {

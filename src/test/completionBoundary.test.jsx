@@ -274,7 +274,11 @@ describe('2/8/14. the action boundary, independent of the button', () => {
     const i = appCode.indexOf('const sendForSignature = async (employeeEmail)');
     const body = appCode.slice(i, appCode.indexOf('\n  };', i));
     expect(body).toContain('allowedFrom: [MEETING_STATUS.COMPLETED], toStatus: MEETING_STATUS.COMPLETED,');
-    expect(body).toContain("patch: { signId, signStatus: \"sent\" }");
+    // The patch now also carries the real send outcome (TRUST-SIG-02), so it is
+    // asserted by its parts. What matters here is unchanged: signature attaches
+    // signing state to an ALREADY completed meeting and can never complete one.
+    expect(body).toContain('patch: { signId, signStatus: "sent"');
+    expect(body).toContain('sendAcceptedAt: success ?');
     expect(body).not.toContain('MEETING_STATUS.REVIEW_DRAFT');
     // and it never re-enters the save, which would append a duplicate now that
     // caseInfo.meetingId has been cleared

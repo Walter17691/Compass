@@ -1,4 +1,6 @@
 import { requireCaseAccess, verifyOutcomeApproved, verifyAppealDecisionRecorded } from './_auth.js';
+import { supabaseRequest } from './_supabase.js';
+import { sendAttemptPatch, sendOutcomePatch } from '../src/lib/communicationEvidence.js';
 import { checkRateLimit } from './_rateLimit.js';
 import { escapeHtml as esc } from './_html.js';
 import { documentTypeLabel } from '../src/lib/eSignature.js';
@@ -83,6 +85,30 @@ export default async function handler(req, res) {
   const label = documentTypeLabel(documentType).toLowerCase();
   const action = requiresSignature === false ? 'acknowledge' : 'sign';
 
+  // ── COMMUNICATION EVIDENCE (TRUST-SIG-02) ────────────────────────────────
+  //
+  // Before this, the row was written with status 'sent' by api/signing.js at
+  // INSERT time and this handler persisted NOTHING — so a request that was
+  // never emailed was indistinguishable from one that was, and the UI said
+  // "Sent for confirmation" either way.
+  //
+  // The attempt is recorded BEFORE the provider call, so a crash mid-flight
+  // still leaves "attempted, outcome unknown" rather than silence. signId is
+  // optional on some legacy callers; where it is absent nothing is recorded,
+  // which is honest — there is no request to record it against.
+  const recordEvidence = async (patch) => {
+    if (!signId) return;
+    try {
+      await supabaseRequest(`signing_requests?sign_id=eq.${encodeURIComponent(signId)}`, {
+        method: 'PATCH', body: JSON.stringify(patch),
+      });
+    } catch (e) {
+      // Evidence-keeping must never break the send itself.
+      console.error('send evidence not recorded:', e.message);
+    }
+  };
+  await recordEvidence(sendAttemptPatch());
+
   try {
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -106,8 +132,15 @@ export default async function handler(req, res) {
 
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || 'Failed to send');
-    res.status(200).json({ success: true });
+    // PROVIDER ACCEPTANCE — the strongest claim Compass is entitled to make.
+    // Resend taking the message says nothing about the recipient's mail server,
+    // so there is no delivered_at here and no column to put one in.
+    await recordEvidence(sendOutcomePatch({ accepted: true, providerMessageId: data?.id || null }));
+    res.status(200).json({ success: true, providerMessageId: data?.id || null });
   } catch (error) {
+    // The failure is persisted, so the request stops claiming it was sent and
+    // the manager can be told why. A retry that succeeds clears this.
+    await recordEvidence(sendOutcomePatch({ accepted: false, error: error.message }));
     res.status(500).json({ error: error.message });
   }
 }

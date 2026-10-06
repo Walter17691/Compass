@@ -1,3 +1,4 @@
+import { participantResponsePatch } from '../lib/participantResponse.js';
 import { describe, it, expect } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { readFileSync } from 'fs';
@@ -203,9 +204,15 @@ describe('a participant can disagree without their words replacing the record', 
 
   it('a dispute writes no signature and no signed_at — nothing was agreed', () => {
     const api = stripJs(readFileSync('api/signing.js', 'utf8'));
-    const block = api.slice(api.indexOf("? { status: 'disputed' }") - 400, api.indexOf("? { status: 'disputed' }") + 60);
-    expect(block).toContain("{ status: 'disputed' }");
-    expect(block).not.toMatch(/disputed'\s*,\s*signature/);
+    // The patch moved into ONE shared builder so the portal cannot diverge
+    // (SIG-SEC-01/02). The invariant is asserted on the builder's OUTPUT, which
+    // is stronger than asserting on its source text.
+    expect(api).toContain('participantResponsePatch(');
+    const p = participantResponsePatch('disputed', { comment: 'the dates are wrong' });
+    expect(p.status).toBe('disputed');
+    expect(p).not.toHaveProperty('signature');
+    expect(p).not.toHaveProperty('signed_at');
+    expect(p.participant_comment).toBe('the dates are wrong');
   });
 
   it('the comment never travels in the manager notification email', () => {

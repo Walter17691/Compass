@@ -299,7 +299,7 @@ describe('MeetingsTab — e-signature status badges (Phase 5, IP27)', () => {
   // requestManualSignatureConfirmation (humanOverride.js), which itself
   // has its own full test coverage — these just prove MeetingsTab wires
   // the confirm/cancel outcome through to saveCases/audit correctly.
-  it('clicking "Mark signed" saves the meeting with signStatus "signed" once the confirmation is given', async () => {
+  it('clicking "Mark signed" records it as SIGNED OUTSIDE COMPASS, not as a captured signature', async () => {
     const user = userEvent.setup();
     const saveCases = vi.fn();
     const audit = vi.fn();
@@ -308,7 +308,7 @@ describe('MeetingsTab — e-signature status badges (Phase 5, IP27)', () => {
     render(<MeetingsTab {...baseProps} cs={cs} cases={[cs]} saveCases={saveCases} promptDialog={promptDialog} audit={audit} />);
     await user.click(screen.getByRole('button', { name: 'Mark signed' }));
     const [savedCases] = saveCases.mock.calls[0];
-    expect(savedCases[0].meetings[0].signStatus).toBe('signed');
+    expect(savedCases[0].meetings[0].signStatus).toBe('signed_externally');
     expect(audit).toHaveBeenCalledWith('Marked signed outside Compass', expect.stringContaining('Signed paper copy handed to HR on 12 March 2026'), cs.id);
   });
 

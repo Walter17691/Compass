@@ -1,4 +1,5 @@
-import { ESIGNATURE_STATUS, LEGACY_PENDING_STATUS } from './eSignature';
+import { ESIGNATURE_STATUS, LEGACY_PENDING_STATUS, EXTERNAL_SIGNATURE_STATUS } from './eSignature';
+import { communicationEvidence, COMMUNICATION } from './communicationEvidence';
 
 // ─────────────────────────────────────────────────────────────────────────
 // WHAT EACH CONFIRMATION STATE MEANS TO A HUMAN — ONE EXHAUSTIVE MAP.
@@ -34,6 +35,11 @@ export const PROVENANCE_KIND = Object.freeze({
   RECEIPT: 'receipt',
   ISSUED: 'issued',
   DECISION: 'decision',
+  // SIG-SEC-06. A genuine signature that Compass did not capture — a signed
+  // paper copy, recorded by a named manager with an explanation. It confirms
+  // the same thing a captured signature confirms, but Compass holds no
+  // signature image and must never render one, so it cannot share SIGNED.
+  EXTERNAL: 'external',
 });
 
 const entry = (o) => Object.freeze(o);
@@ -46,6 +52,27 @@ export const CONFIRMATION_SEMANTICS = Object.freeze({
     provenanceKind: PROVENANCE_KIND.SIGNED,
     participantEngaged: true,
     impliesAgreement: true,
+    settlesProgression: true,
+    managerActionRequired: false,
+  }),
+  // ── SIGNED OUTSIDE COMPASS ───────────────────────────────────────────
+  //
+  // Human UAT review (SIG-SEC-06): "Mark signed" wrote signStatus:'signed' into
+  // cases.meetings[] while signing_requests stayed untouched, so a manually
+  // recorded paper signature became INDISTINGUISHABLE from one Compass
+  // captured — and, because `signed` carries provenanceKind SIGNED, the UI
+  // offered to show a signature image that does not exist.
+  //
+  // The capability is right and stays: people do sign paper. What was wrong was
+  // claiming Compass's own evidence for it. This is a separate, honest state
+  // with the same PROGRESS consequences and none of the same evidence claims.
+  [EXTERNAL_SIGNATURE_STATUS]: entry({
+    heading: 'Signed outside Compass',
+    viewLabel: 'View issued record',
+    stateLine: 'Signed outside Compass',
+    provenanceKind: PROVENANCE_KIND.EXTERNAL,
+    participantEngaged: true,
+    impliesAgreement: false,
     settlesProgression: true,
     managerActionRequired: false,
   }),
@@ -160,6 +187,48 @@ export function confirmationSemantics(status) {
 }
 
 /**
+ * The same semantics, but refusing to claim a record reached the participant
+ * when Compass has no evidence that it did (TRUST-SIG-02).
+ *
+ * Only the two AWAITING states are affected — `sent` and `opened` are the only
+ * ones whose wording asserts a successful send. `opened` is left alone when
+ * evidence is UNKNOWN, because an actual page open is its own proof that the
+ * link arrived; it is only downgraded on a recorded FAILURE, which would mean
+ * the row contradicts itself.
+ *
+ * Everything the participant actually DID keeps its own wording. A signature is
+ * a signature however the link got there.
+ */
+export function confirmationSemanticsFor(status, request) {
+  const base = confirmationSemantics(status);
+  if (base.provenanceKind !== PROVENANCE_KIND.ISSUED) return base;
+  if (status !== ESIGNATURE_STATUS.SENT && status !== ESIGNATURE_STATUS.OPENED) return base;
+  const evidence = communicationEvidence(request);
+  if (evidence === COMMUNICATION.ACCEPTED) return base;
+  if (status === ESIGNATURE_STATUS.OPENED && evidence !== COMMUNICATION.FAILED) return base;
+  if (evidence === COMMUNICATION.FAILED) {
+    return Object.freeze({
+      ...base,
+      heading: 'Record prepared — could not be emailed',
+      stateLine: 'Could not be emailed',
+      managerActionRequired: true,
+      settlesProgression: false,
+    });
+  }
+  // NOT_ATTEMPTED, ATTEMPTED, or UNKNOWN: issued, but Compass cannot say it
+  // arrived. "Prepared" is the honest word.
+  return Object.freeze({
+    ...base,
+    heading: 'Record prepared — not confirmed as sent',
+    stateLine: evidence === COMMUNICATION.UNKNOWN
+      ? 'Issued — Compass has no record of it being emailed'
+      : 'Prepared — not yet confirmed as emailed',
+    managerActionRequired: true,
+    settlesProgression: false,
+  });
+}
+
+/**
  * The provenance sentence. The ONLY path to signature wording is
  * PROVENANCE_KIND.SIGNED, which only `signed` carries.
  */
@@ -172,6 +241,10 @@ export function provenanceLine(status, { name, at, fmtDate } = {}) {
       return `Signed by${who || ' the participant'}${when}`;
     case PROVENANCE_KIND.RECEIPT:
       return `Acknowledged receipt by${who || ' the participant'}${when}`;
+    case PROVENANCE_KIND.EXTERNAL:
+      // Names the MANAGER who recorded it, never the participant, and never
+      // the word "signature image" — Compass has none.
+      return `Signed outside Compass — recorded by${who || ' a manager'}${when}`;
     case PROVENANCE_KIND.DECISION:
       // Deliberately says nothing about the participant. The manager's decision
       // is rendered separately by the caller, from proceed_* provenance.
