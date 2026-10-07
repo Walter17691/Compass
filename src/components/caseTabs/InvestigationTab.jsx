@@ -3,6 +3,7 @@ import { hasInvestigationStage } from '../../lib/caseWorkspace';
 import { meetingStateChips } from '../../lib/meetingRecordState';
 import { isGenuineMeeting } from '../../lib/meetingLifecycle';
 import { COLOR, TYPE, RADIUS } from '../../styles/tokens';
+import { MDRenderer } from '../MDRenderer';
 
 // ─────────────────────────────────────────────────────────────────────────
 // WAVE B.2 corrective — the investigation, as one stage.
@@ -137,8 +138,20 @@ export function InvestigationTab({
               <div style={{...TYPE.metadata,color:COLOR.inkQuiet,marginBottom:6}}>
                 Investigation report{cs.investigationReportDate && fmtDate ? ` · ${fmtDate(cs.investigationReportDate)}` : ""}
               </div>
-              <div style={{...TYPE.rowContext,color:COLOR.ink,whiteSpace:"pre-wrap",lineHeight:1.6,maxHeight:260,overflow:"auto"}}>
-                {cs.investigationReport}
+              {/* IR-0 presentation fix — the report is structured Markdown
+                  (## PART 1, ###, ---), and this panel rendered it RAW in a
+                  pre-wrap div, so "## Executive Summary" and "---" were visible
+                  as control syntax in production. MDRenderer already exists for
+                  exactly this document — its own header comment says it was
+                  written for "an investigation report's PART 1/2/3 structure" —
+                  and LetterScreen already uses it for the same text. This makes
+                  the two surfaces agree. Presentation only: the persisted text is
+                  untouched, and MDRenderer uses no innerHTML, so model output
+                  stays escaped React text. */}
+              <div style={{maxHeight:260,overflow:"auto"}}>
+                <MDRenderer text={cs.investigationReport}
+                  font={TYPE.rowContext.fontFamily} ink={COLOR.ink}
+                  accent={COLOR.purple} rule={COLOR.border}/>
               </div>
               {onOpenDocuments && (
                 <button type="button" onClick={onOpenDocuments}
