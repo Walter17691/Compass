@@ -73,8 +73,9 @@ import { canAnalyseEvidence, buildAnalysisContent } from './lib/documentIngestio
 import { OH_REPORT_SYSTEM_PROMPT, buildOhFindings, ohFindingTaskName } from './lib/ohReportIntelligence';
 import { isTerminalStatus, isExpired, signatureStatusLabel } from './lib/eSignature';
 import { hasBeenIssued, confirmationSemantics } from './lib/confirmationSemantics';
-import { resolutionLabel, RESPONSE_TYPE, awaitsEmployerReview } from './lib/employeeResponse';
+import { resolutionLabel, RESPONSE_TYPE } from './lib/employeeResponse';
 import { mirrorResolutionOntoMeeting } from './lib/resolutionMirror';
+import { syncCandidates, signatureSyncKey } from './lib/signatureSync';
 import { parseCommitmentDueDate, suggestTaskOwner } from './lib/taskDueDateParsing';
 import { derivePeopleForCase } from './lib/casePeople';
 import { matchCaseByEmployeeName, matchCaseByEmployeeNameWithConfidence } from './lib/globalAssistant';
@@ -3924,18 +3925,22 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // (was originally right after the URL-sync effect, much earlier in this
   // file) purely because it calls audit() below, which must be declared
   // first — no behavioural change, same deps, same body.
+  //
+  // Derived on every render, deliberately NOT memoised. It is a short string over
+  // the active case's meetings, and useMemo here bought nothing while tripping
+  // react-hooks/preserve-manual-memoization. What matters is the VALUE: it only
+  // moves when a fact the signature sync acts on moves, which is what makes it
+  // safe as a dependency where `cases` itself was not.
+  const signatureSyncCandidatesKey = signatureSyncKey(
+    cases.find(c => c.id === activeCaseId)?.meetings,
+  );
+
   useEffect(() => {
     if (screen !== SCREENS.CASE_VIEW || !activeCaseId) return;
     const cs = cases.find(c => c.id === activeCaseId);
-    // A request is re-read while the PARTICIPANT might still act (non-terminal),
-    // and now also while an EMPLOYER review might have landed elsewhere. The
-    // second case is not hypothetical: a dispute is signed, `signed` is terminal,
-    // so without this clause a resolution recorded in another tab — or by another
-    // manager, or in a session whose mirror write lost an updated_at race — could
-    // never reach this client. It is the normal sync path doing what it exists
-    // for, which is why no backfill is needed to heal an already-stale mirror.
-    const pending = (cs?.meetings || []).filter(m => m.signId
-      && (!isTerminalStatus(m.signStatus) || awaitsEmployerReview(m)));
+    // ONE definition of "worth re-reading", shared with the key below so the
+    // gate and the trigger can never disagree — see lib/signatureSync.js.
+    const pending = syncCandidates(cs?.meetings);
     if (!pending.length) return;
     let cancelled = false;
     (async () => {
@@ -4054,11 +4059,24 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       });
     })();
     return () => { cancelled = true; };
-    // cases/saveCases deliberately excluded — this should check once per
-    // case-view visit, not re-run on every unrelated case-data change
-    // (which would refire the check mid-edit and spam the signing API).
+    // ── WHY THE KEY, AND WHY STILL NOT `cases` (TRUST-SIG-05) ──────────────
+    //
+    // `cases` is still excluded, for the original and correct reason: re-running
+    // on every unrelated case-data change refires this mid-edit and spams the
+    // signing API. But excluding it alone meant the effect could never see data
+    // that arrived AFTER it first ran — and on a hard refresh that is always,
+    // because screen/activeCaseId are restored synchronously from the URL while
+    // cases load asynchronously. The effect gave up at `!pending.length` before
+    // the case existed and never looked again. Human UAT caught it: a dispute
+    // resolved in signing_requests kept rendering "Signed — notes disputed".
+    //
+    // signatureSyncCandidatesKey is a string over ONLY the facts this effect
+    // reads and writes. It moves from "" to a real value the moment the case
+    // lands, which re-runs this once; a manager editing the record leaves it
+    // identical, so none of the churn the original author excluded `cases` to
+    // avoid comes back. saveCases is still excluded as before.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, activeCaseId]);
+  }, [screen, activeCaseId, signatureSyncCandidatesKey]);
 
   // Process Intelligence (P1) — thin App-level wrapper binding
   // requestOverride to this component's own promptDialog/audit closures.

@@ -9,6 +9,7 @@ import {
 import { confirmationSemanticsFor, TONE } from '../lib/confirmationSemantics.js';
 import { computeInvestigationQualityGaps } from '../lib/investigationQuality.js';
 import { mirrorResolutionOntoMeeting, resolutionMirrorFields } from '../lib/resolutionMirror.js';
+import { syncCandidates } from '../lib/signatureSync.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // TRUST-SIG FINALISATION — A REVIEWED DISPUTE MUST STOP LOOKING UNRESOLVED.
@@ -274,10 +275,19 @@ describe('D. the resolution survives persistence and reload', () => {
     expect(body).not.toMatch(/responseResolution:\s*resolution\b/);
   });
 
-  it('the signature sync re-reads a signed request whose dispute still looks unresolved', () => {
-    // This is what makes an ALREADY-STALE mirror heal itself through a normal
-    // app path, instead of needing a one-off production backfill.
-    expect(app).toMatch(/!isTerminalStatus\(m\.signStatus\) \|\| awaitsEmployerReview\(m\)/);
+  it('EXECUTED: the signature sync re-reads a signed request whose dispute still looks unresolved', () => {
+    // What makes an ALREADY-STALE mirror heal through a normal app path. The rule
+    // moved into lib/signatureSync.js in TRUST-SIG-05, so it is tested by running
+    // it rather than by matching App's source — which is also how the previous
+    // version of this assertion managed to pass while the path was broken.
+    const stale = disputedMeeting();
+    expect(syncCandidates([stale])).toHaveLength(1);
+    // A settled, undisputed request is not re-read.
+    expect(syncCandidates([{ ...stale, responseType: null, participantComment: null }])).toHaveLength(0);
+    // Neither is one already resolved.
+    expect(syncCandidates([resolvedMeeting(RESOLUTION.PARTIALLY_ACCEPTED)])).toHaveLength(0);
+    // And the effect is actually wired to it.
+    expect(app).toMatch(/const pending = syncCandidates\(cs\?\.meetings\);/);
   });
 
   it('a refresh that is not a status transition cannot duplicate audit history', () => {
