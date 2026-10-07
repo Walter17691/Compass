@@ -50,11 +50,15 @@ const read = (p) => fs.readFileSync(path.resolve(__dirname, '..', '..', p), 'utf
  * assertion that was really matching its own explanatory comment. It asserts the
  * strip DID something, so "nothing to strip" can never be mistaken for proof.
  */
-function codeOnly(text) {
-  const out = text
+function stripComments(text) {
+  return text
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^\s*\/\/.*$/gm, '')
     .replace(/^\s*--.*$/gm, '');   // SQL files comment with --, not //
+}
+
+function codeOnly(text) {
+  const out = stripComments(text);
   expect(out.length).toBeLessThan(text.length);
   return out;
 }
@@ -275,17 +279,46 @@ describe('the employer resolution', () => {
     expect(joined).not.toMatch(/dismiss|ignore|delete|reject/);
   });
 
-  it('requires a reason for everything except a straightforward full acceptance', () => {
-    expect(resolutionNeedsReason(RESOLUTION.CORRECTION_ACCEPTED)).toBe(false);
-    expect(resolutionNeedsReason(RESOLUTION.PARTIALLY_ACCEPTED)).toBe(true);
-    expect(resolutionNeedsReason(RESOLUTION.ORIGINAL_RETAINED)).toBe(true);
-    expect(resolutionNeedsReason(RESOLUTION.ADDENDUM_ADDED)).toBe(true);
+  it('requires a written rationale for ALL FOUR, trimmed', () => {
+    // TRUST-SIG-03 exempted a full acceptance. The UAT brief asked for a
+    // non-empty, trimmed rationale on any recorded resolution, so the exemption
+    // was withdrawn — a stricter gate, and the stricter one is right: "we
+    // accepted it" with no sentence is the case a later reader can least
+    // reconstruct.
+    for (const r of RESOLUTIONS) expect(resolutionNeedsReason(r)).toBe(true);
+    expect(resolutionNeedsReason('made_it_go_away')).toBe(false);
 
-    expect(validateResolution({ resolution: RESOLUTION.ORIGINAL_RETAINED, reason: '  ' }).ok).toBe(false);
-    expect(validateResolution({ resolution: RESOLUTION.ORIGINAL_RETAINED, reason: 'The audio recording supports the record as written.' }).ok).toBe(true);
-    expect(validateResolution({ resolution: RESOLUTION.CORRECTION_ACCEPTED }).ok).toBe(true);
+    for (const r of RESOLUTIONS) {
+      expect(validateResolution({ resolution: r, reason: '   ', addendum: 'a' }).ok).toBe(false);
+      expect(validateResolution({ resolution: r, reason: '', addendum: 'a' }).ok).toBe(false);
+      expect(validateResolution({ resolution: r, reason: 'A considered reason.', addendum: 'a' }).ok).toBe(true);
+    }
     expect(validateResolution({ resolution: RESOLUTION.ADDENDUM_ADDED, reason: 'r', addendum: '' }).ok).toBe(false);
-    expect(validateResolution({ resolution: 'made_it_go_away' }).ok).toBe(false);
+    expect(validateResolution({ resolution: 'made_it_go_away', reason: 'r' }).ok).toBe(false);
+  });
+
+  it('trims the rationale and the addendum before they are stored', () => {
+    const patch = resolutionPatch({
+      resolution: RESOLUTION.PARTIALLY_ACCEPTED,
+      reason: '   Partly right.   ', addendum: '  Added wording.  ', actorId: 'u',
+    });
+    expect(patch.response_resolution_reason).toBe('Partly right.');
+    expect(patch.response_addendum).toBe('Added wording.');
+  });
+
+  it('partially accepted keeps WHY separate from WHAT IS ADOPTED', () => {
+    // The production UAT shape: the manager agrees on one point, keeps the rest,
+    // and the addendum is their OWN wording — never the employee's promoted to fact.
+    const employeeWording = 'It should record that responsibility was not established.';
+    const patch = resolutionPatch({
+      resolution: RESOLUTION.PARTIALLY_ACCEPTED,
+      reason: 'Sam is correct on responsibility; the rest of the record stands.',
+      addendum: 'It is recorded that responsibility was not established during this meeting.',
+      actorId: 'manager-uuid',
+    });
+    expect(patch.response_resolution_reason).not.toBe(patch.response_addendum);
+    expect(patch.response_addendum).not.toBe(employeeWording);
+    expect(patch).not.toHaveProperty('proposed_correction');
   });
 
   it('records actor and time on every conclusion, and never touches the record or the employee’s words', () => {
@@ -342,8 +375,41 @@ describe('the API boundary', () => {
     expect(block).toMatch(/requireOrgMembership\(req, res, resolveOrgId\)/);
     expect(block).toMatch(/row\.org_id !== resolveOrgId/);
     // Actor from the verified session, never the body.
-    expect(block).toMatch(/actorId: resolveAuth\.user\.id/);
     expect(block).not.toMatch(/actorId:\s*req\.body/);
+    // The actor VALUE is asserted by running the handler against the real
+    // requireOrgMembership — see api/signing.test.js. An assertion here could
+    // only ever match the string this file chose, and the previous version of
+    // this test did exactly that: it asserted /actorId: resolveAuth\.user\.id/
+    // and so PINNED a production TypeError in place. Removed, not relaxed.
+  });
+
+  it('nothing in api/ reads `.user.id` off an authority result — the contract is { caller, role }', () => {
+    // THE PRODUCTION FAILURE, as a structural invariant. requireOrgMembership,
+    // requireOrgRole and requireCaseAccess all return { caller, role }. One
+    // call site wrote `.user.id`, threw "Cannot read properties of undefined
+    // (reading 'id')", and 500'd the employer-review action. This makes the
+    // whole API surface answer for it, not just the line that got it wrong.
+    const root = path.resolve(__dirname, '..', '..', 'api');
+    const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) return walk(full);
+      return e.name.endsWith('.js') && !e.name.endsWith('.test.js') ? [full] : [];
+    });
+    const offenders = [];
+    for (const file of walk(root)) {
+      // stripComments, not codeOnly: plenty of these files have no comments at
+      // all, and for an absence check a strip that removes nothing can only
+      // make the test stricter — never give a false pass.
+      const code = stripComments(fs.readFileSync(file, 'utf8'));
+      for (const m of code.matchAll(/([A-Za-z_$][\w$]*)\.user\.id\b/g)) {
+        offenders.push(`${path.relative(root, file)}: ${m[0]}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+    // And the shape this is protecting is the real one.
+    const auth = stripComments(fs.readFileSync(path.join(root, '_auth.js'), 'utf8'));
+    expect(auth).toMatch(/return \{ caller, role: member\.role \}/);
+    expect(auth).not.toMatch(/return \{\s*user[,:]/);
   });
 
   it('resolution is applied only while still unresolved, so a replay cannot overwrite it', () => {
@@ -357,6 +423,41 @@ describe('the API boundary', () => {
     const from = api.indexOf('if (resolveResponse)');
     const block = api.slice(from, from + 2600);
     expect(block).toMatch(/!challengesAccuracy\(row\)/);
+  });
+
+  it('every key App sends is a key the handler actually reads', () => {
+    // THE SAME BUG CLASS AS THE PRODUCTION FAILURE, on the other boundary. The
+    // `.user.id` defect was two sides of a contract where each side had only
+    // ever been checked against itself. App builds this request body and the
+    // handler destructures it; nothing previously connected the two, so App
+    // could have sent `reason` while the handler read `resolutionReason` and
+    // every test on both sides would still have passed.
+    const app = codeOnly(read('src/App.jsx'));
+    const from = app.indexOf('resolveResponse: true');
+    expect(from).toBeGreaterThan(-1);
+    const sent = app.slice(app.lastIndexOf('JSON.stringify({', from), app.indexOf('}),', from));
+    const keys = [...sent.matchAll(/([A-Za-z_$][\w$]*)\s*:/g)].map((m) => m[1]);
+    expect(keys).toContain('resolveResponse');
+    expect(keys.length).toBeGreaterThanOrEqual(5);
+
+    // Everything the handler reads off the body, in any of the three forms it
+    // uses: the top-level destructure, a RENAMED destructure inside a branch
+    // (`const { orgId: resolveOrgId } = req.body`), and a direct `req.body.x`.
+    const readKeys = new Set();
+    for (const m of api.matchAll(/const\s*\{([^}]*)\}\s*=\s*req\.body/g)) {
+      for (const part of m[1].split(',')) {
+        const name = part.split(':')[0].trim();
+        if (name) readKeys.add(name);
+      }
+    }
+    for (const m of api.matchAll(/req\.body\.([A-Za-z_$][\w$]*)/g)) readKeys.add(m[1]);
+
+    for (const key of keys) {
+      expect(readKeys.has(key), `App sends "${key}" but api/signing.js never reads it`).toBe(true);
+    }
+    // The check has teeth: a key the handler genuinely ignores is not in the set.
+    expect(readKeys.has('signedAt')).toBe(false);   // SIG-SEC-05 — deliberately ignored
+    expect(readKeys.has('notAKeyAnywhere')).toBe(false);
   });
 
   it('resolving adds no serverless function — it is an action on the existing handler', () => {
@@ -514,12 +615,35 @@ describe('the review form', () => {
     expect(screen.getByRole('alert').textContent).toMatch(/Record why you have reached this conclusion/);
   });
 
-  it('accepts a correction in full with no reason, because none is owed', () => {
+  it('will not accept a correction in full without saying what was accepted', () => {
     const onSubmit = vi.fn();
     render(<ResponseReviewForm onSubmit={onSubmit} />);
     fireEvent.click(screen.getByLabelText(/Correction accepted/));
     fireEvent.click(screen.getByText('Record this conclusion'));
-    expect(onSubmit).toHaveBeenCalledWith({ resolution: RESOLUTION.CORRECTION_ACCEPTED, reason: '', addendum: '' });
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toMatch(/Record why you have reached this conclusion/);
+  });
+
+  it('submits all four once a rationale is given, trimmed', () => {
+    for (const [labelRe, resolution] of [
+      [/Correction accepted/, RESOLUTION.CORRECTION_ACCEPTED],
+      [/Partially accepted/, RESOLUTION.PARTIALLY_ACCEPTED],
+      [/Original record retained/, RESOLUTION.ORIGINAL_RETAINED],
+      [/Clarification added/, RESOLUTION.ADDENDUM_ADDED],
+    ]) {
+      const onSubmit = vi.fn();
+      const { unmount } = render(<ResponseReviewForm onSubmit={onSubmit} />);
+      fireEvent.click(screen.getByLabelText(labelRe));
+      fireEvent.change(screen.getByLabelText(/Why have you reached this conclusion\?/), { target: { value: '  A considered reason.  ' } });
+      if (resolution === RESOLUTION.ADDENDUM_ADDED) {
+        fireEvent.change(screen.getByLabelText(/clarification to add/i), { target: { value: '  Added wording.  ' } });
+      }
+      fireEvent.click(screen.getByText('Record this conclusion'));
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(onSubmit.mock.calls[0][0].resolution).toBe(resolution);
+      expect(onSubmit.mock.calls[0][0].reason).toBe('A considered reason.');
+      unmount();
+    }
   });
 
   it('asks for the addendum text only where one is being written', () => {

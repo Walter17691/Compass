@@ -94,13 +94,23 @@ export const RESOLUTIONS = Object.freeze(Object.values(RESOLUTION));
 /**
  * Which resolutions must carry a written explanation?
  *
- * Everything except a straightforward full acceptance. Accepting in full needs
- * no justification — the employee said what was wrong and the employer agreed —
- * but it still records WHO and WHEN, because a change to the authoritative
- * reading of a meeting record must always be attributable.
+ * ALL OF THEM. TRUST-SIG-03 originally carved out a straightforward full
+ * acceptance on the reasoning that agreeing with the employee needs no
+ * justification. The UAT brief then asked, under VALIDATION, that a manager
+ * rationale be non-empty and trimmed for a RECORDED RESOLUTION — no exception —
+ * and the stricter rule is the right one: every resolution changes the
+ * authoritative reading of someone's employment record, and "we accepted it"
+ * without a sentence saying what was accepted is the one case where the reader a
+ * year later has the least to go on.
+ *
+ * The DB CHECK (signing_requests_resolution_complete) is still laxer here: it
+ * exempts correction_accepted. That is deliberate and safe — the constraint is a
+ * BACKSTOP, this is the gate, and the API is the only writer. Tightening the
+ * constraint to match would need a migration for no behavioural gain; it is
+ * noted rather than done.
  */
 export function resolutionNeedsReason(resolution) {
-  return RESOLUTIONS.includes(resolution) && resolution !== RESOLUTION.CORRECTION_ACCEPTED;
+  return RESOLUTIONS.includes(resolution);
 }
 
 /** Does this resolution produce employer-authored text attached to the record? */

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   RESOLUTION, RESOLUTIONS, RESOLUTION_LABEL,
-  resolutionNeedsReason, resolutionCarriesAddendum, validateResolution,
+  resolutionCarriesAddendum, validateResolution,
 } from '../lib/employeeResponse';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -14,8 +14,9 @@ import {
 // │                                                                         │
 // │ So this form offers exactly FOUR conclusions and no fifth. There is no    │
 // │ "dismiss", no "ignore", no delete. Every outcome is recorded, every       │
-// │ outcome names an actor and a time, and the only one that needs no         │
-// │ written explanation is the one where the employer simply agrees.         │
+// │ outcome names an actor and a time, and EVERY outcome needs a written      │
+// │ rationale — including a full acceptance, which earlier carried an         │
+// │ exception (see resolutionNeedsReason for why that was withdrawn).        │
 // └─────────────────────────────────────────────────────────────────────────┘
 //
 // IT WRITES NOTHING ITSELF. It collects an intention and hands it to the server,
@@ -37,14 +38,18 @@ const ORDER = [
 ];
 
 const HELP = Object.freeze({
-  [RESOLUTION.CORRECTION_ACCEPTED]: 'The employee is right. Their correction is adopted and added to the record.',
+  [RESOLUTION.CORRECTION_ACCEPTED]: 'The employee is right. Their correction is adopted and added to the record. Say what you accepted.',
   [RESOLUTION.PARTIALLY_ACCEPTED]: 'Some of it is adopted. Say which parts, and why the rest is not.',
   [RESOLUTION.ORIGINAL_RETAINED]: 'The record stands as written. Say why — the employee is entitled to know.',
   [RESOLUTION.ADDENDUM_ADDED]: 'Nothing in the record was wrong, but something is added for clarity.',
 });
 
 const ADDENDUM_LABEL = Object.freeze({
-  [RESOLUTION.CORRECTION_ACCEPTED]: 'The correction, as it will appear on the record (optional — leave blank to adopt their wording as written above)',
+  // This used to read "leave blank to adopt their wording as written above",
+  // which promised something the code deliberately does not do: a blank addendum
+  // stores NULL, it does not copy the employee's words into employer-authored
+  // record text. Saying otherwise invited exactly the promotion the brief forbids.
+  [RESOLUTION.CORRECTION_ACCEPTED]: 'The correction in your own words, as it will appear on the record (optional — their proposed wording stays on the record as their proposal either way)',
   [RESOLUTION.PARTIALLY_ACCEPTED]: 'What is added to the record (optional)',
   [RESOLUTION.ADDENDUM_ADDED]: 'The clarification to add to the record',
 });
@@ -66,7 +71,6 @@ export function ResponseReviewForm({ onSubmit, busy = false }) {
   const [addendum, setAddendum] = useState('');
   const [error, setError] = useState('');
 
-  const needsReason = resolutionNeedsReason(resolution);
   const takesAddendum = resolutionCarriesAddendum(resolution);
 
   function submit() {
@@ -116,7 +120,7 @@ export function ResponseReviewForm({ onSubmit, busy = false }) {
       {RESOLUTIONS.includes(resolution) && (
         <div style={{ marginBottom: 12 }}>
           <label htmlFor="resolution-reason" style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#1A1535', marginBottom: 6 }}>
-            {needsReason ? 'Why have you reached this conclusion?' : 'Anything you want to record about this decision (optional)'}
+            Why have you reached this conclusion?
           </label>
           <textarea
             id="resolution-reason" style={area} value={reason}

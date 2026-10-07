@@ -238,7 +238,12 @@ export default async function handler(req, res) {
             method: 'PATCH', headers: { 'Prefer': 'return=representation' },
             body: JSON.stringify(resolutionPatch({
               resolution, reason: resolutionReason, addendum: resolutionAddendum,
-              actorId: resolveAuth.user.id,
+              // requireOrgMembership returns { caller, role } — NOT { user }.
+              // This read was `resolveAuth.user.id`, which threw
+              // "Cannot read properties of undefined (reading 'id')" server-side
+              // and 500'd the whole action. Every other call site in this file and
+              // across api/ uses .caller.id, including proceeded_by below.
+              actorId: resolveAuth.caller.id,
             })),
           });
           if (!patchRes.ok) return res.status(500).json({ error: await patchRes.text() });
