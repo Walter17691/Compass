@@ -275,13 +275,19 @@ describe('IR-0.3 — completion and persistence must be true', () => {
     expect(conclude).toMatch(/const saved = await saveCases\(\s*\n?[\s\S]{0,260}?caseId\);/);
     const iSaved = conclude.indexOf('const saved = await saveCases');
     const iGuard = conclude.indexOf('if(!saved?.ok)');
-    const iAudit = conclude.indexOf('audit("Investigation report generated"');
-    const iToast = conclude.indexOf('showToast("Investigation report generated")');
     expect(iSaved).toBeGreaterThan(-1);
     expect(iGuard).toBeGreaterThan(iSaved);
-    // The audit and the toast come AFTER the persistence check, not before.
-    expect(iAudit).toBeGreaterThan(iGuard);
-    expect(iToast).toBeGreaterThan(iGuard);
+    // IR-0.2a moved the action string behind reportAuditAction(), because a
+    // replacement must not audit as a first generation. The INVARIANT is
+    // unchanged and is what this asserts: EVERY audit call and EVERY success
+    // toast comes after the persistence check. Asserting one literal string
+    // would have passed again the moment a second call site was added.
+    const auditCalls = [...conclude.matchAll(/\baudit\(/g)].map(m => m.index);
+    const successToasts = [...conclude.matchAll(/showToast\("Investigation report (generated|replaced)"\)/g)].map(m => m.index);
+    expect(auditCalls.length).toBeGreaterThan(0);
+    expect(successToasts.length).toBeGreaterThan(0);
+    for (const i of auditCalls) expect(i).toBeGreaterThan(iGuard);
+    for (const i of successToasts) expect(i).toBeGreaterThan(iGuard);
   });
 
   it('the report, its date and the stage are one case update — no partial write (wiring)', () => {

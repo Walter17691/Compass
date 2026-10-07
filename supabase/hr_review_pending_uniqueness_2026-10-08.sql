@@ -1,0 +1,124 @@
+-- ============================================================================
+-- ONE PENDING HR REVIEW PER CASE PER STEP — 2026-10-08  (IR-0.2a)
+-- ============================================================================
+-- HOW TO APPLY: paste into the Supabase SQL Editor and run, as ONE unit.
+--
+-- ADDITIVE ONLY. One partial unique index. No column, no constraint on existing
+-- data, no backfill, no policy change, no trigger change, and not one existing
+-- row is read, rewritten or reinterpreted.
+--
+-- ┌─ THE DEFECT THIS CLOSES ────────────────────────────────────────────────┐
+-- │ finalizeInvestigationSubmission() calls requestHrReview("inv_report", …),  │
+-- │ which is a plain INSERT with status 'pending' and no idempotency check:    │
+-- │                                                                         │
+-- │   supabase.from('hr_review_requests').insert({ …, status: 'pending' })     │
+-- │                                                                         │
+-- │ hr_review_requests carried only PRIMARY KEY (id) — no uniqueness at all.  │
+-- │ So REGENERATING an investigation report on a case that already had a      │
+-- │ pending submission created a SECOND pending request for the same gate.    │
+-- │ HR would see the same investigation queued for review twice, with no way  │
+-- │ to tell which was current.                                               │
+-- │                                                                         │
+-- │ Found during IR-0.2 pre-flight on the ZZ UAT case, which holds            │
+-- │ 0ac3bba6-3b6c-4071-bf1e-90329e57dbf5  inv_report/pending — so the next     │
+-- │ regeneration would have produced the duplicate. The human UAT was HELD    │
+-- │ rather than run, to avoid deliberately creating known-bad production      │
+-- │ state.                                                                   │
+-- └─────────────────────────────────────────────────────────────────────────┘
+--
+-- ┌─ WHY THE INDEX IS PARTIAL ON status = 'pending' ────────────────────────┐
+-- │ 'pending' is the ONLY status that means "awaiting HR". Every one of the    │
+-- │ six investigation review statuses is a TERMINAL HR action —               │
+-- │ approved · returned · clarification_requested · taken_over · closed ·     │
+-- │ progressed (src/lib/approvals.js) — and the outcome flow's vocabulary      │
+-- │ shares 'approved'. investigationReviewStatusLabel() defaults to           │
+-- │ "Awaiting HR review", which is the pending state.                        │
+-- │                                                                         │
+-- │ So the invariant Compass actually needs is about the CURRENT gate:        │
+-- │                                                                         │
+-- │   at most ONE pending request per (case_id, step)                        │
+-- │                                                                         │
+-- │ A unique index across ALL statuses would be WRONG, not merely stricter:   │
+-- │ it would permanently block the legitimate cycle                          │
+-- │                                                                         │
+-- │   submit -> pending -> HR returns it -> investigator revises -> resubmit   │
+-- │                                                                         │
+-- │ because the returned row would still occupy (case_id, step). Historical    │
+-- │ rows must stay, and a genuine resubmission must be able to create a new    │
+-- │ pending row once the previous one has left 'pending'.                     │
+-- │                                                                         │
+-- │ Verified against production: 0 duplicate pending groups, and 0 duplicate  │
+-- │ (case_id, step) groups at ANY status — so this index applies with no       │
+-- │ remediation and nothing to repair.                                       │
+-- └─────────────────────────────────────────────────────────────────────────┘
+--
+-- ┌─ WHY A DATABASE INVARIANT AND NOT ONLY APPLICATION CODE ────────────────┐
+-- │ The application check lands first and is what users experience (the       │
+-- │ existing request is reused, silently and successfully). But two           │
+-- │ simultaneous submissions — two tabs, a double-submit that outruns the      │
+-- │ in-flight guard, a retry — would both read "no pending request" and both  │
+-- │ insert. Only the database can serialise that. The index makes the second  │
+-- │ insert fail with 23505, which the client treats as "already pending"      │
+-- │ rather than an error.                                                     │
+-- │                                                                         │
+-- │ NO SECURITY DEFINER. No function, no trigger, no RPC, no policy change.   │
+-- │ Idempotency is obtained from a constraint, not from elevated privilege —  │
+-- │ the three existing RLS policies (insert_same_org, select_case_scoped,     │
+-- │ update_hr_only) and both triggers are untouched.                          │
+-- └─────────────────────────────────────────────────────────────────────────┘
+--
+-- PRE-MIGRATION BASELINE (production, read-only, immediately before applying):
+--
+--   hr_review_requests  139 rows across 3 orgs
+--     status: pending 119 · approved 20        (no other status has ever existed)
+--     step:   final_written_warning 86 · inv_report 35 · dismissal 18
+--     duplicate pending (case_id, step) groups:  0
+--     duplicate (case_id, step) groups, any status: 0
+--     indexes: hr_review_requests_pkey only
+--     RLS: enabled, 3 policies · triggers: 2
+--
+--   S1 md5(string_agg(id||':'||status, ',' order by id))
+--      = recorded in the IR-0.2a report   <- must be IDENTICAL afterwards
+--
+-- This migration writes no row, so S1 cannot change. If it does, something
+-- other than this migration ran.
+-- ============================================================================
+
+
+-- ── THE INVARIANT ──────────────────────────────────────────────────────────
+--
+-- Not CONCURRENTLY: 139 rows, and a plain create is instantaneous. Doing it
+-- non-concurrently also keeps this migration a single transactional unit, so a
+-- failure leaves nothing half-applied.
+drop index if exists public.hr_review_requests_one_pending_per_step;
+create unique index hr_review_requests_one_pending_per_step
+  on public.hr_review_requests (case_id, step)
+  where status = 'pending';
+
+comment on index public.hr_review_requests_one_pending_per_step is
+  'IR-0.2a. At most one PENDING review request per case per workflow step, so regenerating an investigation report cannot queue the same gate for HR twice. Partial on purpose: every other status is a terminal HR action, and a legitimate resubmission after a returned or clarified review must be able to create a new pending row. Historical rows are never blocked.';
+
+
+-- ============================================================================
+-- WHAT THIS MIGRATION DELIBERATELY DOES NOT DO
+-- ============================================================================
+-- * It adds no report-version or report-history store. Replacement still
+--   overwrites cases.investigation_report in place, with the explicit,
+--   consented warning the product already shows. Versioning is IR-2.
+-- * It does not add a CHECK on status. The column has never had one
+--   (baseline_schema_2026-08-06.sql) and two vocabularies share it; constraining
+--   it is a separate decision with its own migration.
+-- * It does not touch the three RLS policies or either trigger.
+-- * It adds no function, no RPC and no SECURITY DEFINER anything.
+-- * It does not read, merge, delete or mutate a single existing row — there was
+--   nothing to remediate (0 duplicate groups at any status).
+-- * It does not change who may request or action a review.
+--
+-- ============================================================================
+-- ROLLBACK (complete; no data to restore, because nothing was written)
+-- ============================================================================
+--   drop index if exists public.hr_review_requests_one_pending_per_step;
+--
+-- Rolling back restores "the same investigation can be queued for HR review
+-- twice". No row is altered either way.
+-- ============================================================================

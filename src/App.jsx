@@ -76,6 +76,8 @@ import { hasBeenIssued, confirmationSemantics } from './lib/confirmationSemantic
 import { resolutionLabel, RESPONSE_TYPE } from './lib/employeeResponse';
 import { mirrorResolutionOntoMeeting } from './lib/resolutionMirror';
 import { syncCandidates, signatureSyncKey } from './lib/signatureSync';
+import { planHrReviewRequest, isDuplicatePendingViolation, HR_REVIEW_OUTCOME } from './lib/hrReviewIdempotency';
+import { reportDigest, reportAuditAction, describeReportReplacement } from './lib/reportDigest';
 import { INVESTIGATION_REPORT_DOC, refuseInvestigationReportSave,
   documentCapabilities, refuseCorrespondence, CORRESPONDENCE_ACTION,
   describeReplaceExistingReport, hasExistingReport,
@@ -3092,6 +3094,20 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!org?.id) return;
     const cs = cases.find(x=>x.id===caseId);
     const meeting = cs?.meetings.find(m=>m.id===meetingId);
+    // ── IR-0.2a — ONE PENDING REQUEST PER GATE ──────────────────────────────
+    //
+    // This was a plain INSERT, so regenerating an investigation report queued
+    // the same gate for HR twice. The check lands here and shapes what the user
+    // sees — the existing request is REUSED, with its id, requester, timestamp
+    // and snapshot untouched — and the partial unique index
+    // hr_review_requests_one_pending_per_step is what makes it hold under two
+    // simultaneous submissions, which no client-side check can.
+    const plan = planHrReviewRequest({ requests: hrReviewRequests, caseId, step });
+    if(!plan.shouldInsert) {
+      // Deliberately silent: nothing happened, and announcing "HR review
+      // requested" again would fabricate a second submission event.
+      return { ok: true, outcome: plan.outcome, request: plan.existing };
+    }
     const { data, error } = await withFkRetry(() => supabase.from('hr_review_requests').insert({
       org_id: org.id,
       case_id: caseId,
@@ -3107,10 +3123,17 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(data) {
       setHrReviewRequests(r=>[data,...r]);
       if(announce) showToast("HR review requested");
-    } else {
-      console.error("requestHrReview", error);
-      showToast("Couldn't request HR review — "+error?.message, "error");
+      return { ok: true, outcome: HR_REVIEW_OUTCOME.CREATED, request: data };
     }
+    // The database refusing a duplicate is the race being serialised, not a
+    // failure: another submission won and the gate is already open. Reported as
+    // success, with no toast and no second lifecycle event.
+    if(isDuplicatePendingViolation(error)) {
+      return { ok: true, outcome: HR_REVIEW_OUTCOME.ALREADY_PENDING, request: null };
+    }
+    console.error("requestHrReview", error);
+    showToast("Couldn't request HR review — "+error?.message, "error");
+    return { ok: false, outcome: HR_REVIEW_OUTCOME.FAILED, error };
   };
 
   // Manager Enablement (Phase 4, MP12, §13) — "Escalate to HR". A new,
@@ -11171,6 +11194,12 @@ Please produce:
     if(hasExistingReport(cs) && !replaceExisting) {
       return { ok:false, reason:REPORT_GENERATION.NEEDS_REPLACE_DECISION };
     }
+    // The pre-write state, captured before anything can change it. Read here
+    // rather than after the stream so a concurrent write cannot make a
+    // replacement look like a first generation or vice versa.
+    const hadExistingReport = hasExistingReport(cs);
+    const previousReportText = hadExistingReport ? cs.investigationReport : null;
+    const previousReportDate = hadExistingReport ? cs.investigationReportDate : null;
     setConcludingInvestigation(true);
     setInvestigationReportDraft("");
     try {
@@ -11254,8 +11283,32 @@ Please produce:
         if(saved?.reason !== 'conflict') showToast(describeReportGeneration(REPORT_GENERATION.NOT_PERSISTED), "error");
         return { ok:false, reason:REPORT_GENERATION.NOT_PERSISTED };
       }
-      audit("Investigation report generated", cs.employeeName, caseId);
-      showToast("Investigation report generated");
+      // ── IR-0.2a — A REPLACEMENT IS NOT A FIRST GENERATION ─────────────────
+      //
+      // Both used this one action string, so two rows read identically and a
+      // reader could not tell an earlier report had existed, still less that it
+      // had been destroyed. `hadExistingReport` is read from the PRE-WRITE
+      // state, not from the UI's consent flag — and that pre-image is what
+      // saveCaseToDB's conditional update on updated_at just validated.
+      //
+      // The superseded text is NOT recorded: a digest proves which document was
+      // replaced while putting no case narrative into a widely-readable,
+      // DSAR-disclosable audit row. Report versions are IR-2.
+      if(hadExistingReport) {
+        const [supersededDigest, newDigest] = await Promise.all([
+          reportDigest(previousReportText), reportDigest(text),
+        ]);
+        audit(reportAuditAction(true), describeReportReplacement({
+          employeeName: cs.employeeName,
+          supersededDigest, supersededLength: previousReportText?.length ?? null,
+          supersededAt: previousReportDate || null,
+          newDigest, newLength: text.length,
+        }), caseId);
+        showToast("Investigation report replaced");
+      } else {
+        audit(reportAuditAction(false), cs.employeeName, caseId);
+        showToast("Investigation report generated");
+      }
       if(invMeetings.length>=2) generateInconsistencies(cs, true);
       return { ok:true };
     } catch(e) {
