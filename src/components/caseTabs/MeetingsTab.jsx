@@ -58,7 +58,7 @@ const SUGGESTION_LABEL = {
 // Investigation meetings list (their natural narrative position, and
 // disciplinary-only — a grievance case never shows them) rather than
 // moving to Outcome, which is specifically about the decision itself.
-export function MeetingsTab({ cs, cases, saveCases, currentUser, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, onPresentMeetingRecord, showToast, meetingTypes, fmtDate, attemptSubmitInvestigation, concludingInvestigation, investigationReportDraft, setShowHandoffModal, setLetterOutput, onAcceptSavedSuggestion, onDismissSavedSuggestion, promptDialog, audit, loadSignedSnapshot, loadRequestHistory, proceedWithoutConfirmation, resolveSignatureResponse, onResendReminder }) {
+export function MeetingsTab({ cs, cases, saveCases, currentUser, activeCaseStage, setActiveCaseStage, setMeetingSetup, setCaseInfo, getEmployeeRecord, orgMembers, setScreen, screens, onPresentMeetingRecord, showToast, meetingTypes, fmtDate, attemptSubmitInvestigation, concludingInvestigation, investigationReportDraft, setShowHandoffModal, onOpenInvestigationReport, onAcceptSavedSuggestion, onDismissSavedSuggestion, promptDialog, audit, loadSignedSnapshot, loadRequestHistory, proceedWithoutConfirmation, resolveSignatureResponse, onResendReminder }) {
   const grievance = isGrievanceCase(cs);
   const meetings = cs.meetings||[];
   // Human UAT remediation, Batch 2, Part 9 — see SignedRecordModal's own
@@ -412,7 +412,7 @@ export function MeetingsTab({ cs, cases, saveCases, currentUser, activeCaseStage
           <div style={{background:"#FFFFFF",border:"1px solid #E8EAF2",borderRadius:12,overflow:"hidden"}}>
             <div style={{padding:"12px 16px",background:"#FFFFFF",borderBottom:"1px solid #E3E5EE",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div style={{fontSize:14,fontWeight:700,color:COLOR.purple}}>Investigation report</div>
-              {cs.investigationReport&&<button onClick={()=>{setLetterOutput(cs.investigationReport);setScreen(screens.LETTER);}} style={{fontSize:11,color:COLOR.purple,background:COLOR.purpleTint,border:"none",borderRadius:4,padding:"3px 10px",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500}}>View report</button>}
+              {cs.investigationReport&&<button onClick={()=>onOpenInvestigationReport?.(cs)} style={{fontSize:11,color:COLOR.purple,background:COLOR.purpleTint,border:"none",borderRadius:4,padding:"3px 10px",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500}}>View report</button>}
             </div>
             <div style={{padding:"14px 16px"}}>{
               cs.investigationReport?(

@@ -21,7 +21,7 @@ const CORRESPONDENCE_TYPES = Object.entries(CORRESPONDENCE_TYPE_LABELS).map(([id
 // see src/lib/caseDocuments.js. Letters open in the existing Letter
 // screen (same as everywhere else generated letters are viewed); evidence
 // files download the same way the Evidence tab already does.
-export function DocumentsTab({ cs, setLetterOutput, setScreen, screens, fmtDate, onGenerateHearingPack, hearingPackGenerating, hearingPackReady, onDismissHearingPackReady, onDraftCorrespondence }) {
+export function DocumentsTab({ cs, setLetterOutput, onOpenInvestigationReport, setScreen, screens, fmtDate, onGenerateHearingPack, hearingPackGenerating, hearingPackReady, onDismissHearingPackReady, onDraftCorrespondence }) {
   const docs = deriveDocumentsForCase(cs);
   return (
     <div style={{background:"#FFFFFF",border:"1px solid #E8EAF2",borderRadius:12,overflow:"hidden"}}>
@@ -67,8 +67,13 @@ export function DocumentsTab({ cs, setLetterOutput, setScreen, screens, fmtDate,
                 <span style={{fontSize:11,color:"#8A8EA3"}}>{fmtDate(d.date)}{d.size?" · "+fmtBytes(d.size):""}</span>
               </div>
             </div>
+            {/* IR-0.1 — a report opens as a REPORT. A letter still opens as a
+                letter. Routing both through setLetterOutput alone left the
+                document type at whatever activeLetter happened to hold
+                (default "outcome"), which is how an investigation report could
+                later be saved as an outcome letter. */}
             {(d.kind==="letter"||d.kind==="report")&&(
-              <button onClick={()=>{setLetterOutput(d.content);setScreen(screens.LETTER);}} style={{fontSize:11,color:"#7A2FD8",background:"#EDE8FF",border:"none",borderRadius:4,padding:"4px 10px",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500,flexShrink:0}}>View</button>
+              <button onClick={()=>{ if(d.kind==="report"&&onOpenInvestigationReport){onOpenInvestigationReport(cs);return;} setLetterOutput(d.content);setScreen(screens.LETTER); }} style={{fontSize:11,color:"#7A2FD8",background:"#EDE8FF",border:"none",borderRadius:4,padding:"4px 10px",cursor:"pointer",fontFamily:FONT.sans,fontWeight:500,flexShrink:0}}>View</button>
             )}
             {d.kind==="evidence"&&d.dataUrl&&(
               <a href={d.dataUrl} download={d.label} style={{fontSize:11,color:"#7A2FD8",background:"#EDE8FF",borderRadius:4,padding:"4px 10px",textDecoration:"none",fontWeight:500,flexShrink:0}}>Download</a>

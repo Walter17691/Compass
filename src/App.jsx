@@ -76,6 +76,9 @@ import { hasBeenIssued, confirmationSemantics } from './lib/confirmationSemantic
 import { resolutionLabel, RESPONSE_TYPE } from './lib/employeeResponse';
 import { mirrorResolutionOntoMeeting } from './lib/resolutionMirror';
 import { syncCandidates, signatureSyncKey } from './lib/signatureSync';
+import { INVESTIGATION_REPORT_DOC, refuseInvestigationReportSave,
+  describeReplaceExistingReport, hasExistingReport,
+  assessReportGeneration, describeReportGeneration, REPORT_GENERATION } from './lib/investigationReportDocument';
 import { parseCommitmentDueDate, suggestTaskOwner } from './lib/taskDueDateParsing';
 import { derivePeopleForCase } from './lib/casePeople';
 import { matchCaseByEmployeeName, matchCaseByEmployeeNameWithConfidence } from './lib/globalAssistant';
@@ -2157,6 +2160,10 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const [showInvestigationQualityCheck, setShowInvestigationQualityCheck] = useState(false);
   const [investigationQualityGaps, setInvestigationQualityGaps] = useState([]);
   const [investigationQualitySubmitCaseId, setInvestigationQualitySubmitCaseId] = useState(null);
+  // IR-0.2 — which case the manager has explicitly agreed to replace the report
+  // on, for this attempt only. In-flight consent, never persisted: it is not a
+  // fact about the case and must not survive the attempt.
+  const [investigationReplaceApproved, setInvestigationReplaceApproved] = useState(null);
 
   // ── Intelligent Meeting Mode — live panels ──
   // Fires on the same throttled cadence as updateLiveContext (every 3rd
@@ -9567,6 +9574,25 @@ Please produce:
     setScreen(SCREENS.REVIEW);
   };
 
+  // IR-0.1 — opening the investigation report NAMES it.
+  //
+  // "View report" used to set only letterOutput and navigate, leaving
+  // activeLetter at whatever it happened to hold — which defaults to "outcome".
+  // A later "Save to case" then persisted the investigation report as a meeting
+  // carrying letterType:"outcome", and caseStage derived an OUTCOME stage for a
+  // disciplinary outcome nobody decided.
+  //
+  // Viewing is side-effect free: both calls below are local component state, and
+  // nothing is written to the case. letterApproval is snapshot-bound, so a stale
+  // approval from a previously-viewed letter cannot attach to this text either.
+  const openInvestigationReport = (cs) => {
+    if(!cs?.investigationReport) return false;
+    setActiveLetter(INVESTIGATION_REPORT_DOC);
+    setLetterOutput(cs.investigationReport);
+    setScreen(SCREENS.LETTER);
+    return true;
+  };
+
   const saveMeetingToCase = async (signatureInfo = {}) => {
     // Phase 6.5 hardening (closes independent audit finding 3.7) — the
     // button that calls this ("Save and go to case →", ReviewScreen.jsx/
@@ -9588,6 +9614,20 @@ Please produce:
     // (LetterScreen.jsx's/ReviewScreen.jsx's own "Save to case" buttons,
     // which navigate to the Cases list themselves rather than relying on
     // this function's own case-view navigation) finally can.
+    // IR-0.1 — the investigation report is never saved as a letter.
+    //
+    // THE WRITE BOUNDARY, not just the button. Hiding the control in
+    // LetterScreen is the UX half; this is the half that still holds if a future
+    // change re-exposes it, or if any other caller reaches here with the report
+    // in letterOutput. The report is ALREADY persisted as
+    // cases.investigation_report — saving it again would write an unidentified
+    // second copy as a meeting record, and (before this guard) one carrying
+    // letterType:"outcome", which caseStage reads as a disciplinary outcome.
+    const reportSaveRefusal = refuseInvestigationReportSave(activeLetter);
+    if(reportSaveRefusal) {
+      showToast(reportSaveRefusal.message, "error");
+      return reportSaveRefusal;
+    }
     if(savingMeetingRef.current) return { ok: false, reason: 'error' };
     savingMeetingRef.current = true;
     try {
@@ -11068,7 +11108,7 @@ Please produce:
   // evidence stance links, real inconsistency signals, the real next-
   // action recommendation) as input context, same "surface what Compass
   // already knows" pattern used in Phase 10's prep enhancement.
-  const concludeInvestigation = async (caseId) => {
+  const concludeInvestigation = async (caseId, { replaceExisting = false } = {}) => {
     // Human UAT remediation, Batch 2 hardening — the trigger buttons
     // (MeetingsTab's "Conclude investigation & generate report", the
     // next-step banner) already disable themselves while
@@ -11076,11 +11116,23 @@ Please produce:
     // makes the function itself refuse to start a second, concurrent
     // generation regardless of what called it, so two overlapping streams
     // can never race to save two different reports onto the same case.
-    if(concludingInvestigation) return;
+    if(concludingInvestigation) return { ok:false, reason:'in_flight' };
     const cs = cases.find(x=>x.id===caseId);
-    if(!cs) return;
+    if(!cs) return { ok:false, reason:'no_case' };
     const invMeetings = (cs.meetings||[]).filter(m=>(m.type||"").toLowerCase().includes("investigation")&&m.record);
-    if(!invMeetings.length) return;
+    if(!invMeetings.length) return { ok:false, reason:'no_records' };
+    // IR-0.2 — THE WRITE BOUNDARY for replacing an existing report.
+    //
+    // The caller obtains the decision (attemptSubmitInvestigation), but the
+    // refusal lives here, where the overwrite happens. HR returning an
+    // investigation leaves investigationReport populated while reverting the
+    // stage, so the next step re-offers generation — and this function used to
+    // overwrite the returned report in place, with no history and no warning.
+    // IR-0 adds no versioning, so the minimum honest behaviour is that
+    // destruction requires an explicit decision to have been taken.
+    if(hasExistingReport(cs) && !replaceExisting) {
+      return { ok:false, reason:REPORT_GENERATION.NEEDS_REPLACE_DECISION };
+    }
     setConcludingInvestigation(true);
     setInvestigationReportDraft("");
     try {
@@ -11137,21 +11189,47 @@ Please produce:
         +"## PART 3 — For HR Decision"+nl
         +"### Recommended Procedural Next Step"+nl
         +"End PART 3 with one line making clear that the final finding, sanction, and outcome decision rest with the responsible HR manager, not with this report.";
-      const text = await streamClaude(systemPrompt, userPrompt, t=>setInvestigationReportDraft(t), 3400);
-      if(text) {
-        saveCases(cases.map(x=>x.id===caseId?{...x,investigationReport:text,investigationReportDate:new Date().toISOString(),stage:"inv_report"}:x));
-        audit("Investigation report generated", cs.employeeName, caseId);
-        showToast("Investigation report generated");
-        if(invMeetings.length>=2) generateInconsistencies(cs, true);
-      } else {
-        showToast("Failed to generate investigation report", "error");
+      // IR-0.3 — completion metadata is CONSUMED, not discarded. streamClaude
+      // has always exposed { stopReason, truncated } for exactly this reason;
+      // this call simply never asked for it, so a report cut off at max_tokens
+      // was persisted, audited and announced as finished.
+      let completion = null;
+      const text = await streamClaude(systemPrompt, userPrompt, t=>setInvestigationReportDraft(t), 3400,
+        c => { completion = c; });
+      const assessed = assessReportGeneration({ text, truncated: !!completion?.truncated });
+      if(!assessed.ok) {
+        // Nothing is written, nothing is audited, the stage does not move.
+        showToast(describeReportGeneration(assessed.reason), "error");
+        return { ok:false, reason:assessed.reason };
       }
+      // ONE case update carries the report, its date and the stage together, so
+      // there is no window in which the report exists without its stage or vice
+      // versa. changedId is passed so saveCases returns the real write promise —
+      // without it, the bulk branch is fire-and-forget and the audit entry and
+      // success toast below fired before any persistence result existed.
+      const saved = await saveCases(
+        cases.map(x=>x.id===caseId?{...x,investigationReport:text,investigationReportDate:new Date().toISOString(),stage:"inv_report"}:x),
+        caseId);
+      if(!saved?.ok) {
+        // A conflict has already reloaded the case and toasted; an error has
+        // already toasted. Either way this is NOT a generated report.
+        if(saved?.reason !== 'conflict') showToast(describeReportGeneration(REPORT_GENERATION.NOT_PERSISTED), "error");
+        return { ok:false, reason:REPORT_GENERATION.NOT_PERSISTED };
+      }
+      audit("Investigation report generated", cs.employeeName, caseId);
+      showToast("Investigation report generated");
+      if(invMeetings.length>=2) generateInconsistencies(cs, true);
+      return { ok:true };
     } catch(e) {
       console.error("concludeInvestigation error:", e);
       showToast("Error generating investigation report", "error");
+      return { ok:false, reason:'error' };
+    } finally {
+      // finally, so an early return above cannot leave the generation lock set
+      // or a partial draft on screen.
+      setConcludingInvestigation(false);
+      setInvestigationReportDraft("");
     }
-    setConcludingInvestigation(false);
-    setInvestigationReportDraft("");
   };
 
   // Manager Enablement (Phase 4, MP10, §16) — "Submit investigation" is
@@ -11166,33 +11244,59 @@ Please produce:
   // pending/approved/rejected, it doesn't need to exist yet) and marking
   // the checklist's own "Submit findings to HR" step done, if a checklist
   // was ever seeded for this case.
-  const finalizeInvestigationSubmission = (caseId) => {
-    concludeInvestigation(caseId);
+  const finalizeInvestigationSubmission = async (caseId, { replaceExisting = false } = {}) => {
+    // IR-0.3 — THE CASE ADVANCES ONLY IF THE REPORT WAS ACTUALLY WRITTEN.
+    //
+    // This used to fire concludeInvestigation and then, without waiting,
+    // register the HR review request and tick the checklist's "Submit findings
+    // to HR" step. So a truncated generation, a failed write or a declined
+    // replacement still advanced the workflow: HR was told an investigation had
+    // been submitted for review when no report existed.
+    const result = await concludeInvestigation(caseId, { replaceExisting });
+    if(!result?.ok) return result;
     requestHrReview("inv_report", caseId, null, "Investigation submitted for review", false);
     const submitTask = investigationChecklistTasks(caseTasks, caseId).find(t => t.name === INVESTIGATION_CHECKLIST_STEPS[INVESTIGATION_CHECKLIST_STEPS.length - 1].label);
     if(submitTask && submitTask.status !== "done") toggleCaseTaskDone(submitTask.id);
+    return result;
   };
 
-  const attemptSubmitInvestigation = (caseId) => {
+  const attemptSubmitInvestigation = async (caseId) => {
     const cs = cases.find(c=>c.id===caseId);
     if(!cs) return;
+    // IR-0.2 — the replace decision is taken FIRST, before anything else
+    // happens. Asking after the quality check would mean a manager who cancels
+    // here had already passed a gate; asking inside concludeInvestigation would
+    // mean the HR review request and the checklist tick had already fired.
+    // Cancelling leaves the case exactly as it was.
+    if(hasExistingReport(cs)) {
+      const copy = describeReplaceExistingReport({ reportDate: cs.investigationReportDate, fmtDate });
+      const confirmed = await promptDialog({ ...copy, fields: [] });
+      if(!confirmed) { showToast("The existing investigation report is unchanged."); return; }
+      setInvestigationReplaceApproved(caseId);
+    } else {
+      setInvestigationReplaceApproved(null);
+    }
     const gaps = computeInvestigationQualityGaps(cs, allegations, caseTasks);
     setInvestigationQualitySubmitCaseId(caseId);
     if(gaps.length) { setInvestigationQualityGaps(gaps); setShowInvestigationQualityCheck(true); return; }
-    finalizeInvestigationSubmission(caseId);
+    await finalizeInvestigationSubmission(caseId, { replaceExisting: hasExistingReport(cs) });
   };
 
   const proceedPastInvestigationQualityCheck = async () => {
     setShowInvestigationQualityCheck(false);
     const ok = await requestOverrideReason(investigationQualityGaps.join("; "), { caseId: investigationQualitySubmitCaseId, actionLabel: "Submitted investigation despite quality check gaps" });
     if(!ok) return;
-    finalizeInvestigationSubmission(investigationQualitySubmitCaseId);
+    // The replace decision was taken in attemptSubmitInvestigation, before this
+    // gate. It is carried, never re-asked and never assumed.
+    await finalizeInvestigationSubmission(investigationQualitySubmitCaseId,
+      { replaceExisting: investigationReplaceApproved === investigationQualitySubmitCaseId });
   };
 
-  const createInvestigationQualityFollowUp = () => {
+  const createInvestigationQualityFollowUp = async () => {
     createCaseTask(investigationQualitySubmitCaseId, { name: "Follow up on: "+investigationQualityGaps.join("; ") });
     setShowInvestigationQualityCheck(false);
-    finalizeInvestigationSubmission(investigationQualitySubmitCaseId);
+    await finalizeInvestigationSubmission(investigationQualitySubmitCaseId,
+      { replaceExisting: investigationReplaceApproved === investigationQualitySubmitCaseId });
   };
 
   const restoreLetterVersion = (entry) => {
@@ -12542,7 +12646,7 @@ Please produce:
             setActiveEmployeeId,
             getProceedingTitle, getCaseStatus, setMeetingSetup, getEmployeeRecord, getCaseEmployeeRecord, orgMembers,
             setCaseInfo, saveCases, setReviewOutput, onPresentMeetingRecord: presentMeetingRecord, setMeetingType, showToast, currentUser,
-            setLetterOutput, handleLetter, isHR, caseAccess, allegations, auditLog, caseTasks,
+            setLetterOutput, onOpenInvestigationReport: openInvestigationReport, handleLetter, isHR, caseAccess, allegations, auditLog, caseTasks,
             createCaseTask, caseSignals, changeSignalStatus, toggleCaseTaskDone, setShowHandoffModal,
             setShowAppealOfficerModal,
             generateInvestigationPlan, investigationPlanLoading, promptDialog, audit,
