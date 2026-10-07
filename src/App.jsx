@@ -77,6 +77,7 @@ import { resolutionLabel, RESPONSE_TYPE } from './lib/employeeResponse';
 import { mirrorResolutionOntoMeeting } from './lib/resolutionMirror';
 import { syncCandidates, signatureSyncKey } from './lib/signatureSync';
 import { INVESTIGATION_REPORT_DOC, refuseInvestigationReportSave,
+  documentCapabilities, refuseCorrespondence, CORRESPONDENCE_ACTION,
   describeReplaceExistingReport, hasExistingReport,
   assessReportGeneration, describeReportGeneration, REPORT_GENERATION } from './lib/investigationReportDocument';
 import { parseCommitmentDueDate, suggestTaskOwner } from './lib/taskDueDateParsing';
@@ -474,6 +475,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   const letterIsApproved = isLetterApproved(letterOutput, letterApproval);
   const approveLetter = () => {
     if(!letterOutput) return;
+    // IR-SURF-01 — an internal case document is never "approved for sending".
+    // The boundary, not the button: LetterScreen hides this control for internal
+    // documents, and this refuses it regardless of what the UI offers.
+    const refusal = refuseCorrespondence(activeLetter, CORRESPONDENCE_ACTION.APPROVE_FOR_SENDING);
+    if(refusal) { showToast(refusal.message, "error"); return; }
     const approval = createLetterApproval(letterOutput, { by: currentUser?.name || member?.name, type: activeLetter });
     setLetterApproval(approval);
     audit("AI-drafted letter approved for sending", `${caseInfo.employee||"Employee"} — ${meetingType?.label||""} (${activeLetter})`, activeCaseId);
@@ -10184,7 +10190,10 @@ Please produce:
   };
 
   const generatePDF = async sig => buildDocumentPDF({
-    heading: `${meetingType?.label} — Letter`,
+    // IR-SURF-01 — an internal document is titled as itself. This read
+    // "undefined — Letter" for the investigation report, since meetingType is
+    // not set on that route.
+    heading: documentCapabilities(activeLetter).label || `${meetingType?.label} — Letter`,
     content: letterOutput,
     employee: caseInfo.employee, date: caseInfo.date, chair: caseInfo.manager,
     sig, letterheadImg: letterhead,
@@ -10207,6 +10216,24 @@ Please produce:
   });
 
   const triggerWithSig = action => {
+    // ── IR-SURF-01 ──────────────────────────────────────────────────────────
+    // An internal case document may be EXPORTED but never TRANSMITTED. Those
+    // were one capability behind canIssue; separating them is the whole point.
+    const caps = documentCapabilities(activeLetter);
+    if(caps.internal) {
+      if(action !== "download") {
+        const refusal = refuseCorrespondence(activeLetter,
+          action === "gmail" ? CORRESPONDENCE_ACTION.GMAIL
+          : action === "outlook" ? CORRESPONDENCE_ACTION.OUTLOOK
+          : CORRESPONDENCE_ACTION.SEND_FROM_COMPASS);
+        showToast(refusal.message, "error");
+        return;
+      }
+      // Export needs no issuance approval and carries no employee signature —
+      // this is the investigator taking a copy of their own document.
+      doSend(action, null);
+      return;
+    }
     // Defense in depth — LetterScreen already disables these buttons until
     // the letter is approved, but a letter is never sent from here without
     // that gate passing, even if some future caller skips the UI.
@@ -12731,7 +12758,7 @@ Please produce:
 
       {/* ══ LETTERS ══ */}
       {screen===SCREENS.LETTER&&(
-        <LetterScreen handleLetter={handleLetter} activeLetter={activeLetter} aiProcessing={aiProcessing} letterOutput={letterOutput} letterSources={letterSources} onAskWhy={setLetterWhySignal} letterHistory={letterHistory} restoreLetterVersion={restoreLetterVersion} editingLetter={editingLetter} setEditingLetter={setEditingLetter} setLetterOutput={setLetterOutput} signature={signature} setShowSigPad={setShowSigPad} setSignature={setSignature} onRemoveSignature={()=>{setSignature(null);orgLsSet("compass_signature",null);}} caseInfo={caseInfo} triggerWithSig={triggerWithSig} pdfGenerating={pdfGenerating} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} letterIsApproved={letterIsApproved} letterApproval={letterApproval} approveLetter={approveLetter} onSendFromCompass={()=>setShowEmailLetter(true)} onSendForAcknowledgement={activeLetter==="outcome"?()=>setShowLetterAckModal(true):undefined} outcomeRecorded={!!cases.find(x=>x.id===activeCaseId)?.outcome} outcomeValue={cases.find(x=>x.id===activeCaseId)?.outcome} outcomeLetter={outcomeLetterStatus(cases.find(x=>x.id===activeCaseId))} warningDurationMonths={cases.find(x=>x.id===activeCaseId)?.warningDurationMonths} warningExpiresAt={cases.find(x=>x.id===activeCaseId)?.warningExpiresAt} />
+        <LetterScreen handleLetter={handleLetter} activeLetter={activeLetter} aiProcessing={aiProcessing} letterOutput={letterOutput} letterSources={letterSources} onAskWhy={setLetterWhySignal} letterHistory={letterHistory} restoreLetterVersion={restoreLetterVersion} editingLetter={editingLetter} setEditingLetter={setEditingLetter} setLetterOutput={setLetterOutput} signature={signature} setShowSigPad={setShowSigPad} setSignature={setSignature} onRemoveSignature={()=>{setSignature(null);orgLsSet("compass_signature",null);}} caseInfo={caseInfo} triggerWithSig={triggerWithSig} pdfGenerating={pdfGenerating} saveMeetingToCase={saveMeetingToCase} setScreen={setScreen} letterIsApproved={letterIsApproved} letterApproval={letterApproval} approveLetter={approveLetter} onSendFromCompass={()=>{const r=refuseCorrespondence(activeLetter,CORRESPONDENCE_ACTION.SEND_FROM_COMPASS); if(r){showToast(r.message,"error");return;} setShowEmailLetter(true);}} onSendForAcknowledgement={activeLetter==="outcome"?()=>{const r=refuseCorrespondence(activeLetter,CORRESPONDENCE_ACTION.SEND_FOR_ACKNOWLEDGEMENT); if(r){showToast(r.message,"error");return;} setShowLetterAckModal(true);}:undefined} outcomeRecorded={!!cases.find(x=>x.id===activeCaseId)?.outcome} outcomeValue={cases.find(x=>x.id===activeCaseId)?.outcome} outcomeLetter={outcomeLetterStatus(cases.find(x=>x.id===activeCaseId))} warningDurationMonths={cases.find(x=>x.id===activeCaseId)?.warningDurationMonths} warningExpiresAt={cases.find(x=>x.id===activeCaseId)?.warningExpiresAt} />
       )}
 
       {/* ══ DASHBOARD ══ */}

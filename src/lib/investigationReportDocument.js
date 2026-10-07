@@ -101,6 +101,122 @@ export function refuseInvestigationReportSave(docType) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// IR-SURF-01 — AN INTERNAL CASE DOCUMENT IS NOT CORRESPONDENCE.
+//
+// ┌─ WHAT IR-0 EXPOSED, AND PARTLY CAUSED ──────────────────────────────────┐
+// │ The report is presented through LetterScreen. Before IR-0 it arrived      │
+// │ there as activeLetter="outcome", so                                      │
+// │   outcomeNotYetDecided = activeLetter==="outcome" && !outcomeRecorded     │
+// │ was TRUE on a case with no recorded outcome, and canIssue                 │
+// │   = letterIsApproved && !outcomeNotYetDecided && !letterGroundingFailed   │
+// │ was false — which incidentally disabled Download, Gmail, Outlook, Send    │
+// │ from Compass, Send for acknowledgement, Print and Copy.                  │
+// │                                                                         │
+// │ Giving the report its correct identity removed that clause. The report is  │
+// │ also correctly excluded from EMPLOYEE_DIRECTED_LETTER_TYPES, so grounding  │
+// │ passes too. The only remaining gate became one "Approve for sending"      │
+// │ click — on an INTERNAL, PRE-DECISION document that contains Compass's own  │
+// │ PART 2 advisory interpretation, explicitly labelled "not a finding".      │
+// │                                                                         │
+// │ The old block was protecting for the wrong reason. This replaces it with  │
+// │ the right one: a domain distinction between an internal case document and  │
+// │ employee correspondence.                                                 │
+// └─────────────────────────────────────────────────────────────────────────┘
+//
+// ONE classification, consumed everywhere. No string comparisons scattered
+// through LetterScreen, and no parallel truth: this extends the identity IR-0
+// already established rather than introducing a second one.
+// ─────────────────────────────────────────────────────────────────────────
+
+/** Document types that are internal case artefacts, never sent to an employee. */
+const INTERNAL_CASE_DOCUMENTS = Object.freeze([INVESTIGATION_REPORT_DOC]);
+
+export function isInternalCaseDocument(docType) {
+  return INTERNAL_CASE_DOCUMENTS.includes(docType);
+}
+
+/**
+ * What may be done with this document.
+ *
+ * The correspondence capabilities and the EXPORT capabilities are deliberately
+ * separated. Export (download / print / copy) is an internal act — an
+ * investigator needs a PDF of their own report — and must NOT require
+ * "Approve for sending", which is an issuance gate for something leaving the
+ * organisation. Coupling them is what made the old canIssue gate do two
+ * unrelated jobs.
+ *
+ * Nothing here changes for a genuine letter: every flag is true and export still
+ * requires approval, exactly as before.
+ */
+export function documentCapabilities(docType) {
+  if (!isInternalCaseDocument(docType)) {
+    return Object.freeze({
+      internal: false,
+      label: null,
+      mayApproveForSending: true,
+      maySendToEmployee: true,
+      mayESign: true,
+      maySaveAsLetter: true,
+      maySwitchDocumentType: true,
+      mayExport: true,
+      exportRequiresApproval: true,
+    });
+  }
+  return Object.freeze({
+    internal: true,
+    label: 'Investigation report',
+    mayApproveForSending: false,
+    maySendToEmployee: false,
+    mayESign: false,
+    maySaveAsLetter: false,
+    maySwitchDocumentType: false,
+    // Legitimate internal actions, and they do not need issuance approval.
+    mayExport: true,
+    exportRequiresApproval: false,
+  });
+}
+
+/** The correspondence actions this boundary knows how to refuse. */
+export const CORRESPONDENCE_ACTION = Object.freeze({
+  APPROVE_FOR_SENDING: 'approve_for_sending',
+  GMAIL: 'gmail',
+  OUTLOOK: 'outlook',
+  SEND_FROM_COMPASS: 'send_from_compass',
+  SEND_FOR_ACKNOWLEDGEMENT: 'send_for_acknowledgement',
+  E_SIGN: 'e_sign',
+  SAVE_AS_LETTER: 'save_as_letter',
+});
+
+const REFUSAL_MESSAGE = Object.freeze({
+  [CORRESPONDENCE_ACTION.APPROVE_FOR_SENDING]: 'The investigation report is an internal case document. It is not approved for sending, because it is not sent to the employee.',
+  [CORRESPONDENCE_ACTION.GMAIL]: 'The investigation report is an internal case document and is not emailed to the employee. Download it if you need a copy.',
+  [CORRESPONDENCE_ACTION.OUTLOOK]: 'The investigation report is an internal case document and is not emailed to the employee. Download it if you need a copy.',
+  [CORRESPONDENCE_ACTION.SEND_FROM_COMPASS]: 'The investigation report is an internal case document and is not sent to the employee from Compass.',
+  [CORRESPONDENCE_ACTION.SEND_FOR_ACKNOWLEDGEMENT]: 'The investigation report is an internal case document. There is nothing for the employee to acknowledge.',
+  [CORRESPONDENCE_ACTION.E_SIGN]: 'The investigation report does not carry an employee signature.',
+  [CORRESPONDENCE_ACTION.SAVE_AS_LETTER]: 'The investigation report is already saved on this case. It is not a letter and is not saved again as one.',
+});
+
+/**
+ * Refuse a correspondence action on an internal document, or null to proceed.
+ *
+ * A FUNCTION at the action boundary, not a hidden button. IR-0's mutation
+ * testing established why: a guard asserted only as source text cannot be
+ * distinguished from a disabled one, and a hidden control is one UI regression
+ * away from being live again. Every refusal below is reachable and executable in
+ * a test.
+ */
+export function refuseCorrespondence(docType, action) {
+  if (!isInternalCaseDocument(docType)) return null;
+  return Object.freeze({
+    ok: false,
+    reason: `internal_document_${action}`,
+    message: REFUSAL_MESSAGE[action]
+      || 'The investigation report is an internal case document and is not sent to the employee.',
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // IR-0.2 — REPLACING AN EXISTING REPORT IS A DECISION, NOT A SIDE EFFECT.
 //
 // When HR returns an investigation, App.jsx:5889 sets stage back to

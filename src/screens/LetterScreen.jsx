@@ -7,6 +7,7 @@ import { PageHeader } from '../components/design/PageHeader';
 import { COLOR, TYPE, FONT, RADIUS } from '../styles/tokens';
 import { outcomeLetterNotice, OUTCOME_LETTER } from '../lib/outcomeLetter';
 import { validateFormalLetter } from '../lib/letterValidation';
+import { documentCapabilities } from '../lib/investigationReportDocument';
 
 // UAT Product Hierarchy pass, Part 3 — this screen was the brief's own
 // flagship bad example: a bare tab row with no page identity, no case/
@@ -36,6 +37,12 @@ const OTHER_LETTER_LABELS = {
 
 export function LetterScreen({ outcomeLetter=null, handleLetter, activeLetter, aiProcessing, letterOutput, letterSources=[], onAskWhy, letterHistory=[], restoreLetterVersion, editingLetter, setEditingLetter, setLetterOutput, signature, setShowSigPad, setSignature, onRemoveSignature, caseInfo, triggerWithSig, pdfGenerating, saveMeetingToCase, setScreen, letterIsApproved, letterApproval, approveLetter, onSendFromCompass, onSendForAcknowledgement, outcomeRecorded=true, outcomeValue, warningDurationMonths, warningExpiresAt }) {
   const [showHistory, setShowHistory] = useState(false);
+  // ── IR-SURF-01 ──────────────────────────────────────────────────────────
+  // ONE classification, derived once. No activeLetter string comparisons are
+  // added anywhere below; every affordance reads this. The matching refusals
+  // live at the action boundaries in App, so hiding a control here is the
+  // presentation half of the rule, never the rule itself.
+  const caps = documentCapabilities(activeLetter);
   // Phase 6.5 hardening (closes Prompt 16 audit finding H10, HIGH) — an
   // "Outcome letter" can be reached before any real outcome decision
   // exists (CaseViewScreen's Copilot "Draft outcome letter" action, or
@@ -76,25 +83,34 @@ export function LetterScreen({ outcomeLetter=null, handleLetter, activeLetter, a
   const letterGroundingFailed = !letterValidation.valid;
   const canIssue = letterIsApproved && !outcomeNotYetDecided && !letterGroundingFailed;
   const cantIssueReason = letterGroundingFailed?"Fix the issues above before this draft can be used":outcomeNotYetDecided?"Record the outcome first":"Approve the letter first";
+  // Export (download / print / copy) is an INTERNAL act and must not sit behind
+  // an issuance gate. For a genuine letter this is identical to canIssue, so
+  // nothing about letter behaviour changes.
+  //
+  // Declared HERE, after cantIssueReason, not beside canIssue: placing it earlier
+  // referenced cantIssueReason before initialisation and threw for every genuine
+  // letter. Caught by the regression test, not by me.
+  const canExport = caps.exportRequiresApproval ? canIssue : caps.mayExport;
+  const cantExportReason = caps.exportRequiresApproval ? cantIssueReason : undefined;
   const activeLetterLabel = LETTER_TYPES.find(lt=>lt.id===activeLetter)?.l || OTHER_LETTER_LABELS[activeLetter] || "Letter";
   return (
     <div>
       <div style={{borderBottom:`1px solid ${COLOR.border}`,background:COLOR.paper}}>
         <div style={{maxWidth:1440,margin:"0 auto",padding:"20px 20px 0"}}>
           <PageHeader
-            eyebrow="Generate letter"
-            title={activeLetterLabel}
+            eyebrow={caps.internal ? "Internal case document" : "Generate letter"}
+            title={caps.label || activeLetterLabel}
             subtitle={caseInfo.employee?`${caseInfo.employee}${caseInfo.manager?` · Owner: ${caseInfo.manager}`:""}`:undefined}
             actions={<Btn variant="ghost" onClick={()=>setScreen(SCREENS.REVIEW)}>← Back to case</Btn>}
           />
-          <div style={{display:"flex",gap:2,paddingBottom:8}}>
+          {caps.maySwitchDocumentType&&<div style={{display:"flex",gap:2,paddingBottom:8}}>
             {LETTER_TYPES.map(lt=>(
               <button key={lt.id} onClick={()=>handleLetter(lt.id)}
                 style={{padding:"6px 9px",borderRadius:6,border:"none",background:activeLetter===lt.id?COLOR.purpleTint:"none",color:activeLetter===lt.id?COLOR.purpleDeep:COLOR.inkSoft,fontWeight:activeLetter===lt.id?600:400,fontSize:13,cursor:"pointer",fontFamily:FONT.sans,whiteSpace:"nowrap"}}>
                 {lt.l}
               </button>
             ))}
-          </div>
+          </div>}
         </div>
       </div>
       <div style={{maxWidth:900,margin:"28px auto",padding:"0 20px"}}>
@@ -139,8 +155,9 @@ export function LetterScreen({ outcomeLetter=null, handleLetter, activeLetter, a
               <textarea aria-label="Letter text" value={letterOutput} onChange={e=>setLetterOutput(e.target.value)}
                 style={{width:"100%",minHeight:400,background:"#FDFAF5",border:`1px solid ${COLOR.purple}33`,borderRadius:8,padding:"16px",fontSize:13,lineHeight:1.8,outline:"none",color:"#1A1535",resize:"vertical",boxSizing:"border-box",fontFamily:FONT.sans,marginBottom:12}}/>
             )}
-            {/* Sig bar */}
-            <div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            {/* Sig bar — IR-SURF-01: an internal case document carries no
+                employee signature. */}
+            {caps.mayESign&&<div style={{background:"#FFFFFF",border:"1px solid #E8E0D0",borderRadius:8,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <span style={{fontSize:11,color:"#6B6375"}}>E-signature:</span>
                 {signature
@@ -151,7 +168,7 @@ export function LetterScreen({ outcomeLetter=null, handleLetter, activeLetter, a
                 <button onClick={()=>setShowSigPad(true)} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:11,color:COLOR.purple,cursor:"pointer"}}>{signature?"Change":"Add"}</button>
                 {signature&&<button onClick={onRemoveSignature||(()=>setSignature(null))} style={{background:"none",border:"1px solid #E8E0D0",borderRadius:5,padding:"3px 10px",fontSize:11,color:"#C84B2F",cursor:"pointer"}}>Remove</button>}
               </div>
-            </div>
+            </div>}
 
             <div className="print-area" style={{background:"#FDFAF5",borderRadius:12,padding:"36px 44px",marginBottom:16,textAlign:"left"}}>
               <MDRenderer text={letterOutput} light/>
@@ -205,7 +222,7 @@ export function LetterScreen({ outcomeLetter=null, handleLetter, activeLetter, a
               </div>
             )}
 
-            {/* AI-approval gate — this letter was drafted by AI and carries
+            {caps.mayApproveForSending&&<>{/* AI-approval gate — this letter was drafted by AI and carries
                 real legal/financial weight once it reaches the employee, so
                 sending it requires an explicit human sign-off tied to this
                 exact text, not just having looked at the screen. Editing or
@@ -250,13 +267,13 @@ export function LetterScreen({ outcomeLetter=null, handleLetter, activeLetter, a
               <Btn variant={letterIsApproved?"ghost":"primary"} onClick={approveLetter} disabled={letterIsApproved||letterGroundingFailed} title={letterGroundingFailed?"Fix the issues above before this draft can be approved":undefined} style={{fontSize:12,padding:"6px 14px",flexShrink:0}}>
                 {letterIsApproved?"Already approved":"Approve for sending"}
               </Btn>
-            </div>
+            </div></>}
 
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              <Btn onClick={()=>triggerWithSig("download")} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:cantIssueReason}>{pdfGenerating?"Generating...":"Download PDF"}</Btn>
-              <Btn variant="secondary" onClick={()=>triggerWithSig("gmail")} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:cantIssueReason}>Send via Gmail</Btn>
-              <Btn variant="secondary" onClick={()=>triggerWithSig("outlook")} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:cantIssueReason}>Send via Outlook</Btn>
-              {onSendFromCompass&&(
+              <Btn onClick={()=>triggerWithSig("download")} disabled={pdfGenerating||!canExport} title={canExport?undefined:cantExportReason}>{pdfGenerating?"Generating...":"Download PDF"}</Btn>
+              {caps.maySendToEmployee&&<Btn variant="secondary" onClick={()=>triggerWithSig("gmail")} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:cantIssueReason}>Send via Gmail</Btn>}
+              {caps.maySendToEmployee&&<Btn variant="secondary" onClick={()=>triggerWithSig("outlook")} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:cantIssueReason}>Send via Outlook</Btn>}
+              {caps.maySendToEmployee&&onSendFromCompass&&(
                 // Integrations & Workflow Automation (Phase 5, IP13, §7) —
                 // unlike "Send via Gmail/Outlook" above (download a PDF,
                 // open a webmail compose window, HR still attaches and
@@ -267,7 +284,7 @@ export function LetterScreen({ outcomeLetter=null, handleLetter, activeLetter, a
                 // audit event — as one action.
                 <Btn variant="secondary" onClick={onSendFromCompass} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:cantIssueReason}>Send from Compass</Btn>
               )}
-              {onSendForAcknowledgement&&(
+              {caps.maySendToEmployee&&onSendForAcknowledgement&&(
                 // Integrations & Workflow Automation (Phase 5, IP27, §21) —
                 // unlike "Send from Compass" above (a plain email, no
                 // receipt), this tracks whether the employee has actually
@@ -275,8 +292,8 @@ export function LetterScreen({ outcomeLetter=null, handleLetter, activeLetter, a
                 // signing_requests lifecycle meeting records already use.
                 <Btn variant="secondary" onClick={onSendForAcknowledgement} disabled={pdfGenerating||!canIssue} title={canIssue?undefined:cantIssueReason}>Send for acknowledgement</Btn>
               )}
-              <Btn variant="ghost" onClick={()=>window.print()} disabled={!canIssue} title={canIssue?undefined:cantIssueReason}>Print</Btn>
-              <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(letterOutput)} disabled={!canIssue} title={canIssue?undefined:cantIssueReason}>Copy text</Btn>
+              <Btn variant="ghost" onClick={()=>window.print()} disabled={!canExport} title={canExport?undefined:cantExportReason}>Print</Btn>
+              <Btn variant="ghost" onClick={()=>navigator.clipboard.writeText(letterOutput)} disabled={!canExport} title={canExport?undefined:cantExportReason}>Copy text</Btn>
               {/* Defect #11/#12/#13 remediation — this had no gate at all
                   before: a letter that failed every other check above
                   could still be permanently attached to the case via this
@@ -288,7 +305,7 @@ export function LetterScreen({ outcomeLetter=null, handleLetter, activeLetter, a
                   ReviewScreen.jsx's identical "Save to case" fix: only
                   navigate away once saveMeetingToCase confirms the write
                   actually landed. */}
-              <Btn variant="dark" onClick={async ()=>{const result=await saveMeetingToCase();if(result?.ok){setScreen(SCREENS.CASES);}}} disabled={letterGroundingFailed} title={letterGroundingFailed?cantIssueReason:undefined}>Save to case</Btn>
+              {caps.maySaveAsLetter&&<Btn variant="dark" onClick={async ()=>{const result=await saveMeetingToCase();if(result?.ok){setScreen(SCREENS.CASES);}}} disabled={letterGroundingFailed} title={letterGroundingFailed?cantIssueReason:undefined}>Save to case</Btn>}
             </div>
 
             {letterHistory.length>0&&(
