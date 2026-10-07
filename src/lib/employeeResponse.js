@@ -146,6 +146,47 @@ export function resolutionLabel(resolution) {
   return RESOLUTION_LABEL[resolution] || null;
 }
 
+/**
+ * The manager-facing ROW badge once a challenge has been reviewed.
+ *
+ * ┌─ WHY THE WORD "DISPUTED" STAYS ─────────────────────────────────────────┐
+ * │ The row previously kept saying "Signed — notes disputed" after review,   │
+ * │ which was wrong — it implied outstanding work. The obvious correction,    │
+ * │ "Reviewed — partially accepted", is also wrong: it drops the historical   │
+ * │ fact that the employee challenged this record, and a manager scanning the │
+ * │ Meetings tab would see no sign it was ever contested.                    │
+ * │                                                                         │
+ * │ So the badge keeps BOTH. The resolution value entails that review        │
+ * │ happened — nothing can be partially accepted without being reviewed — so  │
+ * │ one line carries three facts with no redundant word:                     │
+ * │                                                                         │
+ * │   it was challenged · review is complete · what was concluded            │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ *
+ * An EXPLICIT map, not `Disputed — ${label.toLowerCase()}`. Lowercasing a
+ * display string is the kind of derivation that breaks silently the first time a
+ * label contains a proper noun. A test asserts every RESOLUTION has an entry, so
+ * a fifth resolution cannot ship without a badge.
+ */
+export const RESOLVED_DISPUTE_BADGE = Object.freeze({
+  [RESOLUTION.CORRECTION_ACCEPTED]: 'Disputed — correction accepted',
+  [RESOLUTION.PARTIALLY_ACCEPTED]: 'Disputed — partially accepted',
+  [RESOLUTION.ORIGINAL_RETAINED]: 'Disputed — original record retained',
+  [RESOLUTION.ADDENDUM_ADDED]: 'Disputed — clarification added',
+});
+
+/**
+ * The badge for a reviewed challenge, or null if there is no recorded resolution.
+ *
+ * Reads the stored token and never renames it. An unrecognised value returns null
+ * so the caller falls back to the unresolved wording rather than inventing a
+ * label for a state Compass does not understand.
+ */
+export function resolvedDisputeBadge(row) {
+  const resolution = row?.response_resolution ?? row?.responseResolution;
+  return RESOLVED_DISPUTE_BADGE[resolution] || null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // VALIDATION — one definition, used by the API and by the tests.
 // ─────────────────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { ESIGNATURE_STATUS, LEGACY_PENDING_STATUS, EXTERNAL_SIGNATURE_STATUS } from './eSignature';
 import { communicationEvidence, COMMUNICATION } from './communicationEvidence';
-import { challengesAccuracy, confirmsAccuracy, isResolved } from './employeeResponse';
+import { challengesAccuracy, confirmsAccuracy, isResolved, resolvedDisputeBadge } from './employeeResponse';
 
 // ─────────────────────────────────────────────────────────────────────────
 // WHAT EACH CONFIRMATION STATE MEANS TO A HUMAN — ONE EXHAUSTIVE MAP.
@@ -314,8 +314,16 @@ function withResponse(base, status, request) {
         ? `${base.heading} — employee response reviewed`
         : `${base.heading} — employee response requires review`,
       stateLine: reviewed ? 'Signed — response reviewed' : 'Signed — notes disputed',
-      badgeLabel: reviewed ? 'Signed — response reviewed' : 'Signed — notes disputed',
-      tone: TONE.ATTENTION,
+      // The ROW badge names the conclusion as well as the challenge, because the
+      // Meetings tab is a scanning surface: "reviewed" alone leaves the manager
+      // to open the record to find out what was decided. Falls back to the
+      // unresolved wording if the stored token is one this build does not know,
+      // rather than inventing a label.
+      badgeLabel: (reviewed && resolvedDisputeBadge(request)) || 'Signed — notes disputed',
+      // A reviewed challenge is DONE, not ATTENTION. Leaving it amber told the
+      // manager there was outstanding work on a record they had already
+      // adjudicated — which is exactly how a real warning gets ignored.
+      tone: reviewed ? TONE.DONE : TONE.ATTENTION,
       // They signed for receipt; they did not agree the notes are right.
       impliesAgreement: false,
       participantResponded: true,

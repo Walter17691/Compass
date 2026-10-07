@@ -73,7 +73,8 @@ import { canAnalyseEvidence, buildAnalysisContent } from './lib/documentIngestio
 import { OH_REPORT_SYSTEM_PROMPT, buildOhFindings, ohFindingTaskName } from './lib/ohReportIntelligence';
 import { isTerminalStatus, isExpired, signatureStatusLabel } from './lib/eSignature';
 import { hasBeenIssued, confirmationSemantics } from './lib/confirmationSemantics';
-import { resolutionLabel, RESPONSE_TYPE } from './lib/employeeResponse';
+import { resolutionLabel, RESPONSE_TYPE, awaitsEmployerReview } from './lib/employeeResponse';
+import { mirrorResolutionOntoMeeting } from './lib/resolutionMirror';
 import { parseCommitmentDueDate, suggestTaskOwner } from './lib/taskDueDateParsing';
 import { derivePeopleForCase } from './lib/casePeople';
 import { matchCaseByEmployeeName, matchCaseByEmployeeNameWithConfidence } from './lib/globalAssistant';
@@ -1772,6 +1773,40 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         const error = data.error || "Couldn't record that conclusion — please try again.";
         showToast(error, "error");
         return { ok:false, error };
+      }
+      // ── MIRROR THE CONCLUSION ONTO THE MEETING ──────────────────────────
+      //
+      // THE DEFECT THIS CLOSES. This handler used to audit, toast and return. The
+      // signing_requests row was correct, but `cases.meetings[].responseResolution`
+      // stayed NULL forever — and because the signature-sync poll only refreshes
+      // NON-terminal requests, and `signed` is terminal, nothing ever caught up.
+      // So the row badge kept reading "Signed — notes disputed" and
+      // computeInvestigationQualityGaps kept asserting the response "has not been
+      // reviewed", both indefinitely and both false.
+      //
+      // Only the SERVER'S returned values are written — never the local decision
+      // object — so the mirror cannot disagree with the authoritative row. The row
+      // stays the source of truth; this is the existing client projection.
+      //
+      // response_resolved_by is deliberately NOT mirrored: it is an internal
+      // auth.users id and cases.meetings is readable across the org. Who reviewed
+      // is recorded in signing_requests and in the audit entry below, which is
+      // where an internal actor id belongs.
+      // The projection itself is a PURE transform (lib/resolutionMirror.js) so it
+      // can be executed by a test rather than only asserted about as source text.
+      // It returns the same array reference when there is nothing to apply.
+      const updated = mirrorResolutionOntoMeeting(casesRef.current, {
+        caseId: cs?.id, meetingId: meeting?.id, request: data.request,
+      });
+      if (updated !== casesRef.current) {
+        // The established persistence path, with its own optimistic-concurrency
+        // check on updated_at. A conflict is benign here: saveCaseToDB reloads the
+        // case, and the widened sync poll re-reads this request and mirrors the
+        // resolution again. Nothing is lost and nothing is overwritten.
+        const saved = await saveCases(updated, cs.id);
+        if (saved && saved.ok === false && saved.reason === 'conflict') {
+          console.warn('Resolution recorded; the local case was refreshed before the mirror landed. The signature sync will re-apply it.');
+        }
       }
       // The audit entry names the conclusion AND whether text was added, because
       // "we kept the record as written" and "we added a correction to it" are
@@ -3892,7 +3927,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   useEffect(() => {
     if (screen !== SCREENS.CASE_VIEW || !activeCaseId) return;
     const cs = cases.find(c => c.id === activeCaseId);
-    const pending = (cs?.meetings || []).filter(m => m.signId && !isTerminalStatus(m.signStatus));
+    // A request is re-read while the PARTICIPANT might still act (non-terminal),
+    // and now also while an EMPLOYER review might have landed elsewhere. The
+    // second case is not hypothetical: a dispute is signed, `signed` is terminal,
+    // so without this clause a resolution recorded in another tab — or by another
+    // manager, or in a session whose mirror write lost an updated_at race — could
+    // never reach this client. It is the normal sync path doing what it exists
+    // for, which is why no backfill is needed to heal an already-stale mirror.
+    const pending = (cs?.meetings || []).filter(m => m.signId
+      && (!isTerminalStatus(m.signStatus) || awaitsEmployerReview(m)));
     if (!pending.length) return;
     let cancelled = false;
     (async () => {
@@ -3936,7 +3979,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
             || (data.response_type || null) !== (m.responseType || null)
             || (data.response_resolution || null) !== (m.responseResolution || null);
           return data.status && changed
-            ? { id: m.id, status: data.status, signedAt: data.signed_at || data.declined_at || null, signature: data.signature || null, signerName: data.employee_name || null, declineReason: data.decline_reason || null,
+            ? { id: m.id, status: data.status, prevStatus: m.signStatus || null, signedAt: data.signed_at || data.declined_at || null, signature: data.signature || null, signerName: data.employee_name || null, declineReason: data.decline_reason || null,
                 expiresAt: data.expires_at || null,
                 participantComment: data.participant_comment || null,
                 participantCommentAt: data.participant_comment_at || null,
@@ -3982,8 +4025,15 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       // double-log the same transition.
       saveCases(updated, activeCaseId).then(result => {
         if (!result?.ok || cancelled) return;
-        changes.forEach(({ id, status, responseType }) => {
+        changes.forEach(({ id, status, prevStatus, responseType }) => {
           if (!isTerminalStatus(status)) return; // "opened" isn't a completion — only signed/acknowledged/declined are
+          // A TRANSITION, not merely a changed row. Before the poll was widened to
+          // re-read signed-and-disputed requests, reaching a terminal status here
+          // always WAS a transition. Now a resolution appearing on an already-
+          // signed request also produces a change, and without this guard it would
+          // log "notes signed" and "accuracy disputed" a second time — duplicating
+          // audit history for an event that happened once.
+          if (status === prevStatus) return;
           const m = pending.find(p => p.id === id);
           const outcomeText = status === "signed" ? "signed" : status === "acknowledged" ? "acknowledged" : status === "declined" ? "declined to sign" : status;
           // TRUST-SIG-03 — what the employee DID about signing and what they SAID
