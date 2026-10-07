@@ -69,11 +69,15 @@ describe('A/B. the investigation report presents as an internal document', () =>
 
   it('EXECUTED: every correspondence capability is off, every internal one on', () => {
     const caps = documentCapabilities(INVESTIGATION_REPORT_DOC);
+    // Deep equality on purpose: a new capability cannot be added without this
+    // test being updated deliberately. IR-SURF-01a added mayAskWhy/mayEditInline
+    // and this assertion is what surfaced it.
     expect(caps).toEqual({
       internal: true, label: 'Investigation report',
       mayApproveForSending: false, maySendToEmployee: false, mayESign: false,
       maySaveAsLetter: false, maySwitchDocumentType: false,
       mayExport: true, exportRequiresApproval: false,
+      mayAskWhy: false, mayEditInline: false,
     });
   });
 
@@ -219,6 +223,7 @@ describe('F. genuine letter types are untouched', () => {
         mayApproveForSending: true, maySendToEmployee: true, mayESign: true,
         maySaveAsLetter: true, maySwitchDocumentType: true,
         mayExport: true, exportRequiresApproval: true,
+        mayAskWhy: true, mayEditInline: true,
       });
     }
   });

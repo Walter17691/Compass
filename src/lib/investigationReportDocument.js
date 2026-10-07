@@ -160,6 +160,8 @@ export function documentCapabilities(docType) {
       maySwitchDocumentType: true,
       mayExport: true,
       exportRequiresApproval: true,
+      mayAskWhy: true,
+      mayEditInline: true,
     });
   }
   return Object.freeze({
@@ -173,6 +175,26 @@ export function documentCapabilities(docType) {
     // Legitimate internal actions, and they do not need issuance approval.
     mayExport: true,
     exportRequiresApproval: false,
+    // ── IR-SURF-01a — RESIDUAL LETTER CHROME ────────────────────────────────
+    //
+    // "Ask why" is LETTER-SPECIFIC and ungrounded here. Its panel is built from
+    // `letterSources`, which is populated only by handleLetter (set at
+    // App.jsx:11078, cleared at :10859). openInvestigationReport does not touch
+    // it, so on this document it shows the PREVIOUS letter's provenance — or
+    // nothing — under the heading "This letter's draft", which also talks about
+    // "regenerating". Attributing one document's sources to another inside the
+    // same case is worse than showing nothing.
+    mayAskWhy: false,
+    //
+    // "Edit letter" is not merely mislabelled — there is nowhere for the edit to
+    // GO. The textarea writes to letterOutput (session state), and there is
+    // exactly ONE writer of cases.investigation_report in the whole app
+    // (concludeInvestigation). With Save-to-case now refused for this document,
+    // an edit is silently discarded on navigation. Relabelling it "Edit report"
+    // would make a lossy control look legitimate, which the brief explicitly
+    // warns against. Editing the report arrives in IR-2, alongside adoption and
+    // versions — i.e. once the edit has somewhere to be kept.
+    mayEditInline: false,
   });
 }
 

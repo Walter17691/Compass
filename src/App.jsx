@@ -105,7 +105,7 @@ import { splitMeetingRecord } from './lib/meetingRecordSections';
 import { employeeFacingSnapshot } from './lib/signedSnapshot';
 import { applyRecordIdentity, resolvePersistedMeeting, RESOLUTION, isPersistedIdentityMissing, describeUnresolvedPersistedRecord } from './lib/meetingIdentity';
 import { CAPTURE_CHANNEL, isSegmentable, pendingCapture, attributeCapture, reconcileCapture } from './lib/noteCapture';
-import { useScrollToTopOnEnter } from './lib/screenScroll';
+import { useScrollToTopOnEnter, useScrollToTopOnDocumentEntry, internalDocumentEntryKey } from './lib/screenScroll';
 import { resolveRecipient, isAddressOverride, isValidRecipientEmail, describeAddressOverride, RECIPIENT_SOURCE } from './lib/recipientResolution';
 import { sourceFidelity, dialoguePermitted, discussionHeading, discussionInstruction, participantInitials, applyFidelityGuard, describeFidelityFallback } from './lib/recordFidelity';
 import { mergeSuggestions, suggestionKey } from './lib/suggestionIdentity';
@@ -7504,6 +7504,17 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // on Review all re-render with `screen` unchanged, so none of them re-runs
   // this and none of them moves the manager's reading position.
   useScrollToTopOnEnter(screen, SCREENS.REVIEW);
+  // IR-SURF-01a — opening an investigation report starts at the report.
+  //
+  // Keyed on the DOCUMENT, not the screen: the key is null for every genuine
+  // letter and never transitions, so letter scrolling is untouched by
+  // construction. It changes only when an internal document is opened, so
+  // reading, scrolling and any other state change cannot drag the reader back
+  // to the top. No timers.
+  useScrollToTopOnDocumentEntry(internalDocumentEntryKey({
+    screen, documentScreen: SCREENS.LETTER, docType: activeLetter,
+    internal: documentCapabilities(activeLetter).internal,
+  }));
 
   // §6 — the recipient Compass holds for this employee, resolved for display
   // and for the override comparison.

@@ -143,14 +143,20 @@ export function LetterScreen({ outcomeLetter=null, handleLetter, activeLetter, a
         {letterOutput&&(
           <>
             {/* Edit toggle */}
-            <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginBottom:8}}>
-              <button onClick={()=>onAskWhy?.({title:"This letter's draft", reasoning:"Drafted by AI from the case information below, as it stood at the moment this draft was generated. Regenerating the letter refreshes both the draft and this source list.", sourceRefs:letterSources})}
-                style={{fontSize:11,background:"none",border:`1px solid ${COLOR.purple}33`,borderRadius:6,padding:"4px 12px",color:COLOR.purpleDeep,cursor:"pointer",fontFamily:FONT.sans,fontWeight:600}}>Ask why</button>
-              <button onClick={()=>setEditingLetter(e=>!e)}
+            {/* IR-SURF-01a — both controls are letter-specific. Ask why reads
+                letterSources, which only handleLetter populates, so on an internal
+                document it would show another letter's provenance. And an inline
+                edit has nowhere to persist to: letterOutput is session state and
+                Save-to-case is refused for this document, so the edit is silently
+                lost. Editing the report belongs to IR-2, with adoption/versions. */}
+            {(caps.mayAskWhy||caps.mayEditInline)&&<div style={{display:"flex",justifyContent:"flex-end",gap:8,marginBottom:8}}>
+              {caps.mayAskWhy&&<button onClick={()=>onAskWhy?.({title:"This letter's draft", reasoning:"Drafted by AI from the case information below, as it stood at the moment this draft was generated. Regenerating the letter refreshes both the draft and this source list.", sourceRefs:letterSources})}
+                style={{fontSize:11,background:"none",border:`1px solid ${COLOR.purple}33`,borderRadius:6,padding:"4px 12px",color:COLOR.purpleDeep,cursor:"pointer",fontFamily:FONT.sans,fontWeight:600}}>Ask why</button>}
+              {caps.mayEditInline&&<button onClick={()=>setEditingLetter(e=>!e)}
                 style={{background:editingLetter?COLOR.purple:"none",border:"1px solid",borderColor:editingLetter?COLOR.purple:"#E8E0D0",borderRadius:5,padding:"4px 12px",fontSize:11,color:editingLetter?"#fff":"#888",cursor:"pointer"}}>
                 {editingLetter?"Done editing":"Edit letter"}
-              </button>
-            </div>
+              </button>}
+            </div>}
             {editingLetter&&(
               <textarea aria-label="Letter text" value={letterOutput} onChange={e=>setLetterOutput(e.target.value)}
                 style={{width:"100%",minHeight:400,background:"#FDFAF5",border:`1px solid ${COLOR.purple}33`,borderRadius:8,padding:"16px",fontSize:13,lineHeight:1.8,outline:"none",color:"#1A1535",resize:"vertical",boxSizing:"border-box",fontFamily:FONT.sans,marginBottom:12}}/>
