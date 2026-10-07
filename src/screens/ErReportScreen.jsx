@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { runPdfExport } from '../lib/pdfDocument';
 import { SCREENS } from '../constants';
 import { authedFetch } from '../lib/authedFetch';
 import { useLoadMore } from '../hooks/useLoadMore';
@@ -35,7 +36,9 @@ import { ReportsFilterBar } from '../components/reports/ReportsFilterBar';
 // activity within the selected period. Location/case-type filters apply
 // to both kinds equally (a genuine, meaningful scope), only the date
 // dimension is restricted to period metrics.
-export function ErReportScreen({ cases, getCaseStage, employeeRecords, dueSoon, onViewCases, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActiveEmployeeId, getNextStep, fmtDate, loadJsPDF, caseThemes, organisationThemes, isHR }) {
+export function ErReportScreen({ cases, showToast, getCaseStage, employeeRecords, dueSoon, onViewCases, setReportNarrative, reportNarrative, setActiveCaseId, setActiveCaseStage, setScreen, setActiveEmployeeId, getNextStep, fmtDate, loadJsPDF, caseThemes, organisationThemes, isHR }) {
+  // PDF-01 — a real loading state, so the control cannot sit dead on failure.
+  const [boardPdfBusy, setBoardPdfBusy] = useState(false);
   const [dateRangeId, setDateRangeId] = useState(DEFAULT_DATE_RANGE_ID);
   const [location, setLocation] = useState("");
   const [caseType, setCaseType] = useState("");
@@ -163,7 +166,10 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, dueSoon, 
           <h2 style={{ ...TYPE.sectionHeading, color: COLOR.inkFaint, margin: "0 0 4px", fontWeight: 700 }}>Reports</h2>
           <p style={{ fontSize: 13, color: COLOR.inkFaint, margin: 0 }}>Understand case activity, outcomes and emerging trends.</p>
         </div>
-        <button onClick={async () => {
+        {/* PDF-01 — this had no loading state and no error handling: a failed
+            export was an unhandled rejection and nothing visibly happened. The
+            invariant now comes from runPdfExport. */}
+        <button disabled={boardPdfBusy} onClick={async () => runPdfExport(async () => {
           const jsPDF = await loadJsPDF();
           const doc = new jsPDF({ unit: "mm", format: "a4" });
           const M = 20, W = doc.internal.pageSize.getWidth(), maxW = W - M * 2;
@@ -197,8 +203,8 @@ export function ErReportScreen({ cases, getCaseStage, employeeRecords, dueSoon, 
             lines.forEach(line => { if (y > 280) { doc.addPage(); y = 20; } doc.text(line, M, y); y += 5.5; });
           }
           doc.save("Compass_Board_Report_" + new Date().toLocaleDateString("en-GB").split("/").join("-") + ".pdf");
-        }} style={{ fontSize: 13, background: COLOR.surface, border: `1px solid ${COLOR.border}`, borderRadius: RADIUS.surface, padding: "10px 20px", color: COLOR.ink, fontWeight: 600, cursor: "pointer", fontFamily: FONT.sans, flexShrink: 0 }}>
-          Download board report
+        }, { setBusy: setBoardPdfBusy, onError: m => showToast?.(m, "error"), label: 'Board report' })} style={{ fontSize: 13, background: COLOR.surface, border: `1px solid ${COLOR.border}`, borderRadius: RADIUS.surface, padding: "10px 20px", color: COLOR.ink, fontWeight: 600, cursor: "pointer", fontFamily: FONT.sans, flexShrink: 0 }}>
+          {boardPdfBusy ? 'Preparing...' : 'Download board report'}
         </button>
       </div>
 

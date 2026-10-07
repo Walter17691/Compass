@@ -138,6 +138,7 @@ export function InsightsScreen({
                 getNextStep={reporting.getNextStep}
                 fmtDate={reporting.fmtDate}
                 loadJsPDF={reporting.loadJsPDF}
+                showToast={reporting.showToast}
                 caseThemes={orgIntel.caseThemes}
                 organisationThemes={orgIntel.organisationThemes}
                 isHR={isHR}

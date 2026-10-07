@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { runPdfExport } from '../lib/pdfDocument';
 import { buildCaseTimeline, mayHaveIncompleteAuditHistory } from '../lib/caseTimeline';
 import { computeStageProgress } from '../lib/processTimeline';
 import { Btn } from './Primitives';
@@ -26,7 +27,9 @@ const selectStyle = { fontSize:12, border:"1px solid #E8EAF2", borderRadius:6, p
 // timeline_overrides column, applied inside buildCaseTimeline itself so
 // every caller sees the same result), a cached per-entry AI relevance
 // note, and export.
-export function TimelinePanel({ cs, allegations, auditLog, fmtDate, onOpenSource, onToggleExclude, onEditDescription, onGenerateRelevance, relevanceLoading, loadJsPDF }) {
+export function TimelinePanel({ cs, allegations, auditLog, fmtDate, onOpenSource, onToggleExclude, onEditDescription, onGenerateRelevance, relevanceLoading, loadJsPDF, onPdfError }) {
+  // PDF-01 — a real loading state, so Export cannot sit dead after a failure.
+  const [chronologyBusy, setChronologyBusy] = useState(false);
   const [personFilter, setPersonFilter] = useState("");
   const [allegationFilter, setAllegationFilter] = useState("");
   const [editingKey, setEditingKey] = useState(null);
@@ -48,7 +51,10 @@ export function TimelinePanel({ cs, allegations, auditLog, fmtDate, onOpenSource
     return true;
   });
 
-  const exportPdf = async () => {
+  // PDF-01 — this had no loading state and no error handling either: a failed
+  // chronology export was an unhandled rejection with no user feedback. The
+  // invariant now comes from runPdfExport, shared with every other export.
+  const exportPdf = async () => runPdfExport(async () => {
     const jsPDF = await loadJsPDF();
     const doc = new jsPDF({ unit: "mm", format: "a4" });
     const M = 20, W = doc.internal.pageSize.getWidth(), maxW = W - M * 2;
@@ -65,7 +71,7 @@ export function TimelinePanel({ cs, allegations, auditLog, fmtDate, onOpenSource
       y += 3;
     });
     doc.save((cs.employeeName || "case") + "-chronology.pdf");
-  };
+  }, { setBusy: setChronologyBusy, onError: m => onPdfError?.(m), label: 'Chronology' });
 
   return (
     <div style={{background:"#FFFFFF",border:"1px solid #E8EAF2",borderRadius:12,overflow:"hidden"}}>
@@ -85,7 +91,7 @@ export function TimelinePanel({ cs, allegations, auditLog, fmtDate, onOpenSource
             </select>
           )}
           {onGenerateRelevance && <button onClick={()=>onGenerateRelevance(cs)} disabled={relevanceLoading} style={{...selectStyle,background:"none",cursor:relevanceLoading?"not-allowed":"pointer"}}>{relevanceLoading?"Assessing relevance…":"Assess relevance"}</button>}
-          {loadJsPDF && <Btn variant="secondary" style={{padding:"5px 10px",fontSize:12}} onClick={exportPdf}>Export</Btn>}
+          {loadJsPDF && <Btn variant="secondary" disabled={chronologyBusy} style={{padding:"5px 10px",fontSize:12}} onClick={exportPdf}>{chronologyBusy ? "Preparing..." : "Export"}</Btn>}
         </div>
       </div>
 

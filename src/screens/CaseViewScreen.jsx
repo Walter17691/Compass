@@ -1516,7 +1516,7 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
             <OutcomeTab cs={cs} stage={stage} fmtDate={fmtDate} setShowOutcomeModal={setShowOutcomeModal} canDecide={canDecide} onDraftOutcomeLetter={draftOutcomeLetter}/>
             ),
                       record: (
-            <TimelinePanel cs={cs} allegations={allegations} auditLog={auditLog} fmtDate={fmtDate} onOpenSource={openTimelineSource} onToggleExclude={timeline.toggleTimelineExclude} onEditDescription={timeline.editTimelineDescription} onGenerateRelevance={timeline.generateTimelineRelevance} relevanceLoading={timeline.timelineRelevanceLoading?.[cs.id]} loadJsPDF={timeline.loadJsPDF}/>
+            <TimelinePanel cs={cs} allegations={allegations} auditLog={auditLog} fmtDate={fmtDate} onOpenSource={openTimelineSource} onToggleExclude={timeline.toggleTimelineExclude} onEditDescription={timeline.editTimelineDescription} onGenerateRelevance={timeline.generateTimelineRelevance} relevanceLoading={timeline.timelineRelevanceLoading?.[cs.id]} onPdfError={m=>showToast(m,"error")} loadJsPDF={timeline.loadJsPDF}/>
             ),
                       compass: (
             <CompassAnalysisPanel cs={cs} readiness={readiness} currentRisk={currentRisk}
