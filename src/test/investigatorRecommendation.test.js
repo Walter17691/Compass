@@ -37,13 +37,26 @@ describe('computeInvestigatorRecommendation', () => {
 
   it('falls back to the next incomplete fixed checklist step when the plan is empty or fully done', () => {
     const result = computeInvestigatorRecommendation(cs, [], [], []);
-    expect(result).toEqual({ text: INVESTIGATION_CHECKLIST_STEPS[0].label, kind: 'checklist' });
+    // IR-REPORT-01a — the line the investigator READS is displayLabel where
+    // one exists; the step is still identified, and its task still matched, by
+    // `label` (see the next test, which marks a task done by that label).
+    expect(result).toEqual({
+      text: INVESTIGATION_CHECKLIST_STEPS[0].displayLabel || INVESTIGATION_CHECKLIST_STEPS[0].label,
+      kind: 'checklist',
+    });
+    expect(result.text).toBe('Review the issue(s) under investigation');
   });
 
   it('recommends the first fixed step not yet marked done, in order', () => {
+    // The task carries the PERSISTED label. If matching had moved to
+    // displayLabel this would not be recognised as done and step 1 would be
+    // recommended again.
     const checklistTasks = [{ id: 't1', name: INVESTIGATION_CHECKLIST_STEPS[0].label, status: 'done' }];
     const result = computeInvestigatorRecommendation(cs, checklistTasks, [], []);
-    expect(result).toEqual({ text: INVESTIGATION_CHECKLIST_STEPS[1].label, kind: 'checklist' });
+    expect(result).toEqual({
+      text: INVESTIGATION_CHECKLIST_STEPS[1].displayLabel || INVESTIGATION_CHECKLIST_STEPS[1].label,
+      kind: 'checklist',
+    });
   });
 
   it('returns null once every guardrail, plan item and checklist step is resolved', () => {

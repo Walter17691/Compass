@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { InvestigationConclusionField } from './InvestigationConclusionField';
+import { DraftTextarea } from './DraftTextarea';
 import { FONT } from '../styles/tokens';
 import { ALLEGATION_STATUSES, EVIDENCE_STANCES, allegationStatusMeta, evidenceForAllegation, linkEvidenceToAllegation, unlinkEvidenceFromAllegation, isFindingStatus, APPEAL_OUTCOMES, appealOutcomeMeta } from '../lib/allegations';
 import { computeOutcomeDistribution, computeSanctionDistribution, comparableCaseSummaries } from '../lib/outcomeConsistency';
@@ -24,35 +25,9 @@ const labelStyle = { fontSize:11, color:"#8A8EA3", display:"block", marginBottom
 // tiny and local rather than a shared component since its only job is
 // to preserve the exact visual rhythm of the editable version it
 // replaces.
-// Phase 6.5 hardening (P0, Cluster 7) — these fields used to call
-// onCommit (patchAllegation, a full-row upsert) on every keystroke via
-// onChange. A local draft persists only on blur (or unmount, so
-// collapsing the row without a natural blur event doesn't drop the last
-// edit) — cuts write volume from one-per-character to one-per-field-edit,
-// and shrinks the window the paired optimistic-concurrency guard
-// (saveAllegationToDB) has to protect. Syncs from the incoming value only
-// when it actually changes, so an unrelated re-render never clobbers an
-// in-progress edit.
-function DraftTextarea({ value, onCommit, ...rest }) {
-  const [draft, setDraft] = useState(value || "");
-  const draftRef = useRef(draft);
-  const valueRef = useRef(value);
-  const onCommitRef = useRef(onCommit);
-  useEffect(() => { draftRef.current = draft; onCommitRef.current = onCommit; });
-
-  useEffect(() => {
-    if (value !== valueRef.current) { setDraft(value || ""); valueRef.current = value; }
-  }, [value]);
-
-  useEffect(() => () => {
-    if (draftRef.current !== (valueRef.current || "")) onCommitRef.current(draftRef.current);
-  }, []);
-
-  const commit = () => { if (draft !== (value || "")) { onCommit(draft); valueRef.current = draft; } };
-
-  return <textarea {...rest} value={draft} onChange={e=>setDraft(e.target.value)} onBlur={commit} />;
-}
-
+// DraftTextarea (the Phase 6.5 commit-on-blur hardening) now lives in
+// ./DraftTextarea so the investigator's findings workspace shares one
+// implementation rather than carrying a second copy of that fix.
 function ReadOnlyField({ label, value, placeholder }) {
   return (
     <div style={{marginBottom:12}}>
@@ -69,6 +44,14 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
   // canRecordInvestigation: may this user write the investigation narrative —
   // true for HR, the disciplinary officer, AND the assigned investigator.
   atDecisionStage = true, canRecordInvestigation = canDecide,
+  // IR-REPORT-01a. canConcludeInvestigation is NARROWER than
+  // canRecordInvestigation: HR or this case's assigned investigator, and
+  // deliberately not the disciplinary officer, mirroring
+  // protect_allegations_investigation_conclusion_columns. Defaulting it to
+  // canRecordInvestigation would reinstate the mismatch it exists to close, so
+  // it defaults to false — a caller that has not decided the authority does
+  // not get to offer the control.
+  canConcludeInvestigation = false,
   recordInvestigationConclusion }) {
   const [showNew, setShowNew] = useState(false);
   const [newForm, setNewForm] = useState({ title:"", description:"", period:"", peopleInvolved:"" });
@@ -250,7 +233,7 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                       only the front door. */}
                   <InvestigationConclusionField
                     allegation={a}
-                    canRecord={canRecordInvestigation}
+                    canRecord={canConcludeInvestigation}
                     onRecord={(conclusion, reasoning) => recordInvestigationConclusion?.(a.id, conclusion, reasoning)}
                     fmtDate={fmtDate}
                     orgMembers={orgMembers}
@@ -345,10 +328,22 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                   ) : (
                     <ReadOnlyField label="Employee response" value={a.employeeResponse} placeholder="Not yet recorded" />
                   )}
-                  <div style={{marginBottom:14}}>
-                    <label htmlFor={`allegation-witness-evidence-${a.id}`} style={labelStyle}>Witness evidence summary</label>
-                    <DraftTextarea id={`allegation-witness-evidence-${a.id}`} style={{...inputStyle,resize:"vertical"}} rows={2} value={a.witnessEvidence||""} onCommit={v=>patchAllegation(a.id,{witnessEvidence:v})} />
-                  </div>
+                  {/* IR-REPORT-01a — this field had NO gate at all, unlike
+                      every sibling around it: it rendered an editable textarea
+                      unconditionally, so an appeal manager, approver or case
+                      owner viewing the case read-only could still rewrite the
+                      witness evidence summary. Gated on canRecordInvestigation
+                      — the same authority as the investigator's assessment,
+                      because a witness evidence summary is investigation
+                      material, which is exactly what that gate is for. */}
+                  {canRecordInvestigation ? (
+                    <div style={{marginBottom:14}}>
+                      <label htmlFor={`allegation-witness-evidence-${a.id}`} style={labelStyle}>Witness evidence summary</label>
+                      <DraftTextarea id={`allegation-witness-evidence-${a.id}`} style={{...inputStyle,resize:"vertical"}} rows={2} value={a.witnessEvidence||""} onCommit={v=>patchAllegation(a.id,{witnessEvidence:v})} />
+                    </div>
+                  ) : (
+                    <ReadOnlyField label="Witness evidence summary" value={a.witnessEvidence} placeholder="Not yet recorded" />
+                  )}
 
                   <div style={{fontSize:11,fontWeight:700,color:"#4A4E63",marginBottom:8}}>Linked evidence ({linked.length})</div>
                   {linked.map(ev => (
@@ -362,7 +357,16 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                   ))}
                   {evidence.filter(ev=>!ev.allegationId).length>0 && (
                     <div style={{marginTop:10,display:"flex",gap:8,alignItems:"center"}}>
-                      <select aria-label="Link existing evidence" defaultValue="" onChange={e=>{ const evId=e.target.value; linkEvidence(a.id, evId, "supports"); e.target.value=""; }} style={{...inputStyle,fontSize:12}}>
+                      {/* IR-REPORT-01a — this passed "supports", so merely
+                          LINKING an item asserted that it supported the
+                          allegation, and the investigator had to notice and
+                          correct a classification they never made. The stance
+                          is now left to linkEvidenceToAllegation's own
+                          documented default (neutral) — one place decides it —
+                          and the per-item select above is where a human
+                          classifies it. Existing links are untouched: this
+                          changes only what a NEW link starts as. */}
+                      <select aria-label="Link existing evidence" defaultValue="" onChange={e=>{ const evId=e.target.value; linkEvidence(a.id, evId); e.target.value=""; }} style={{...inputStyle,fontSize:12}}>
                         <option value="" disabled>Link existing evidence...</option>
                         {evidence.map(ev=>!ev.allegationId && <option key={ev.id} value={ev.id}>{ev.name}</option>)}
                       </select>

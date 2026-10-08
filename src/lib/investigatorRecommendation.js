@@ -30,11 +30,17 @@ export function computeInvestigatorRecommendation(cs, checklistTasks, planTasks,
   }
 
   const nextStep = INVESTIGATION_CHECKLIST_STEPS.find(step => {
+    // Matched on `label`, which is the persisted case_task name.
     const task = (checklistTasks || []).find(t => t.name === step.label);
     return !task || task.status !== "done";
   });
   if (nextStep) {
-    return { text: nextStep.label, kind: "checklist" };
+    // Displayed as `displayLabel` where one exists (IR-REPORT-01a). This line
+    // is read by the investigator, and telling them to "review the
+    // allegation(s)" on a case that records only an incident asserts an
+    // accusation the record may not contain. The MATCH above still uses
+    // `label` — only the wording shown changes.
+    return { text: nextStep.displayLabel || nextStep.label, kind: "checklist" };
   }
 
   return null;

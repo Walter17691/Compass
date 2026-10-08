@@ -31,15 +31,22 @@ const baseProps = {
 };
 
 describe('InvestigatorChecklistView — assignment scope (MP7)', () => {
+  // IR-REPORT-01a — each in-scope issue now appears on TWO surfaces: the
+  // review step's list and the findings workspace on the "record your
+  // findings" step. getAllByText, because one match would mean the workspace
+  // had stopped rendering it. The scoping invariant is unchanged and is now
+  // enforced on both surfaces at once.
   it('shows every allegation when scopeAllegationIds is null (pre-MP7 assignment, or a scope-less caller)', () => {
     render(<InvestigatorChecklistView {...baseProps} />);
-    expect(screen.getByText('Unauthorised absence')).toBeInTheDocument();
-    expect(screen.getByText('Falsified expenses')).toBeInTheDocument();
+    expect(screen.getAllByText('Unauthorised absence').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Falsified expenses').length).toBeGreaterThanOrEqual(1);
   });
 
   it('narrows the allegations list to just the assigned subset when scopeAllegationIds is set', () => {
     render(<InvestigatorChecklistView {...baseProps} scopeAllegationIds={['a1']} />);
-    expect(screen.getByText('Unauthorised absence')).toBeInTheDocument();
+    expect(screen.getAllByText('Unauthorised absence').length).toBeGreaterThanOrEqual(1);
+    // Out of scope: absent from the review list AND from the findings
+    // workspace, so an out-of-scope issue cannot be assessed either.
     expect(screen.queryByText('Falsified expenses')).not.toBeInTheDocument();
   });
 
@@ -128,9 +135,11 @@ describe('InvestigatorChecklistView — Compass recommends next (MP9)', () => {
   it('falls back to the fixed checklist when there is no plan or guardrail yet', () => {
     render(<InvestigatorChecklistView {...baseProps} planTasks={[]} onGeneratePlan={noop} />);
     expect(screen.getByText('Compass recommends next')).toBeInTheDocument();
-    // "Review the allegation(s)" also appears once as StepCard 0's own
-    // label — the recommendation banner is a second, legitimate match.
-    expect(screen.getAllByText('Review the allegation(s)').length).toBeGreaterThanOrEqual(2);
+    // The step's own card is one match and the recommendation banner the
+    // other. Both now read the neutral displayLabel (IR-REPORT-01a) — the
+    // persisted task name behind it is still "Review the allegation(s)".
+    expect(screen.getAllByText('Review the issue(s) under investigation').length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText('Review the allegation(s)')).not.toBeInTheDocument();
   });
 
   it('renders no banner once everything is resolved', () => {

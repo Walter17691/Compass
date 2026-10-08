@@ -45,7 +45,8 @@ import { CommunicationsTab } from '../components/caseTabs/CommunicationsTab';
 import { ThemesTab } from '../components/caseTabs/ThemesTab';
 import { OutcomeTab } from '../components/caseTabs/OutcomeTab';
 import { GuardrailsPanel } from '../components/GuardrailsPanel';
-import { allegationsForCase } from '../lib/allegations';
+import { allegationsForCase, linkEvidenceToAllegation } from '../lib/allegations';
+import { mayRecordInvestigationNarrative, mayRecordInvestigationConclusion } from '../lib/investigationAuthority';
 import { tasksForCase, hrNoteTasks } from '../lib/caseTasks';
 import { openSignalsForCase } from '../lib/caseSignals';
 import { resolveSignalRef as resolveSignalRefFor } from '../lib/resolveSignalRef';
@@ -325,7 +326,24 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   // investigation NARRATIVE — the fields literally named for them — and nothing
   // else: not the status, not the reasoning, not the outcome. Deliberately a
   // separate, narrower gate than canDecide rather than widening canDecide.
-  const canRecordInvestigation = canDecide || isAssignedInvestigator;
+  //
+  // ── IR-REPORT-01a — TWO AUTHORITIES, NOT ONE ────────────────────────────
+  //
+  // These were one gate, and the conclusion control received it. But the
+  // database rule for the conclusion is narrower than the rule for the
+  // narrative: protect_allegations_investigation_conclusion_columns admits HR
+  // or this case's assigned investigator and deliberately NOT the disciplinary
+  // officer, because they are the person who will hear the case. So the officer
+  // was shown "Record investigation conclusion", typed a conclusion and its
+  // mandatory reasoning, and got a 42501 refusal on save.
+  //
+  // Both now come from pure functions in investigationAuthority.js that mirror
+  // the two database rules, so the relationship between them is executable and
+  // testable rather than an expression here. The database still enforces; this
+  // only stops Compass offering a write that cannot land.
+  const investigatorCaseRole = myAccess?.role || null;
+  const canRecordInvestigation = mayRecordInvestigationNarrative({ isHR, caseRole: investigatorCaseRole });
+  const canConcludeInvestigation = mayRecordInvestigationConclusion({ isHR, caseRole: investigatorCaseRole });
   // Independent appeal officer workflow (2026-09-16) — the appeal-decision
   // gate is deliberately separate from canDecide above. The original
   // disciplinary_officer does not gain appeal-decision authority merely
@@ -802,6 +820,25 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
     );
   }
 
+  // ── IR-REPORT-01a — THE INVESTIGATOR'S OWN WRITES ───────────────────────
+  //
+  // Narrow callbacks, deliberately. InvestigatorChecklistView's prop contract
+  // is a within-case minimisation boundary, so it is given the ability to make
+  // these three writes without being handed `cases`, and the only org members
+  // it receives are the ones already named by a conclusion on THIS case rather
+  // than the org directory. Every write lands in the same column HR's panel
+  // writes, through the same function — no second store.
+  const setInvestigationEvidenceStance = (allegationId, evidenceId, stance) => {
+    if(!evidenceId) return;
+    // No stance default decided here: linkEvidenceToAllegation owns it, so
+    // "unclassified until the investigator says otherwise" has one home.
+    saveCases(cases.map(x => x.id===cs.id
+      ? { ...x, evidence: linkEvidenceToAllegation(x.evidence||[], evidenceId, allegationId, stance) }
+      : x), cs.id);
+  };
+  const conclusionAuthors = (orgMembers||[]).filter(m =>
+    caseAllegations.some(a => a.investigationConclusionBy === m.user_id));
+
   if(isAssignedInvestigator) {
     return (
       <InvestigatorChecklistView
@@ -826,6 +863,13 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
         submittingInvestigation={concludingInvestigation}
         onEscalate={()=>openEscalateModal(cs.id)}
         guidanceTasks={guidanceTasks}
+        canRecordNarrative={canRecordInvestigation}
+        canRecordConclusion={canConcludeInvestigation}
+        onPatchIssue={allegationsTab.patchAllegation}
+        onRecordConclusion={allegationsTab.recordInvestigationConclusion}
+        onSetEvidenceStance={setInvestigationEvidenceStance}
+        onCreateIssue={fields=>allegationsTab.createAllegation?.(cs.id, fields)}
+        conclusionAuthors={conclusionAuthors}
       />
     );
   }
@@ -1492,7 +1536,7 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
               onOpenMeeting={()=>goToDestination("meetings")}
               onOpenDocuments={()=>goToDestination("documents")}
               allegationsPanel={
-            <AllegationsPanel cs={cs} allegations={caseAllegations} allAllegations={allegations} createAllegation={allegationsTab.createAllegation} patchAllegation={allegationsTab.patchAllegation} changeAllegationStatus={allegationsTab.changeAllegationStatus} deleteAllegation={allegationsTab.deleteAllegation} saveCases={saveCases} cases={cases} confirmDialog={confirmDialog} showToast={showToast} evidenceSuggestions={allegationsTab.evidenceSuggestions?.[cs.id]||[]} evidenceSuggestionsLoading={allegationsTab.evidenceSuggestionsLoading?.[cs.id]} generateEvidenceSuggestions={allegationsTab.generateEvidenceSuggestions} acceptEvidenceSuggestion={allegationsTab.acceptEvidenceSuggestion} rejectEvidenceSuggestion={allegationsTab.rejectEvidenceSuggestion} setReviewOutput={setReviewOutput} onPresentMeetingRecord={onPresentMeetingRecord}  setScreen={setScreen} screens={screens} orgMembers={orgMembers} fmtDate={fmtDate} caseSignals={caseSignals} onAskWhy={setWhySignal} generateAppealReview={allegationsTab.generateAppealReview} appealReviewLoading={allegationsTab.appealReviewLoading} recordAppealOutcome={allegationsTab.recordAppealOutcome} policies={allegationsTab.policies} consistencyReview={allegationsTab.consistencyReview?.[cs.id]} consistencyReviewLoading={allegationsTab.consistencyReviewLoading?.[cs.id]} generateConsistencyReview={allegationsTab.generateConsistencyReview} canDecide={canDecide} canDecideAppeal={canDecideAppeal} atDecisionStage={atDecisionStage} canRecordInvestigation={canRecordInvestigation} recordInvestigationConclusion={allegationsTab.recordInvestigationConclusion}/>
+            <AllegationsPanel cs={cs} allegations={caseAllegations} allAllegations={allegations} createAllegation={allegationsTab.createAllegation} patchAllegation={allegationsTab.patchAllegation} changeAllegationStatus={allegationsTab.changeAllegationStatus} deleteAllegation={allegationsTab.deleteAllegation} saveCases={saveCases} cases={cases} confirmDialog={confirmDialog} showToast={showToast} evidenceSuggestions={allegationsTab.evidenceSuggestions?.[cs.id]||[]} evidenceSuggestionsLoading={allegationsTab.evidenceSuggestionsLoading?.[cs.id]} generateEvidenceSuggestions={allegationsTab.generateEvidenceSuggestions} acceptEvidenceSuggestion={allegationsTab.acceptEvidenceSuggestion} rejectEvidenceSuggestion={allegationsTab.rejectEvidenceSuggestion} setReviewOutput={setReviewOutput} onPresentMeetingRecord={onPresentMeetingRecord}  setScreen={setScreen} screens={screens} orgMembers={orgMembers} fmtDate={fmtDate} caseSignals={caseSignals} onAskWhy={setWhySignal} generateAppealReview={allegationsTab.generateAppealReview} appealReviewLoading={allegationsTab.appealReviewLoading} recordAppealOutcome={allegationsTab.recordAppealOutcome} policies={allegationsTab.policies} consistencyReview={allegationsTab.consistencyReview?.[cs.id]} consistencyReviewLoading={allegationsTab.consistencyReviewLoading?.[cs.id]} generateConsistencyReview={allegationsTab.generateConsistencyReview} canDecide={canDecide} canDecideAppeal={canDecideAppeal} atDecisionStage={atDecisionStage} canRecordInvestigation={canRecordInvestigation} canConcludeInvestigation={canConcludeInvestigation} recordInvestigationConclusion={allegationsTab.recordInvestigationConclusion}/>
               }
               evidencePanel={
             <EvidenceTab cs={cs} cases={cases} saveCases={saveCases} currentUser={currentUser} showToast={showToast} setReviewOutput={setReviewOutput} onPresentMeetingRecord={onPresentMeetingRecord}  setScreen={setScreen} screens={screens} fmtDate={fmtDate} setMeetingSetup={setMeetingSetup} setCaseInfo={setCaseInfo} orgMembers={orgMembers} allegations={caseAllegations} documentFindings={evidenceTab.documentFindings} documentAnalysisLoading={evidenceTab.documentAnalysisLoading} onAnalyseEvidence={(evidenceId)=>evidenceTab.analyseEvidenceDocument(cs, evidenceId)} onAcceptFinding={(evidenceId, finding)=>evidenceTab.acceptDocumentFinding(cs, evidenceId, finding)} onDismissFinding={(evidenceId, finding)=>evidenceTab.dismissDocumentFinding(cs, evidenceId, finding)} onRemoveEvidence={(evidenceId)=>evidenceTab.removeEvidence(cs.id, evidenceId)} promptDialog={promptDialog} audit={audit}/>

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'fs';
+
+import { mayRecordInvestigationNarrative } from '../lib/investigationAuthority.js';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AllegationsPanel } from '../components/AllegationsPanel.jsx';
@@ -217,9 +219,19 @@ describe('Slice 1 — the assigned investigator may record the investigation', (
   });
 
   it('the authority is derived from the existing case_access role, not from isHR', () => {
-    const src = readFileSync('src/screens/CaseViewScreen.jsx', 'utf8');
-    expect(src).toContain('const canRecordInvestigation = canDecide || isAssignedInvestigator');
-    expect(src).toContain('isAssignedInvestigator = !isHR && myAccess?.role==="investigator"');
+    // IR-REPORT-01a — this asserted the literal text
+    // `const canRecordInvestigation = canDecide || isAssignedInvestigator`,
+    // which pinned the EXPRESSION rather than the RULE and broke the moment
+    // that rule moved into a tested pure function. The invariant it was
+    // protecting is below, executed rather than string-matched: narrative
+    // authority follows the case_access role, so a non-HR investigator holds
+    // it and an unrelated non-HR viewer does not.
+    expect(mayRecordInvestigationNarrative({ isHR: false, caseRole: 'investigator' })).toBe(true);
+    expect(mayRecordInvestigationNarrative({ isHR: false, caseRole: 'disciplinary_officer' })).toBe(true);
+    expect(mayRecordInvestigationNarrative({ isHR: false, caseRole: 'appeal_manager' })).toBe(false);
+    expect(mayRecordInvestigationNarrative({ isHR: false, caseRole: null })).toBe(false);
+    // ...and isHR alone is sufficient, so HR never depends on a case role.
+    expect(mayRecordInvestigationNarrative({ isHR: true, caseRole: null })).toBe(true);
   });
 
   it('grants no outcome authority and no broader access', () => {

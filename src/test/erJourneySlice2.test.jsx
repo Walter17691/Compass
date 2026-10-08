@@ -713,7 +713,10 @@ async function expand(title = 'Unauthorised absence') {
 
 describe('Slice 2 — the Investigation screen asks the investigation question', () => {
   it('offers the conclusion to someone entitled to record it', async () => {
-    render(<AllegationsPanel {...panelProps(alleg())} canRecordInvestigation={true} atDecisionStage={false} />);
+    // IR-REPORT-01a — "entitled" is now canConcludeInvestigation (HR or the
+    // assigned investigator), not canRecordInvestigation (which also admits
+    // the disciplinary officer, whom the database refuses).
+    render(<AllegationsPanel {...panelProps(alleg())} canRecordInvestigation={true} canConcludeInvestigation={true} atDecisionStage={false} />);
     await expand();
     expect(screen.getByRole('button', { name: 'Record investigation conclusion' })).toBeInTheDocument();
   });
@@ -727,7 +730,7 @@ describe('Slice 2 — the Investigation screen asks the investigation question',
   });
 
   it('reveals the three choices and the reasoning only when asked', async () => {
-    render(<AllegationsPanel {...panelProps(alleg())} canRecordInvestigation={true} atDecisionStage={false} />);
+    render(<AllegationsPanel {...panelProps(alleg())} canRecordInvestigation={true} canConcludeInvestigation={true} atDecisionStage={false} />);
     const user = await expand();
     await user.click(screen.getByRole('button', { name: 'Record investigation conclusion' }));
     expect(screen.getByRole('radiogroup')).toBeInTheDocument();
@@ -859,11 +862,22 @@ describe('Slice 2 — the Investigation screen asks the investigation question',
     expect(uncertainty).toBeGreaterThan(assessment);
   });
 
-  it('the conclusion is NOT gated behind the decision stage — it belongs during investigation', () => {
-    const src = stripJs(panelSrc());
-    const block = src.slice(src.indexOf('<InvestigationConclusionField'), src.indexOf('/>', src.indexOf('<InvestigationConclusionField')));
-    expect(block).toContain('canRecord={canRecordInvestigation}');
-    expect(block).not.toContain('atDecisionStage');
+  it('the conclusion is NOT gated behind the decision stage — it belongs during investigation', async () => {
+    // IR-REPORT-01a — this read the JSX text of the call and asserted
+    // `canRecord={canRecordInvestigation}`, so it failed when that binding
+    // correctly narrowed to canConcludeInvestigation, while never actually
+    // proving the atDecisionStage point it is named for. Both halves are now
+    // executed: the control appears before the decision stage, and it is the
+    // conclusion authority — not the decision stage — that governs it.
+    render(<AllegationsPanel {...panelProps(alleg())} canRecordInvestigation={true} canConcludeInvestigation={true} atDecisionStage={false} />);
+    await expand();
+    expect(screen.getByRole('button', { name: 'Record investigation conclusion' })).toBeInTheDocument();
+  });
+
+  it('is governed by the conclusion authority, not the narrative one', async () => {
+    render(<AllegationsPanel {...panelProps(alleg())} canRecordInvestigation={true} canConcludeInvestigation={false} atDecisionStage={true} />);
+    await expand();
+    expect(screen.queryByRole('button', { name: 'Record investigation conclusion' })).not.toBeInTheDocument();
   });
 });
 
