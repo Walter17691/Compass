@@ -35,19 +35,35 @@ export const INVESTIGATION_CONCLUSION_VALUES = Object.freeze([
 export const isValidConclusion = v => INVESTIGATION_CONCLUSION_VALUES.includes(v);
 
 // Plain explanatory copy. Each `meaning` says what proceeding does or does not
-// follow — never whether the allegation is made out.
+// follow — never whether the matter is made out.
+//
+// ── "THIS ISSUE", NOT "THIS ALLEGATION" (IR-REPORT-01a follow-up) ─────────
+//
+// This copy said "this allegation". An investigation may be opened on an
+// incident, a concern or a fact-finding exercise before any allegation — or
+// any individual — has been identified, and IR-REPORT-01a gave the assigned
+// investigator a workspace that deliberately calls those rows "issues under
+// investigation". Reaching the conclusion control and being told the decision
+// concerns "this allegation" asserted an accusation the record may not
+// contain, which is the one thing that workspace exists to avoid.
+//
+// "This issue" is accurate in BOTH directions: an allegation is an issue under
+// investigation, so HR's own view of a genuine allegation reads correctly too.
+// COPY ONLY — the three stored values, the CHECK constraint, the rollup states
+// and every identifier are untouched, and the word "substantiated" still
+// appears nowhere here.
 export const INVESTIGATION_CONCLUSION_COPY = Object.freeze({
   [INVESTIGATION_CONCLUSION.CASE_TO_ANSWER]: Object.freeze({
     label: "Case to answer",
-    meaning: "There is sufficient information for this allegation to be considered at a disciplinary hearing.",
+    meaning: "There is sufficient information for this issue to be considered at a disciplinary hearing.",
   }),
   [INVESTIGATION_CONCLUSION.NO_CASE_TO_ANSWER]: Object.freeze({
     label: "No case to answer",
-    meaning: "The investigation does not identify sufficient grounds for this allegation to proceed to a disciplinary hearing.",
+    meaning: "The investigation does not identify sufficient grounds for this issue to proceed to a disciplinary hearing.",
   }),
   [INVESTIGATION_CONCLUSION.FURTHER_INVESTIGATION_REQUIRED]: Object.freeze({
     label: "Further investigation required",
-    meaning: "More information is needed before deciding whether this allegation should proceed.",
+    meaning: "More information is needed before deciding whether this issue should proceed.",
   }),
 });
 

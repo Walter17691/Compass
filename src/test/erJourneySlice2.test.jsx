@@ -742,15 +742,29 @@ describe('Slice 2 — the Investigation screen asks the investigation question',
   it('shows each option\'s plain meaning, so the user is not guessing', async () => {
     render(<InvestigationConclusionField allegation={alleg()} canRecord={true} onRecord={noop} />);
     await userEvent.setup().click(screen.getByRole('button', { name: 'Record investigation conclusion' }));
-    expect(screen.getByText('There is sufficient information for this allegation to be considered at a disciplinary hearing.')).toBeInTheDocument();
-    expect(screen.getByText('The investigation does not identify sufficient grounds for this allegation to proceed to a disciplinary hearing.')).toBeInTheDocument();
-    expect(screen.getByText('More information is needed before deciding whether this allegation should proceed.')).toBeInTheDocument();
+    expect(screen.getByText('There is sufficient information for this issue to be considered at a disciplinary hearing.')).toBeInTheDocument();
+    expect(screen.getByText('The investigation does not identify sufficient grounds for this issue to proceed to a disciplinary hearing.')).toBeInTheDocument();
+    expect(screen.getByText('More information is needed before deciding whether this issue should proceed.')).toBeInTheDocument();
   });
 
-  it('states plainly that it is not a decision on the allegation', async () => {
+  it('states plainly that it is not a decision on the issue', async () => {
     render(<InvestigationConclusionField allegation={alleg()} canRecord={true} onRecord={noop} />);
     await userEvent.setup().click(screen.getByRole('button', { name: 'Record investigation conclusion' }));
-    expect(screen.getByText(/It is not a decision on the allegation itself/)).toBeInTheDocument();
+    expect(screen.getByText(/It is not a decision on the issue itself/)).toBeInTheDocument();
+  });
+
+  it('never calls the subject an allegation — an investigation may have none', async () => {
+    // IR-REPORT-01a follow-up. This control is shared by HR's panel and the
+    // investigator's workspace, and an investigation may be opened on an
+    // incident before any allegation exists. Asserted on the rendered output
+    // rather than the copy module, so a future reword anywhere in this
+    // component is caught too.
+    const { container } = render(<InvestigationConclusionField allegation={alleg()} canRecord={true} onRecord={noop} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Record investigation conclusion' }));
+    expect(container.textContent.toLowerCase()).not.toContain('allegation');
+    // ...and the three choices are still all present and correctly worded.
+    ['Case to answer', 'No case to answer', 'Further investigation required']
+      .forEach(l => expect(screen.getByText(l)).toBeInTheDocument());
   });
 
   it('cannot be saved without BOTH a choice and reasoning', async () => {

@@ -23,6 +23,13 @@ import {
 // WHAT THE COPY MUST NEVER DO. "Case to answer" is not a finding. Each option
 // states only what does or does not follow for the process, and the word
 // substantiated appears nowhere in this component.
+//
+// It also must not call the subject an ALLEGATION. This component is shared by
+// HR's AllegationsPanel and the assigned investigator's findings workspace, and
+// an investigation may be opened on an incident or concern before any
+// allegation exists (IR-REPORT-01a). "This issue" is correct in both places.
+// The `allegation` PROP NAME is deliberately unchanged — it is the row this
+// control edits, and renaming it would churn every call site for no gain.
 // ─────────────────────────────────────────────────────────────────────────
 
 const INK = "#0F1224", SOFT = "#4A4E63", QUIET = "#8A8EA3";
@@ -122,8 +129,8 @@ export function InvestigationConclusionField({
         {amending ? "Amend the investigation conclusion" : "Investigation conclusion"}
       </div>
       <div style={{ fontSize: 11, color: QUIET, lineHeight: 1.5, marginBottom: 10 }}>
-        This records what the investigation concluded about whether the allegation should be considered at a
-        disciplinary hearing. It is not a decision on the allegation itself.
+        This records what the investigation concluded about whether this issue should be considered at a
+        disciplinary hearing. It is not a decision on the issue itself.
       </div>
 
       <div role="radiogroup" aria-labelledby={`conclusion-legend-${allegation.id}`} style={{ marginBottom: 12 }}>

@@ -3203,8 +3203,32 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if(!org?.id) return;
     setDataLoadIssues([]);
     setCaseSignalsLoaded(false);
-    loadLocations(); loadOrganisationThemes(); loadCaseThemes(); loadOrgEvents(); loadImprovementInitiatives(); loadHrReviews(); loadCaseDecisions(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadEmployeeActivities(); loadEmploymentEvents(); loadTeamMembers(); loadPendingInvites(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadPortalAccounts(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates();
-    if(isHR) { loadWellbeingNotes(); loadManagerCapabilityInsights(); loadIntegrationEvents(); loadRedundancyCases(); }
+    loadLocations(); loadOrganisationThemes(); loadCaseThemes(); loadOrgEvents(); loadImprovementInitiatives(); loadHrReviews(); loadCaseDecisions(); loadOrgRoles(); loadOrgMembers(); loadEmployeeRecords(); loadEmployeeActivities(); loadEmploymentEvents(); loadTeamMembers(); loadPendingInvites(); loadStarterInstances(); loadLeaverInstances(); loadDsarRequests(); loadAllegations(); loadCaseTasks(); loadCaseSignals(); loadConcernReferrals(); loadCaseAccess(); loadCaseViews(); loadProcessTemplates();
+    // ── IR-REPORT-01a FOLLOW-UP — DON'T ASK FOR WHAT YOU MAY NOT HAVE ──────
+    //
+    // loadPortalAccounts was in the unconditional list above, so every
+    // non-HR user issued a request that /api/portal/accounts is designed to
+    // refuse: it calls requireOrgRole(..., isHrRole) because
+    // employee_portal_accounts has zero client-facing RLS and the view is
+    // explicitly HR-admin-facing. The 403 was correct. What was wrong was
+    // asking at all — the refusal reached markLoadIssue('portal accounts'),
+    // so the first thing a newly assigned investigator saw was a red
+    // "Couldn't load portal accounts" banner about a feature they cannot
+    // use, found in IR-REPORT-01a browser UAT.
+    //
+    // Moved into the EXISTING isHR block rather than given a guard of its
+    // own: that block is already the established home for HR-only loads, and
+    // the effect below already re-runs on isHR, so a late-resolving member
+    // still triggers the fetch once the role is known.
+    //
+    // NOT a suppressed error. The endpoint, its role check and the RLS
+    // design are untouched; for an HR user a genuine 403 or 500 still logs
+    // and still raises the banner. The only consumer of this state is
+    // Settings -> Portal access, whose nav entry is isHR-gated and whose
+    // component opens with `if(!isHR) return null`, so no UI loses data.
+    // (exportAllData and DsarScreen do NOT read this state — both fetch
+    // portal accounts freshly from api/portal/dsar-lookup.)
+    if(isHR) { loadPortalAccounts(); loadWellbeingNotes(); loadManagerCapabilityInsights(); loadIntegrationEvents(); loadRedundancyCases(); }
   };
   useEffect(loadOrgData, [org?.id, isHR, user?.id]);
 
