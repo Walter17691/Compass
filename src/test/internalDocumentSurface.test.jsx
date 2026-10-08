@@ -199,7 +199,11 @@ describe('D. the boundary fails closed — this is not CSS-only hiding', () => {
   it('the exported PDF is titled as the document, not as a letter (wiring)', () => {
     const app = stripComments(read('src/App.jsx'));
     const gen = app.slice(app.indexOf('const generatePDF = async sig'), app.indexOf('const generateMeetingRecordPDF'));
-    expect(gen).toMatch(/documentCapabilities\(activeLetter\)\.label \|\|/);
+    // PDF-01b hoisted the lookup into a `caps` local. The INVARIANT asserted
+    // here is unchanged — the heading comes from the document capability's
+    // label, falling back to the meeting type — not the expression's shape.
+    expect(gen).toMatch(/documentCapabilities\(activeLetter\)/);
+    expect(gen).toMatch(/heading: caps\.label \|\|/);
   });
 
   it('LetterScreen adds no activeLetter string comparisons of its own (wiring)', () => {

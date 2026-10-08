@@ -79,6 +79,7 @@ import { syncCandidates, signatureSyncKey } from './lib/signatureSync';
 import { planHrReviewRequest, isDuplicatePendingViolation, HR_REVIEW_OUTCOME } from './lib/hrReviewIdempotency';
 import { reportDigest, reportAuditAction, describeReportReplacement } from './lib/reportDigest';
 import { loadJsPDF, runPdfExport } from './lib/pdfDocument';
+import { parseMarkdownBlocks, renderMarkdownBlocks, documentHeaderRows, exportFileName, PDF_COLOR } from './lib/pdfLayout';
 import { INVESTIGATION_REPORT_DOC, refuseInvestigationReportSave,
   documentCapabilities, refuseCorrespondence, CORRESPONDENCE_ACTION,
   describeReplaceExistingReport, hasExistingReport,
@@ -7226,8 +7227,15 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
 
   // ── Outlook mail connection (Phase 24 follow-up) ──
   // Delegated OAuth to the signed-in user's own Outlook inbox — same
-  // architecture as the Google Calendar connection above (api/graph-mail/*
-  // mirrors api/calendar/*). Never pulls or files mail automatically:
+  // architecture as the Google Calendar connection above (the api/graph-mail
+  // routes mirror api/calendar). Never pulls or files mail automatically:
+  //
+  // The paths above deliberately omit their trailing wildcard: written as
+  // "api/graph-mail/<star>" this LINE comment contains a block-comment opener,
+  // and any tool that strips /* ... */ then swallows everything to the next
+  // */ in the file. That had been latent here for months, closed by accident
+  // by a "\*\*/g" regex further down; deleting that regex in PDF-01b exposed
+  // it and silently blanked 298,000 characters for four unrelated tests.
   // picking a message just fetches its text and runs it through the same
   // extractEmailDetails()/saveEmailToCase() review-then-confirm pipeline a
   // pasted email already uses.
@@ -9626,8 +9634,28 @@ Please produce:
   // Viewing is side-effect free: both calls below are local component state, and
   // nothing is written to the case. letterApproval is snapshot-bound, so a stale
   // approval from a previously-viewed letter cannot attach to this text either.
+  // PDF-01b — the report's OWN export context, captured when it is opened.
+  //
+  // Deliberately NOT caseInfo: that is the meeting-setup context, it defaults to
+  // { employee:"", date:<today>, manager:"" }, and overloading it would make a
+  // document header depend on whatever meeting the user last touched. Every
+  // field here comes from the case itself, and anything the case does not hold
+  // stays null so the header and filename omit it rather than invent it.
+  const [reportExportContext, setReportExportContext] = useState(null);
+
   const openInvestigationReport = (cs) => {
     if(!cs?.investigationReport) return false;
+    setReportExportContext({
+      caseId: cs.id,
+      // No case has a human reference field, so the subject's name is the
+      // reference when there is one; otherwise a short, stable case token —
+      // which is what a fact-finding investigation with no identified subject
+      // will legitimately have.
+      reference: cs.employeeName || `Case-${String(cs.id).slice(0,8)}`,
+      subject: cs.employeeName || null,
+      investigator: cs.investigatingManager || null,
+      generatedAt: cs.investigationReportDate || null,
+    });
     setActiveLetter(INVESTIGATION_REPORT_DOC);
     setLetterOutput(cs.investigationReport);
     setScreen(SCREENS.LETTER);
@@ -10195,7 +10223,7 @@ Please produce:
   // a thin wrapper over this with its own existing letterOutput/
   // meetingType/caseInfo/letterhead closure — no behaviour change for
   // its two existing callers (doSend's Download/Gmail/Outlook paths).
-  const buildDocumentPDF = async ({ heading, content, employee, date, chair, sig, letterheadImg }) => {
+  const buildDocumentPDF = async ({ heading, content, employee, date, chair, reference, generatedLabel, sig, letterheadImg }) => {
     const jsPDF = await loadJsPDF();
     const doc = new jsPDF({unit:"mm",format:"a4"});
     const M=20, W=doc.internal.pageSize.getWidth(), maxW=W-M*2;
@@ -10203,18 +10231,33 @@ Please produce:
     if(letterheadImg) {
       try { const p=doc.getImageProperties(letterheadImg); const iW=maxW; const iH=Math.min((p.height*iW)/p.width,45); doc.addImage(letterheadImg,p.fileType||"PNG",M,8,iW,iH); y=iH+14; doc.setDrawColor(124,92,252); doc.setLineWidth(0.3); doc.line(M,y,W-M,y); y+=8; } catch(e){}
     }
-    doc.setFontSize(9); doc.setTextColor(150); doc.text("PRIVATE & CONFIDENTIAL",M,y); y+=9;
-    doc.setFontSize(17); doc.setTextColor(30); doc.setFont("helvetica","bold"); doc.text(heading,M,y); y+=8;
-    doc.setFontSize(10); doc.setFont("helvetica","normal"); doc.setTextColor(80); doc.text(`Employee: ${employee||"—"} | Date: ${date||"—"} | Chair: ${chair||"—"}`,M,y); y+=7;
-    doc.setDrawColor(124,92,252); doc.setLineWidth(0.5); doc.line(M,y,W-M,y); y+=8;
-    const clean = (content||"").replace(/^## (.+)$/gm,"\n$1\n").replace(/^# (.+)$/gm,"\n$1\n").replace(/\*\*(.+?)\*\*/g,"$1").replace(/^[-*] /gm,"  - ");
-    doc.setFontSize(11); doc.setTextColor(30); doc.setFont("helvetica","normal");
-    doc.splitTextToSize(clean,maxW).forEach(line=>{
-      if(y>255){doc.addPage();y=20;}
-      const isH=line.trim()&&line.trim()===line.trim().toUpperCase()&&line.trim().length>3&&!line.startsWith(" ");
-      if(isH){doc.setFont("helvetica","bold");doc.setTextColor(60,40,160);}else{doc.setFont("helvetica","normal");doc.setTextColor(30);}
-      doc.text(line,M,y); y+=6;
-    });
+    doc.setFontSize(9); doc.setTextColor(...PDF_COLOR.inkFaint); doc.text("PRIVATE & CONFIDENTIAL",M,y); y+=9;
+    doc.setFontSize(17); doc.setTextColor(...PDF_COLOR.ink); doc.setFont("helvetica","bold"); doc.text(heading,M,y); y+=8;
+    // PDF-01b — KNOWN VALUES ONLY. This printed
+    //   `Employee: ${employee||"—"} | Date: ${date||"—"} | Chair: ${chair||"—"}`
+    // from caseInfo, which is the MEETING-SETUP context: it defaults to
+    // { employee:"", date:<today>, manager:"" } and openInvestigationReport
+    // deliberately does not set it. So the report header read two em-dashes and
+    // TODAY's date rather than the report's own generation date — misleading,
+    // not merely blank. A row the caller cannot vouch for is now omitted.
+    const headerRows = documentHeaderRows({ reference, subject: employee, investigator: chair, generatedAt: date, generatedLabel });
+    if(headerRows.length) {
+      // WRAPPED, not a single line. Visual inspection of a rendered PDF caught
+      // the header being clipped at the right margin — three rows of real case
+      // values overflow 170mm, and a plain doc.text() silently truncates.
+      doc.setFontSize(10); doc.setFont("helvetica","normal"); doc.setTextColor(...PDF_COLOR.inkSoft);
+      const headerText = headerRows.map(r=>`${r.label}: ${r.value}`).join("   |   ");
+      doc.splitTextToSize(headerText, maxW).forEach(line=>{ doc.text(line,M,y); y+=5; });
+      y+=2;
+    }
+    doc.setDrawColor(...PDF_COLOR.violet); doc.setLineWidth(0.5); doc.line(M,y,W-M,y); y+=8;
+    // PDF-01b — the content is PARSED into typed blocks and given real PDF
+    // structure, instead of an ad-hoc regex chain that handled only ## , # ,
+    // bold and dash-or-asterisk bullets. "### Background" matched neither
+    // heading pattern and survived verbatim; rules, single-asterisk emphasis
+    // and ordered lists were never handled. Same subset as MDRenderer, so the
+    // preview and the export finally agree.
+    y = renderMarkdownBlocks(doc, parseMarkdownBlocks(content), { margin: M, top: y, bottom: 272 });
     if(sig) {
       y+=8; if(y>260){doc.addPage();y=20;}
       doc.setFontSize(9); doc.setTextColor(120); doc.text("Signed:",M,y); y+=6;
@@ -10223,19 +10266,31 @@ Please produce:
       doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(120);
       doc.text(`${chair||"HR Manager"} | ${new Date().toLocaleDateString("en-GB")}`,M,y+2);
     }
-    doc.setFontSize(8); doc.setTextColor(150); doc.text("Generated by Compass HR | Private & Confidential",M,287);
+    doc.setFontSize(8); doc.setTextColor(...PDF_COLOR.inkFaint); doc.text("Generated by Compass HR | Private & Confidential",M,287);
     return doc;
   };
 
-  const generatePDF = async sig => buildDocumentPDF({
-    // IR-SURF-01 — an internal document is titled as itself. This read
-    // "undefined — Letter" for the investigation report, since meetingType is
-    // not set on that route.
-    heading: documentCapabilities(activeLetter).label || `${meetingType?.label} — Letter`,
-    content: letterOutput,
-    employee: caseInfo.employee, date: caseInfo.date, chair: caseInfo.manager,
-    sig, letterheadImg: letterhead,
-  });
+  const generatePDF = async sig => {
+    const caps = documentCapabilities(activeLetter);
+    // PDF-01b — an internal document's metadata comes from its OWN context, not
+    // from caseInfo. A letter keeps reading caseInfo exactly as before.
+    const ctx = caps.internal ? reportExportContext : null;
+    return buildDocumentPDF({
+      // IR-SURF-01 — an internal document is titled as itself. This read
+      // "undefined — Letter" for the investigation report, since meetingType is
+      // not set on that route.
+      heading: caps.label || `${meetingType?.label} — Letter`,
+      content: letterOutput,
+      employee: ctx ? ctx.subject : caseInfo.employee,
+      chair: ctx ? ctx.investigator : caseInfo.manager,
+      date: ctx
+        ? (ctx.generatedAt ? fmtDate(ctx.generatedAt) : null)
+        : caseInfo.date,
+      reference: ctx ? ctx.reference : null,
+      generatedLabel: ctx ? 'Report generated' : 'Date',
+      sig, letterheadImg: letterhead,
+    });
+  };
 
   // Human UAT remediation, Batch 2 hardening — "Share meeting record"
   // used to send the full record inline in the email body because no
@@ -10281,8 +10336,22 @@ Please produce:
   };
   const doSend = async (action, sig) => {
     const lTypes={outcome:"Outcome",invite:"Invitation",appeal:"Appeal"};
-    const empName = (caseInfo.employee||"Letter").replace(/\s+/g,"_");
-    const fileName = `${empName}_${meetingType?.label||"Letter"}_${new Date().toLocaleDateString("en-GB").replace(/\//g,"-")}.pdf`;
+    // PDF-01b — this was
+    //   `${caseInfo.employee||"Letter"}_${meetingType?.label||"Letter"}_${date}`
+    // which produced "Letter_Letter_08-10-2026.pdf" whenever both inputs were
+    // absent, as they both are on the investigation-report route. Unknown parts
+    // are now omitted rather than filled with the word "Letter".
+    const exportCaps = documentCapabilities(activeLetter);
+    const fileName = exportCaps.internal
+      ? exportFileName({
+          docLabel: exportCaps.label || 'Document',
+          reference: reportExportContext?.reference,
+          date: reportExportContext?.generatedAt ? new Date(reportExportContext.generatedAt) : new Date(),
+        })
+      : exportFileName({
+          docLabel: meetingType?.label ? `${meetingType.label} letter` : 'Letter',
+          reference: caseInfo.employee,
+        });
     const subj = encodeURIComponent(`${meetingType?.label} ${lTypes[activeLetter]||""} - ${caseInfo.employee||"Employee"}`);
     const to = encodeURIComponent(caseInfo.email||"");
     // Human UAT remediation, Batch 2, Part 6 — this opened with "Please
