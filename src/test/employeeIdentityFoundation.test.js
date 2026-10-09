@@ -126,8 +126,15 @@ describe('12/13. the DSAR identity gate', () => {
 
   it('12. the export is BLOCKED, not merely annotated', () => {
     const screen = readFileSync('src/screens/DsarScreen.jsx', 'utf8');
-    // The download button is conditional on identity being resolvable.
-    expect(screen).toContain('compiled&&!compiled.identityRequiresReconciliation&&<Btn');
+    // Pins the GATE and the message, not the JSX shape. This previously
+    // asserted the literal '...identityRequiresReconciliation&&<Btn', which
+    // broke when the button became a draft/approved branch even though the
+    // identity gate was untouched — a test matching the shape of the code
+    // rather than the behaviour of the decision. The behavioural proof is in
+    // src/test/DsarScreen.test.jsx ('BLOCKS the export when the subject's
+    // cases carry more than one distinct email'), which asserts that NEITHER
+    // download button renders.
+    expect(screen).toContain('compiled&&!compiled.identityRequiresReconciliation');
     expect(screen).toContain('Download blocked — employee identity requires reconciliation');
     // And the previous shape — an unconditional download — is gone.
     expect(screen).not.toContain('{compiled&&<Btn variant="secondary" onClick={()=>{downloadJson(');

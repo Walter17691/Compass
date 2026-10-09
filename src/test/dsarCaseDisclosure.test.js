@@ -157,8 +157,20 @@ const expectNoDataKey = (out, key) => {
 // ═══════════════════════════════════════════════════════════════════════════
 describe('Wave 0 — the download path is the thing under test', () => {
   it('the screen serialises the WHOLE compiled object, so that is what is asserted', () => {
+    // The guarantee: the screen must not FILTER the payload, or the redaction
+    // assertions in this file would be testing something the user never
+    // receives. It previously asserted the literal `downloadJson(compiled,`.
+    // The completion-integrity slice wraps the payload to stamp
+    // responseStatus/reviewedBy/reviewedAt onto the artefact, so the call is
+    // now `downloadJson({ ...status, ...compiled }, filename)` — which still
+    // removes nothing. Asserted as "compiled is spread in whole", paired with
+    // the behavioural download tests in
+    // src/test/dsarCompletionIntegrity.test.jsx, which parse the emitted blob
+    // and assert the real payload rather than the shape of this call.
     expect(dsarScreen).toMatch(/JSON\.stringify\(data, null, 2\)/);
-    expect(dsarScreen).toMatch(/downloadJson\(compiled,/);
+    expect(dsarScreen).toMatch(/\.\.\.compiled,/);
+    // and nothing is cherry-picked out of it on the way
+    expect(dsarScreen).not.toMatch(/downloadJson\(\{\s*cases:/);
   });
 
   it('cases are built from the projection, never spread', () => {

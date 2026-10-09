@@ -65,11 +65,25 @@ describe('[UI] the client layers', () => {
     expect(app()).toContain('const canAdministerDsar = mayAdministerDsar({ role: member?.role });');
   });
 
-  it('CLOSES THE DEEP LINK — the render condition carries the capability', () => {
+  it('CLOSES THE DEEP LINK — the capability reaches the screen, which refuses', () => {
     // ?screen=dsar previously rendered the full workspace for any role, because
     // src/App.jsx reads `params.get('screen')` and the render site tested only
     // the screen value.
-    expect(app()).toContain('{screen===SCREENS.DSAR&&canAdministerDsar&&(');
+    //
+    // This originally asserted the literal
+    //   '{screen===SCREENS.DSAR&&canAdministerDsar&&('
+    // which closed the link by rendering NOTHING — a blank content area with no
+    // explanation (STAGE2-UX-01). The condition was removed so that DsarScreen's
+    // own default-deny guard, which was already written and already placed after
+    // every hook, renders a visible refusal instead. The deep link is still
+    // closed; it now says so.
+    //
+    // Asserted as the capability being PASSED, plus the screen's behavioural
+    // refusal in src/test/dsarCompletionIntegrity.test.jsx — not as the shape of
+    // the JSX, which is what made this assertion brittle in the first place.
+    expect(app()).toContain('<DsarScreen canAdministerDsar={canAdministerDsar}');
+    // the workspace must never render on the capability being merely truthy-by-default
+    expect(readFileSync('src/screens/DsarScreen.jsx', 'utf8')).toContain('canAdministerDsar = false');
   });
 
   it('guards the data loader in its OWN condition, not the shared isHR block', () => {

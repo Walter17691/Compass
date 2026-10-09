@@ -171,7 +171,44 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
             ambiguous identity means Compass would be guessing which of two real
             people these records belong to, and a DSAR must prefer "identity
             requires reconciliation" over disclosing the wrong person's history. */}
-        {compiled&&!compiled.identityRequiresReconciliation&&<Btn variant="secondary" onClick={()=>{downloadJson(compiled, `DSAR_${req.employeeName.replace(/\s+/g,"_")}_${req.receivedDate}.json`);audit?.("DSAR response downloaded", req.employeeName);}}>Download response package</Btn>}
+        {/* ── DRAFT vs OFFICIAL RESPONSE (DSAR completion integrity slice) ───
+            The download was previously gated only on identity, and was labelled
+            "Download response package" whether or not the flagged sections had
+            been reviewed — so an unreviewed export was presented as the official
+            response.
+
+            It is NOT blocked when review is outstanding, deliberately: the
+            reviewer needs the compiled package in order to review the flags, so
+            blocking it would make the attestation impossible to reach. Instead
+            the artefact tells the truth about itself — different label, different
+            filename, and a responseStatus block inside the file — and only
+            becomes the official response once the review is recorded.
+
+            reviewedBy/reviewedAt come from the row the DATABASE returned after
+            the attestation was saved (see updateDsarRequest), never from
+            anything the client assembled. */}
+        {compiled&&!compiled.identityRequiresReconciliation&&(()=>{
+          const approved = !!req.reviewedFlaggedSections;
+          const safeName = req.employeeName.replace(/\s+/g,"_");
+          const filename = approved
+            ? `DSAR_${safeName}_${req.receivedDate}.json`
+            : `DSAR_${safeName}_${req.receivedDate}_DRAFT_NOT_APPROVED.json`;
+          return (
+            <Btn variant="secondary" onClick={()=>{
+              downloadJson({
+                // Stamped into the file itself, because a filename can be
+                // renamed and a label is not carried with the artefact.
+                responseStatus: approved ? "approved_for_release" : "draft_review_outstanding",
+                reviewRecorded: approved,
+                reviewedBy: req.reviewedBy || null,
+                reviewedAt: req.reviewedAt || null,
+                ...(approved ? {} : { warning: "DRAFT. The flagged sections have not been reviewed, so this is not an approved subject access response and must not be sent." }),
+                ...compiled,
+              }, filename);
+              audit?.(approved ? "DSAR response downloaded" : "DSAR draft downloaded (review outstanding)", req.employeeName);
+            }}>{approved ? "Download response package" : "Download draft for review"}</Btn>
+          );
+        })()}
         {compiled&&compiled.identityRequiresReconciliation&&(
           <span style={{fontSize:12,color:"#C84B2F",alignSelf:"center"}}>Download blocked — employee identity requires reconciliation</span>
         )}

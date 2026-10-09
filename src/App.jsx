@@ -4695,7 +4695,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
         id:r.id, employeeId:r.employee_id||null, employeeName:r.employee_name, requestedBy:r.requested_by,
         receivedDate:r.received_date, dueDate:r.due_date, status:r.status,
         completedDate:r.completed_date, notes:r.notes,
-        reviewedFlaggedSections:r.reviewed_flagged_sections, createdAt:r.created_at,
+        reviewedFlaggedSections:r.reviewed_flagged_sections, reviewedBy:r.reviewed_by||null, reviewedAt:r.reviewed_at||null, createdAt:r.created_at,
         extended:r.extended, extensionReason:r.extension_reason, extendedAt:r.extended_at,
       })));
     } catch(e) { console.error('loadDsarRequests', e); markLoadIssue('DSAR requests'); }
@@ -4744,9 +4744,22 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     if('extensionReason' in fields) payload.extension_reason = fields.extensionReason;
     if('extendedAt' in fields) payload.extended_at = fields.extendedAt;
     try {
-      const {error} = await supabase.from('dsar_requests').update(payload).eq('id', id);
+      // The row is read BACK, not assumed. reviewed_by/reviewed_at are assigned
+      // by dsar_requests_completion_integrity_guard() from auth.uid() and are
+      // never sent in `payload` — so merging only `fields` would leave local
+      // state without the provenance the database just recorded, and a package
+      // downloaded before the next page load would carry reviewRecorded:true
+      // with no reviewer. Taking the returned row also means a value the client
+      // tried to supply is replaced by the one actually persisted.
+      const {data, error} = await supabase.from('dsar_requests').update(payload).eq('id', id).select().single();
       if(error) throw error;
-      setDsarRequests(p=>p.map(r=>r.id===id?{...r,...fields}:r));
+      setDsarRequests(p=>p.map(r=>r.id===id?{
+        ...r, ...fields,
+        reviewedFlaggedSections: data?.reviewed_flagged_sections ?? r.reviewedFlaggedSections,
+        reviewedBy: data?.reviewed_by ?? null,
+        reviewedAt: data?.reviewed_at ?? null,
+        status: data?.status ?? r.status,
+      }:r));
       return true;
     } catch(e) { console.error('updateDsarRequest', e); showToast("Could not update DSAR request", "error"); return false; }
   };
@@ -13180,8 +13193,24 @@ Please produce:
         />
       )}
 
-      {/* ══ DSAR ══ */}
-      {screen===SCREENS.DSAR&&canAdministerDsar&&(
+      {/* ══ DSAR ══
+
+          STAGE2-UX-01. This condition used to read
+            screen===SCREENS.DSAR && canAdministerDsar &&
+          so a non-director following ?screen=dsar got an EMPTY content area —
+          no workspace, correctly, but also no explanation, which reads as a
+          broken page rather than a refusal.
+
+          The `canAdministerDsar &&` is removed rather than replaced: DsarScreen
+          already carries its own default-deny guard, placed after every hook and
+          defaulting to FALSE, which renders the refusal. That guard was
+          previously unreachable through this path because the component never
+          mounted. Removing the condition makes the written, tested refusal the
+          thing the user actually sees, and leaves exactly one place where the
+          decision lives. Access itself is unchanged and still enforced in the
+          screen, in the three action handlers, at /api/portal/dsar-lookup, and
+          by RLS. */}
+      {screen===SCREENS.DSAR&&(
         <DsarScreen canAdministerDsar={canAdministerDsar} employeeActivities={employeeActivities} employeeActivityRecords={employeeActivityRecords} employmentEvents={employmentEvents}
           dsarRequests={dsarRequests}
           createDsarRequest={createDsarRequest}
