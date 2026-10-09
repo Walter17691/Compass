@@ -281,8 +281,19 @@ describe('NEW-44 — retention is recorded as unenforced, not invented', () => {
   it('names the unwired DSAR obligations rather than hiding them', () => {
     const unwired = unwiredDsarObligations();
     // D4.3 discharged case_decisions' obligation by wiring it into
-    // compileSubjectData, so only NEW-45's remains.
-    expect(unwired).toEqual([{ table: 'team_invites', defect: 'NEW-45' }]);
+    // compileSubjectData, leaving NEW-45's.
+    //
+    // B3.1 adds a SECOND, and declaring it here is the point of the mechanism
+    // rather than a regression: investigation_report_versions holds personal
+    // data and is owed to a subject, but B3.1 only creates the store — nothing
+    // reads it until B3.4 wires compileSubjectData. Classifying it INCLUDED
+    // today would record an obligation that no code performs, which is the
+    // failure the B2 review named ("a manifest entry is not an integration").
+    // It flips to INCLUDED, and leaves this list, in B3.4.
+    expect(unwired).toEqual([
+      { table: 'investigation_report_versions', defect: 'B3.4' },
+      { table: 'team_invites', defect: 'NEW-45' },
+    ]);
     for (const row of unwired) {
       expect(row.defect, `${row.table} claims an unwired DSAR obligation with no defect reference`).toBeTruthy();
     }

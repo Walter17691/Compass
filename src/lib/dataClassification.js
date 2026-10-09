@@ -112,10 +112,11 @@ export const SECURITY_POSTURE = Object.freeze({
 // │ together with its migration file and its entries below.                   │
 // └─────────────────────────────────────────────────────────────────────────┘
 export const PENDING_PRODUCTION_SCHEMA = Object.freeze([
-  // IR-REPORT-01b/B2 — supabase/investigation_finding_revisions_2026-10-08.sql.
+  // B3.1 — supabase/investigation_report_versions_2026-10-09.sql.
   // Posture below ({ rls: true, policies: 2 }) was measured on branch
-  // qlgspfzzfjepwzaryeoi, not on production.
-  'investigation_finding_revisions',
+  // cjijgutnwpqovyjzdvrq, not on production. Remove this entry once the
+  // migration is applied and the live posture is confirmed.
+  'investigation_report_versions',
 ]);
 
 // The live RLS reading. Every entry EXCEPT those named in
@@ -155,6 +156,12 @@ export const RECORDED_RLS_2026_10_03 = Object.freeze({
   // other half (a policy denial is invisible; the trigger is loud, and is the
   // only thing in front of a caller that bypasses RLS).
   investigation_finding_revisions: { rls: true, policies: 2 },
+  // B3.1 — one PERMISSIVE SELECT (HR or the case's current investigator) and
+  // one PERMISSIVE INSERT gated on the same population. There is deliberately
+  // no UPDATE or DELETE policy: the only mutation path is
+  // adopt_investigation_report_version(), which is SECURITY DEFINER, and
+  // investigation_report_versions_immutability_trg refuses everything else.
+  investigation_report_versions: { rls: true, policies: 2 },
   leaver_instances: { rls: true, policies: 4 },
   locations: { rls: true, policies: 4 },
   manager_capability_insights: { rls: true, policies: 1 },
@@ -289,6 +296,33 @@ export const TABLE_CLASSIFICATION = {
         + 'the subject is the subject\'s own information. RETENTION IS THE OPEN QUESTION: this '
         + 'is a NEW category of retained personal data and nothing purges it (decision A3 '
         + 'forbids inventing a period); it is destroyed only with its case.' }),
+
+  investigation_report_versions: t(
+    'Immutable saved versions of the investigation report: the report body, who saved it and '
+    + 'when, and for adopted versions who adopted it, on what basis and — for an HR exception — '
+    + 'the written reason.', C,
+    { org: 1, person: 1, case_: 1 }, D.INCLUDED_NOT_WIRED,
+    { dsarDefect: 'B3.4',
+      dsarNote: 'B3.1 — the investigation report is a document ABOUT the subject, so superseded '
+        + 'and adopted versions are disclosable personal data on the same footing as the report '
+        + 'already held in cases.investigation_report. Marked INCLUDED because the adopted '
+        + 'current version is already disclosed today through that column; what this table adds '
+        + 'is the superseded ones. INCLUDED_NOT_WIRED rather than INCLUDED, deliberately: B3.1 '
+        + 'creates the store and nothing reads it yet, and the B2 review established that a '
+        + 'manifest entry is not an integration — claiming INCLUDED here would record a '
+        + 'disclosure obligation that no code performs. It flips to INCLUDED in B3.4, when '
+        + 'compileSubjectData actually reads it. Three things that wiring must honour. '
+        + '(1) NOT automatic release of '
+        + 'every draft: superseded wording is listed with its version, author and date and '
+        + 'flagged for a human disclosure decision, exactly as investigation_finding_revisions '
+        + 'handles superseded narratives — a draft the investigating officer rejected is not a '
+        + 'finding. (2) adoption_reason is an HR note about process, not about the subject, and '
+        + 'is review-gated rather than released wholesale. (3) Superseded text is still SCANNED '
+        + 'for third-party mentions, because a colleague named in a draft that was later '
+        + 'rewritten must be flagged on the same terms as one named in the adopted text. '
+        + 'RETENTION IS THE OPEN QUESTION, as for superseded narratives: superseded drafts are '
+        + 'restricted case records, nothing purges them, the schedule is an outstanding '
+        + 'governance dependency, and they are destroyed only with their case or organisation.' }),
 
   // ── audit ──
   audit_log: t('Immutable action log; the deletion event itself survives as one row.', C, { org: 1, person: 1, case_: 1 }, D.INCLUDED),

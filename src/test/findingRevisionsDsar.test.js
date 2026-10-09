@@ -73,13 +73,21 @@ describe('B2 — the revision table is registered, classified and erasable', () 
     expect(RECORDED_RLS_2026_10_03.investigation_finding_revisions).toEqual({ rls: true, policies: 2 });
   });
 
-  it('is declared PROPOSED, not live, until production has been re-read', () => {
-    // The posture above was measured on an isolated branch, not on production.
-    // ON DEPLOYMENT: re-read pg_class/pg_policies against production, confirm
-    // the entry still matches, then remove this name from
-    // PENDING_PRODUCTION_SCHEMA — which will fail this test, deliberately, so
-    // the removal is a conscious act rather than a side effect.
-    expect(PENDING_PRODUCTION_SCHEMA).toContain('investigation_finding_revisions');
+  it('is now LIVE, re-read against production, and no longer merely proposed', () => {
+    // This test previously asserted the opposite, and said why: the posture had
+    // been measured on an isolated branch, and removing the name from
+    // PENDING_PRODUCTION_SCHEMA was to "fail this test, deliberately, so the
+    // removal is a conscious act rather than a side effect". This is that act.
+    //
+    // IR-REPORT-01b/B2 was applied to production on 2026-10-09 and pg_class and
+    // pg_policies were re-read afterwards: 45 base tables, the table present,
+    // RLS enabled, two policies — matching the recorded posture above exactly.
+    // So the name moved out of PENDING and into the verified live reading in
+    // src/test/schemaInventoryGate.test.js.
+    expect(PENDING_PRODUCTION_SCHEMA).not.toContain('investigation_finding_revisions');
+    // and the slot is now held by the next proposed table, not left empty —
+    // an empty PENDING list would hide the fact that B3.1 is still unapplied.
+    expect(PENDING_PRODUCTION_SCHEMA).toContain('investigation_report_versions');
   });
 });
 

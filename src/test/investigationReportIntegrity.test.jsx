@@ -379,8 +379,22 @@ describe('nothing else was touched', () => {
     expect(tab).toContain('invMeetings.some(m=>m.record)');
   });
 
-  it('no schema change', () => {
+  it('the B3.1 version store exists in the schema but is NOT wired into the app', () => {
+    // This asserted `no schema change` — that no supabase/ file matched
+    // /investigation_report/i — and it was right for IR-0, which deliberately
+    // added no versioning. B3.1 adds exactly that store, so the premise is
+    // superseded by decision rather than by drift.
+    //
+    // The half of the guard that still matters is kept and is now the point:
+    // B3.1 is a DATABASE-ONLY slice. The store exists; nothing reads or writes
+    // it; generation still advances the stage and still requests HR review
+    // through the legacy path until B3.2 separates them. If application code
+    // starts using the store before that slice lands, the assertion above at
+    // 'the legacy flow is untouched' fails — and so does this one.
     const files = fs.readdirSync(path.resolve(__dirname, '..', '..', 'supabase'));
-    expect(files.some(f => /investigation_report/i.test(f))).toBe(false);
+    expect(files.some(f => /investigation_report_versions/i.test(f))).toBe(true);
+
+    const app = stripComments(read('src/App.jsx'));
+    expect(app).not.toMatch(/investigation_report_versions|adopt_investigation_report_version/);
   });
 });

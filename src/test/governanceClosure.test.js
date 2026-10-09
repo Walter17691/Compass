@@ -231,16 +231,17 @@ describe('NEW-44 — customer-data tables cannot silently lose RLS', () => {
     // 43 before D4.2; case_decisions brings it to 44, with RLS enabled and two
     // policies (select inheriting case access, insert requiring decision authority).
     const enabled = Object.values(RECORDED_RLS_2026_10_03).filter(r => r.rls).length;
-    // 45 = the EXPECTED POST-MIGRATION schema. Split explicitly, because the
-    // reading is not uniform: 44 names were measured against production, and
-    // the remainder were measured on an isolated branch with the migration
-    // applied. Conflating the two is how a proposed table comes to be asserted
-    // as a production fact.
-    expect(Object.keys(RECORDED_RLS_2026_10_03)).toHaveLength(45);
-    expect(enabled).toBe(45);
+    // 46 = the EXPECTED POST-MIGRATION schema. Split explicitly, because the
+    // reading is not uniform: 45 names were measured against production (44 at
+    // 2026-10-02/03, plus investigation_finding_revisions re-read on 2026-10-09
+    // after IR-REPORT-01b/B2 was applied), and the remainder were measured on an
+    // isolated branch with the migration applied. Conflating the two is how a
+    // proposed table comes to be asserted as a production fact.
+    expect(Object.keys(RECORDED_RLS_2026_10_03)).toHaveLength(46);
+    expect(enabled).toBe(46);
     const verified = Object.keys(RECORDED_RLS_2026_10_03)
       .filter(t => !PENDING_PRODUCTION_SCHEMA.includes(t));
-    expect(verified, 'production-verified RLS readings').toHaveLength(44);
+    expect(verified, 'production-verified RLS readings').toHaveLength(45);
     expect(RECORDED_RLS_2026_10_03.case_decisions).toEqual({ rls: true, policies: 2 });
     // IR-REPORT-01b/B2: one SELECT policy and one RESTRICTIVE INSERT
     // `with check (false)`. No UPDATE or DELETE policy exists, deliberately.
@@ -286,9 +287,10 @@ describe('NEW-44D — structural tenancy is derived from the corpus', () => {
     const { tables } = orgScopedShapes(corpus());
     // 37 org_id-bearing base tables measured live on 2026-10-03, plus
     // case_decisions from D4.2 = 38, + investigation_finding_revisions from
-    // IR-REPORT-01b/B2 = 39. The parser is checked against production, not
-    // against another list in this repository.
-    expect(tables).toHaveLength(39);
+    // IR-REPORT-01b/B2 = 39, + investigation_report_versions from B3.1 = 40.
+    // The parser is checked against production, not against another list in
+    // this repository.
+    expect(tables).toHaveLength(40);
     for (const t of tables) expect(t.columns, `${t.name}`).toContain('org_id');
   });
 

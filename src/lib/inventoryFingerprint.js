@@ -85,7 +85,7 @@ export function computeInventoryFingerprint() {
 // governanceClosure.test.js asserts this value equals the computed one in the
 // same run that proves coverage, ordering, DSAR correspondence, posture and
 // tenancy. So a stale or hand-edited value fails CI rather than shipping.
-export const VERIFIED_INVENTORY_FINGERPRINT = 'cec321980dd66617';
+export const VERIFIED_INVENTORY_FINGERPRINT = 'a1b72e2b9fd73f54';
 
 export const INVENTORY_UNVERIFIED_MESSAGE =
   'Delete all data is refusing to run: this build\'s data inventory does not match the inventory that '

@@ -144,6 +144,16 @@ export const CASCADE_COVERED_TABLES = [
   // revisions in place — they still go when the CASE goes, which is what makes
   // cascade_covered truthful here.
   'investigation_finding_revisions',
+  // investigation_report_versions (B3.1,
+  // supabase/investigation_report_versions_2026-10-09.sql) — same shape again:
+  // its (case_id, org_id) -> cases(id, org_id) foreign key is NOT NULL and
+  // ON DELETE CASCADE, so the handler's own `cases` delete erases every saved
+  // report version, adopted and superseded alike. Naming it in
+  // ORG_SCOPED_TABLES would be inert AND harmful: the append-only guard
+  // refuses a direct DELETE while the parent case still exists, so the
+  // handler's per-table delete would fail rather than clean up. Cascade is the
+  // only route, and it is the one the guard is written to permit.
+  'investigation_report_versions',
 ];
 
 // Tables with an org_id column that are deliberately left alone by
