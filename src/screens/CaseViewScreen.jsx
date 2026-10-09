@@ -327,6 +327,11 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   // else: not the status, not the reasoning, not the outcome. Deliberately a
   // separate, narrower gate than canDecide rather than widening canDecide.
   //
+  // IR-REPORT-01b/B2 REVIEW: the two gates no longer nest. canDecide is NOT a
+  // superset of narrative authority any more — the disciplinary officer holds
+  // canDecide and not the narrative, because findings belong to the
+  // investigation workflow. Both are enforced in the database independently.
+  //
   // ── IR-REPORT-01a — TWO AUTHORITIES, NOT ONE ────────────────────────────
   //
   // These were one gate, and the conclusion control received it. But the

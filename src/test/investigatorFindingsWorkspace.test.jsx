@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'fs';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -72,16 +73,43 @@ describe('A. who may record what — the two authorities', () => {
     expect(a.mayRecordConclusion).toBe(true);
   });
 
-  it('the disciplinary officer holds the narrative but NOT the conclusion', () => {
-    // The database refuses this write with 42501 because the person who will
-    // hear the case must not also decide whether there is a case to answer.
+  it('the disciplinary officer holds NEITHER the narrative nor the conclusion', () => {
+    // CHANGED by the IR-REPORT-01b/B2 review. This previously asserted
+    // mayRecordNarrative === true, inherited from the pre-IR-REPORT-01a
+    // expression `canRecordInvestigation = canDecide || isAssignedInvestigator`
+    // where canDecide is `isHR || disciplinary_officer`. The disciplinary
+    // officer therefore held narrative authority by ACCIDENT OF ORIGIN — the
+    // decision gate being reused, never a decision about the investigation.
+    //
+    // The product rule: investigator findings belong to the investigation
+    // workflow. The disciplinary officer works FROM the adopted report and the
+    // disclosed evidence, and records their own reasoning separately. The
+    // narrative is input to them, not output from them.
+    //
+    // Both halves are now enforced in the database, not just here:
+    // protect_allegations_investigator_narrative_columns (narrative, new in
+    // supabase/investigator_narrative_authority_2026-10-08.sql) and
+    // protect_allegations_investigation_conclusion_columns (conclusion).
     const a = investigationAuthority({ isHR: false, caseRole: CASE_ROLE.DISCIPLINARY_OFFICER });
-    expect(a.mayRecordNarrative).toBe(true);
+    expect(a.mayRecordNarrative).toBe(false);
     expect(a.mayRecordConclusion).toBe(false);
   });
 
+  it('still grants the disciplinary officer their OWN authorities, which are elsewhere', () => {
+    // The correction above must not read as "the disciplinary officer lost
+    // their job". Their capabilities are gated by `canDecide`, not by these
+    // predicates, and are untouched: allegation status, decision_reasoning,
+    // decided_by/at, the case outcome, outcome_notes and case_decisions.
+    // This file only governs the two investigation authorities, and the point
+    // is that NEITHER of them was ever theirs to hold.
+    const src = readFileSync('src/screens/CaseViewScreen.jsx', 'utf8');
+    expect(src).toContain('const canDecide = isHR || (myAccess?.role==="disciplinary_officer");');
+    // and the narrative gate is a DIFFERENT value, derived from the predicate
+    expect(src).toContain('mayRecordInvestigationNarrative({ isHR, caseRole: investigatorCaseRole })');
+  });
+
   it('holds neither for any other case role, or none at all', () => {
-    ['appeal_manager', 'notetaker', 'case_owner', 'approver', 'employee_manager', null, undefined, '']
+    ['disciplinary_officer', 'appeal_manager', 'notetaker', 'case_owner', 'approver', 'employee_manager', null, undefined, '']
       .forEach(caseRole => {
         expect(mayRecordInvestigationNarrative({ isHR: false, caseRole })).toBe(false);
         expect(mayRecordInvestigationConclusion({ isHR: false, caseRole })).toBe(false);
@@ -96,6 +124,13 @@ describe('A. who may record what — the two authorities', () => {
       [...Object.values(CASE_ROLE), 'appeal_manager', 'case_owner', null].forEach(caseRole => {
         const a = investigationAuthority({ isHR, caseRole });
         if (a.mayRecordConclusion) expect(a.mayRecordNarrative).toBe(true);
+      });
+      // Since the B2 review the two sets are identical, which is the intended
+      // end state rather than a redundancy. Asserted explicitly so a future
+      // edit that widens ONE of them has to face this line.
+      [...Object.values(CASE_ROLE), 'appeal_manager', 'case_owner', null].forEach(caseRole => {
+        const a = investigationAuthority({ isHR, caseRole });
+        expect(a.mayRecordNarrative).toBe(a.mayRecordConclusion);
       });
     });
   });

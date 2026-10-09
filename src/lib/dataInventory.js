@@ -135,6 +135,15 @@ export const CASCADE_COVERED_TABLES = [
   // decision row. Adding it to ORG_SCOPED_TABLES would be inert, and would
   // also put it in the deletion ORDER where it does not belong.
   'case_decisions',
+  // investigation_finding_revisions (IR-REPORT-01b/B2,
+  // supabase/investigation_finding_revisions_2026-10-08.sql) — same shape as
+  // case_decisions: its (case_id, org_id) -> cases(id, org_id) foreign key is
+  // NOT NULL and ON DELETE CASCADE, so deleting the case erases the revision
+  // history with it. Deliberately NOT cascaded from `allegations` (the
+  // migration header §2 argues why), so deleting an allegation leaves its
+  // revisions in place — they still go when the CASE goes, which is what makes
+  // cascade_covered truthful here.
+  'investigation_finding_revisions',
 ];
 
 // Tables with an org_id column that are deliberately left alone by

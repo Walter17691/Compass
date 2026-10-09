@@ -227,7 +227,12 @@ describe('Slice 1 — the assigned investigator may record the investigation', (
     // authority follows the case_access role, so a non-HR investigator holds
     // it and an unrelated non-HR viewer does not.
     expect(mayRecordInvestigationNarrative({ isHR: false, caseRole: 'investigator' })).toBe(true);
-    expect(mayRecordInvestigationNarrative({ isHR: false, caseRole: 'disciplinary_officer' })).toBe(true);
+    // CHANGED by the IR-REPORT-01b/B2 review: the disciplinary officer no
+    // longer holds narrative authority. It was inherited from `canDecide`
+    // rather than decided, and the database now enforces the narrower rule
+    // (supabase/investigator_narrative_authority_2026-10-08.sql). Their own
+    // decision authorities are unaffected and still derive from canDecide.
+    expect(mayRecordInvestigationNarrative({ isHR: false, caseRole: 'disciplinary_officer' })).toBe(false);
     expect(mayRecordInvestigationNarrative({ isHR: false, caseRole: 'appeal_manager' })).toBe(false);
     expect(mayRecordInvestigationNarrative({ isHR: false, caseRole: null })).toBe(false);
     // ...and isHR alone is sufficient, so HR never depends on a case role.

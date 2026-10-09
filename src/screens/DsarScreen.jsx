@@ -3,6 +3,7 @@ import { SCREENS } from '../constants';
 import { DateInput } from '../components/DateInput';
 import { Btn, Card, Badge } from '../components/Primitives';
 import { compileSubjectData } from '../lib/dsarCompile';
+import { fetchDsarFindingRevisions } from '../lib/findingRevisionGateway';
 import { useLoadMore } from '../hooks/useLoadMore';
 import { daysBetween } from '../lib/dateMath';
 import { authedFetch } from '../lib/authedFetch';
@@ -72,6 +73,26 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
     const meetingResult = await fetchDsarMeetings(supabase, { orgId });
     if (meetingResult.ok) standaloneMeetings = meetingResult.meetings;
     else meetingFetchFailed = true;
+
+    // ── IR-REPORT-01b/B2 — superseded investigator narratives ───────────────
+    //
+    // Fetched HERE, at compile time, rather than loaded into org-wide state in
+    // App.jsx the way caseDecisions is. Nothing in the product UI reads this
+    // table; only this compiler does. Holding the previous and replacing text
+    // of every rewritten finding in every HR user's browser on every page load
+    // would be a standing exposure for a feature used a handful of times a
+    // year. See src/lib/findingRevisionGateway.js for the full argument.
+    //
+    // Ordinary authenticated client, like meetings above, so the compiler is
+    // handed exactly the rows this person may already read.
+    //
+    // A failure does NOT block the package, and must not look like "nothing was
+    // ever rewritten" either — findingRevisionDisposition reports it.
+    let findingRevisions = [];
+    let findingRevisionFetchFailed = false;
+    const revisionResult = await fetchDsarFindingRevisions(supabase, { orgId });
+    if (revisionResult.ok) findingRevisions = revisionResult.revisions;
+    else findingRevisionFetchFailed = true;
     setCompiled(compileSubjectData(req.employeeName, {
       // Phase E0.6 — the canonical subject, where the request recorded one. With
       // it, cases/wellbeing/referrals are selected by employee_id and a same-name
@@ -93,6 +114,8 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
       // needed identity first.
       standaloneMeetings,
       meetingFetchFailed,
+      findingRevisions,
+      findingRevisionFetchFailed,
       // ── the ORIGINAL position, for the record ───────────────────────────
       //
       // The audit finding: this parameter has existed since Phase 4C.1 but no
@@ -273,6 +296,16 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
           ...(compiled.thirdPartyContainment?.reviewRequired || []),
           // Already produced by the compiler and previously merged nowhere.
           ...(compiled.signingDisclosure?.reviewRequired || []),
+          // IR-REPORT-01b/B2 — a THIRD classifier. The compiler withholds
+          // superseded investigator wording pending a disclosure decision, and
+          // this file's own standard is that "a flag that never reaches this
+          // banner is a flag nobody acts on". Without this the revision flags
+          // would reach the downloaded JSON and no human.
+          ...(compiled.findingRevisions || [])
+            .filter(r => r.supersededTextRequiresReview || r.replacementTextRequiresReview)
+            .map(r => ({
+              reason: `An investigator's ${String(r.field || 'finding').replace(/_/g, ' ')} on this subject's case was rewritten — decide whether the superseded wording is disclosed, redacted or withheld`,
+            })),
         ];
         const unrecognisedWithheld = [...new Set([
           ...(compiled.caseDisclosure?.unrecognisedFieldsWithheld || []),
@@ -389,6 +422,28 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
                     ))}
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+          {compiled.findingRevisionDisposition?.readFailed&&(
+            <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FEF5E7",border:"1px solid #F5E6C4",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
+              <WarningIcon size={14} color="#B87520" style={{flexShrink:0,marginTop:1}}/>
+              <div style={{fontSize:12,color:"#7A5C1A",lineHeight:1.6}}>
+                <strong>The investigation revision history could not be read.</strong> No superseded investigator
+                wording is included, and this package cannot be described as a complete record of how the findings
+                changed. Compile it again before responding.
+              </div>
+            </div>
+          )}
+          {compiled.findingRevisions?.length>0&&(
+            <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#F4F2FA",border:"1px solid #DDD8EE",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
+              <WarningIcon size={14} color="#5B4B8A" style={{flexShrink:0,marginTop:1}}/>
+              <div style={{fontSize:12,color:"#3D3357",lineHeight:1.6}}>
+                <strong>{compiled.findingRevisions.length} investigator
+                finding{compiled.findingRevisions.length===1?" has":"s have"} been rewritten.</strong>{" "}
+                The superseded wording is listed with the issue, the order of the change and whether a person or a
+                system made it — but the wording itself is not reproduced in this package. Decide for each whether it
+                is disclosed, redacted or withheld.
               </div>
             </div>
           )}

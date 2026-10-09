@@ -29,9 +29,18 @@
 // │ refused.                                                                │
 // └─────────────────────────────────────────────────────────────────────────┘
 //
-// THE UI IS NOT THE BOUNDARY. Both triggers and both RLS policies stay exactly
-// as they are; nothing here weakens or replaces them. These functions only stop
-// Compass offering a control whose write cannot succeed.
+// THE UI IS NOT THE BOUNDARY. Nothing here weakens or replaces a trigger or a
+// policy; these functions only stop Compass offering a control whose write
+// cannot succeed.
+//
+// That claim was HALF TRUE when it was written, and the B2 review found the
+// other half. For the CONCLUSION the database genuinely was the boundary. For
+// the NARRATIVE there was no column-level rule at all, so the predicate below
+// was the only thing standing between a disciplinary officer and the
+// investigator's assessment — measured, not inferred: a disciplinary officer
+// successfully wrote witness_evidence on an isolated branch (probe M-03b).
+// supabase/investigator_narrative_authority_2026-10-08.sql closes that, so both
+// predicates in this file now mirror a real trigger.
 // ─────────────────────────────────────────────────────────────────────────
 
 /** The `case_access.role` values these two rules care about. */
@@ -44,27 +53,54 @@ export const CASE_ROLE = Object.freeze({
  * May this user write the investigation NARRATIVE — the investigator's
  * assessment, the outstanding uncertainty, and the witness evidence summary?
  *
- * HR, the disciplinary officer, or the case's assigned investigator. This is
- * the existing `canRecordInvestigation` rule, unchanged in behaviour and only
- * moved somewhere it can be tested. The database matches by omission: these
- * columns are deliberately excluded from
- * protect_allegations_finding_columns (destructive_decision_authorization
- * 2026-09-13.sql:128-131) because they are "ordinary investigation material an
- * Investigator legitimately edits", so the enforcement there is case-scoped RLS.
+ * HR, or the case's assigned investigator. NOT the disciplinary officer.
+ *
+ * ┌─ THIS RULE CHANGED, AND WHY (IR-REPORT-01b/B2 review) ──────────────────┐
+ * │ It previously also admitted CASE_ROLE.DISCIPLINARY_OFFICER, inherited    │
+ * │ verbatim from the pre-IR-REPORT-01a expression                           │
+ * │   canRecordInvestigation = canDecide || isAssignedInvestigator           │
+ * │ where `canDecide` is itself `isHR || disciplinary_officer`. So the        │
+ * │ disciplinary officer held narrative authority by ACCIDENT OF ORIGIN —     │
+ * │ it was never a decision about the investigation workflow, it was the      │
+ * │ decision gate being reused.                                              │
+ * │                                                                          │
+ * │ The product rule is that investigator findings belong to the             │
+ * │ INVESTIGATION workflow. A disciplinary officer works FROM the adopted    │
+ * │ investigation report and the disclosed evidence, and records their own    │
+ * │ disciplinary reasoning separately (status, decision_reasoning,           │
+ * │ decided_by/at, the case outcome, outcome_notes and case_decisions — all  │
+ * │ gated on `canDecide` and all independently enforced in the database).    │
+ * │ Those capabilities are untouched: the narrative is INPUT to the          │
+ * │ disciplinary officer, not output from them.                              │
+ * │                                                                          │
+ * │ The old comment here claimed "the database matches by omission… the      │
+ * │ enforcement there is case-scoped RLS". That was true and was the         │
+ * │ problem: case-scoped RLS admits every role that can write to the case,   │
+ * │ which is strictly WIDER than this predicate ever was, so the UI was the  │
+ * │ only boundary. B2 closes that —                                          │
+ * │ protect_allegations_investigator_narrative_columns()                      │
+ * │ (supabase/investigator_narrative_authority_2026-10-08.sql) now enforces  │
+ * │ exactly this predicate in the database, so the two agree and the         │
+ * │ database is authoritative.                                              │
+ * └─────────────────────────────────────────────────────────────────────────┘
  */
 export function mayRecordInvestigationNarrative({ isHR = false, caseRole = null } = {}) {
   return !!isHR
-    || caseRole === CASE_ROLE.INVESTIGATOR
-    || caseRole === CASE_ROLE.DISCIPLINARY_OFFICER;
+    || caseRole === CASE_ROLE.INVESTIGATOR;
 }
 
 /**
  * May this user record or amend the structured investigation CONCLUSION?
  *
  * HR or the case's assigned investigator — and nobody else. A literal mirror of
- * the database trigger, including its deliberate exclusion of the disciplinary
- * officer. Narrower than `mayRecordInvestigationNarrative` on purpose: the
- * conclusion is the one field whose authority the database itself polices.
+ * protect_allegations_investigation_conclusion_columns, including its deliberate
+ * exclusion of the disciplinary officer.
+ *
+ * Since the B2 review this is the SAME set as
+ * `mayRecordInvestigationNarrative`, and that is the intended end state rather
+ * than a redundancy: narrative and conclusion are both investigation work, and
+ * both are now policed by the database. The two predicates are kept separate
+ * because they mirror two different triggers, which can diverge again.
  */
 export function mayRecordInvestigationConclusion({ isHR = false, caseRole = null } = {}) {
   return !!isHR || caseRole === CASE_ROLE.INVESTIGATOR;
@@ -74,8 +110,13 @@ export function mayRecordInvestigationConclusion({ isHR = false, caseRole = null
  * The two authorities for one viewer, as a frozen pair.
  *
  * Returned together because the invariant that matters is the RELATIONSHIP
- * between them — conclusion authority must never exceed narrative authority,
- * and the disciplinary officer must hold the first without the second.
+ * between them: conclusion authority must never exceed narrative authority.
+ * Someone offered "record the conclusion" who cannot write the assessment it
+ * concludes would be a UI promising a half-finished action.
+ *
+ * (The earlier note here — "the disciplinary officer must hold the first
+ * without the second" — described the accident this review corrected, and is
+ * no longer the rule. See mayRecordInvestigationNarrative.)
  */
 export function investigationAuthority({ isHR = false, caseRole = null } = {}) {
   return Object.freeze({

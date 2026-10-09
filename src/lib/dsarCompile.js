@@ -103,11 +103,21 @@ const ALLEGATION_FREE_TEXT_FIELDS = Object.freeze([
 // rather than restated, so this manifest cannot quietly describe a signature
 // that no longer exists.
 //
-// NOT INCLUDED HERE, DELIBERATELY: `canonicalEmployeeId` and
-// `meetingFetchFailed` are not data sources — the first is the subject's
-// identity and the second is a failure flag. They are named in the test's own
-// exclusion list so that adding a third non-source parameter is a decision
-// somebody has to make explicitly.
+// NOT INCLUDED HERE, DELIBERATELY: `canonicalEmployeeId`,
+// `meetingFetchFailed` and `findingRevisionFetchFailed` are not data sources —
+// the first is the subject's identity and the other two are failure flags. They
+// are named in the test's own exclusion list so that adding a further
+// non-source parameter is a decision somebody has to make explicitly.
+//
+// A MANIFEST ENTRY IS NOT AN INTEGRATION. The B2 review found
+// investigation_finding_revisions listed here, classified dsar: included,
+// covered by 21 passing tests — and fetched by nothing at all, because every
+// test handed the parameter in directly. The three-way lock above cannot see
+// that: it ties the manifest to this signature and to the classification, none
+// of which knows whether a caller supplies the argument. The gap is closed by
+// src/lib/findingRevisionGateway.js plus a blob-level wiring test in
+// src/test/DsarScreen.test.jsx, which is the only assertion shape that would
+// have caught it.
 //
 // This manifest changes NO disclosure behaviour. Whether a given table's rows
 // reach the subject, and whether internal material is withheld, is decided
@@ -122,6 +132,7 @@ export const DSAR_SUBJECT_SOURCES = Object.freeze({
   wellbeingNotes: 'wellbeing_notes',
   concernReferrals: 'concern_referrals',
   caseDecisions: 'case_decisions',
+  findingRevisions: 'investigation_finding_revisions',
   allegations: 'allegations',
   caseSignals: 'case_signals',
   caseTasks: 'case_tasks',
@@ -149,6 +160,7 @@ export const DSAR_SUBJECT_SOURCES = Object.freeze({
 export function compileSubjectData(employeeName, { canonicalEmployeeId = null, cases = [], employeeRecords = [], starterInstances = [], leaverInstances = [], wellbeingNotes = [], concernReferrals = [], allegations = [], caseSignals = [], caseTasks = [], hrReviewRequests = [], auditLog = [], signingRequests = [], portalAccounts = [], dsarRequests = [], orgMembers = [], profiles = [], caseViews = [], portalInvites = [], orgEvents = [], improvementInitiatives = [], managerCapabilityInsights = [], organisationThemes = [], caseAccess = [], redundancyCases = [], standaloneMeetings = [], meetingFetchFailed = false,
     employeeActivities = [], employeeActivityRecords = [], employmentEvents = [],
     caseDecisions = [],
+    findingRevisions = [], findingRevisionFetchFailed = false,
   } = {}) {
   // ── Phase E0.5B — CANONICAL IDENTITY TAKES PRECEDENCE OVER THE NAME ───────
   //
@@ -399,6 +411,42 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
     // human review that the case-level field requires.
     reasoningRequiresReview: !!d.outcomeNotes,
   }));
+  // ── IR-REPORT-01b/B2 — superseded investigator narratives ─────────────────
+  //
+  // Decision A4: these ARE potentially disclosable personal data, the table is
+  // NOT silently omitted, and yet every draft is NOT automatically disclosed.
+  // Those three only reconcile one way, and it is the way this file already
+  // handles HR's own reasoning (case_decisions.reasoningRequiresReview,
+  // cases.outcomeNotes): emit the EXISTENCE and the metadata, flag the text for
+  // the human review that reviewed_flagged_sections gates, and do not pour the
+  // raw wording into the pack automatically.
+  //
+  // The superseded TEXT is still scanned for third-party mentions below —
+  // scanning reads the raw input, so withholding the text from the output
+  // costs nothing in third-party protection. An earlier draft that named a
+  // colleague is flagged exactly as the current wording is.
+  //
+  // changed_by is withheld (an internal actor, as decided_by is on
+  // case_decisions). actorKind IS disclosed: whether a person or a system
+  // altered a record about the subject is the subject's own information, and it
+  // is the whole point of recording it.
+  const revisionsForSubject = (Array.isArray(findingRevisions) ? findingRevisions : [])
+    .filter(r => r && subjectCaseIds.has(r.caseId));
+  const subjectFindingRevisions = revisionsForSubject.map(r => ({
+    caseId: r.caseId,
+    allegationId: r.allegationId || null,
+    field: r.field || null,
+    changedAt: r.changedAt || null,
+    // The authoritative order. changed_at alone cannot provide one, because
+    // two edits in a single transaction share it — see the migration's §1.
+    seq: r.seq ?? null,
+    actorKind: r.actorKind || null,
+    // What changed, without reproducing it: a reviewer can see that wording was
+    // replaced, and whether there is anything to release, before deciding.
+    supersededTextRequiresReview: !!(r.previousValue && String(r.previousValue).trim()),
+    replacementTextRequiresReview: !!(r.newValue && String(r.newValue).trim()),
+  }));
+
   const subjectCaseSignals = caseSignals.filter(s => subjectCaseIds.has(s.caseId));
   const subjectCaseTasks = caseTasks.filter(t => subjectCaseIds.has(t.caseId));
   // hr_review_requests isn't remapped to camelCase at load time
@@ -637,6 +685,23 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
       });
     });
   });
+
+  // SUPERSEDED narrative text is scanned on the same terms as the live text.
+  // The three captured columns are already members of ALLEGATION_FREE_TEXT_FIELDS,
+  // so a colleague named in a draft that was later rewritten is flagged for
+  // human review exactly as a colleague named in the current wording is. Not
+  // scanning this would mean a third party's data could be released from an old
+  // draft precisely because it had been edited out of the live record.
+  revisionsForSubject.forEach(r => {
+    scanText(r.previousValue, {
+      field: `findingRevision.${r.field}.superseded`,
+      caseId: r.caseId, allegationId: r.allegationId || null, seq: r.seq ?? null,
+    });
+    scanText(r.newValue, {
+      field: `findingRevision.${r.field}.replacement`,
+      caseId: r.caseId, allegationId: r.allegationId || null, seq: r.seq ?? null,
+    });
+  });
   // signingRequests/portalAccounts are already scoped to this employeeName
   // server-side (api/portal/_dsar-lookup.js filters by org_id+employee_name
   // directly) — filtered again here defensively, matching every other
@@ -807,7 +872,7 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
       concernReferrals: canonicalEmployeeId ? "employee_id" : "employee_name",
       // Derived through their case, which is the authoritative parent.
       allegations: "case_id", caseTasks: "case_id", caseSignals: "case_id", hrReviewRequests: "case_id",
-      caseDecisions: "case_id",
+      caseDecisions: "case_id", findingRevisions: "case_id",
       // No employee column exists on these tables at all.
       onboarding: "employee_name", offboarding: "employee_name",
       signingRequests: "employee_name", portalAccounts: "employee_name",
@@ -905,6 +970,22 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
     employmentEvents: subjectEmploymentEvents,
     concernReferrals: subjectConcernReferrals,
     caseDecisions: subjectCaseDecisions,
+    findingRevisions: subjectFindingRevisions,
+    // IR-REPORT-01b/B2 — the same honesty the meeting disposition applies.
+    // "No revisions were recorded" and "Compass could not read the revision
+    // history" are different facts, and a package that conflated them would
+    // certify a complete narrative history it does not have. Before the B2
+    // migration is applied the table does not exist, which is reported as
+    // not-yet-available rather than as an absence of rewrites.
+    findingRevisionDisposition: {
+      excluded: subjectFindingRevisions.length === 0,
+      readFailed: !!findingRevisionFetchFailed,
+      note: findingRevisionFetchFailed
+        ? "Compass could not read the investigation revision history while compiling this package, so no superseded investigator wording is included and completeness cannot be confirmed for it. Re-compile before responding."
+        : subjectFindingRevisions.length === 0
+        ? "No investigator finding, outstanding uncertainty or witness evidence summary on this subject's cases has been rewritten since revision recording began, so there is no superseded wording to consider."
+        : "Superseded investigator wording exists for this subject and is listed with the field, the issue, the order of the change and whether a person or a system made it. The wording ITSELF is not reproduced here: each entry is flagged for a disclosure decision, so a reviewer releases, redacts or withholds it deliberately. Earlier drafts were scanned for third-party mentions on the same terms as the live text.",
+    },
     allegations: disclosedAllegations,
     allegationDisclosure,
     caseSignals: subjectCaseSignals,

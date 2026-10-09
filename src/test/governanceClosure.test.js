@@ -6,7 +6,7 @@ import {
 import {
   TABLE_CLASSIFICATION, DATA_CLASS, DSAR_DISPOSITION, SECURITY_POSTURE,
   RECORDED_RLS_2026_10_03, SERVICE_ROLE_ONLY_TABLES, postureFor, serviceRoleReasonFor,
-  classificationFor, tablesWithDataClass,
+  classificationFor, tablesWithDataClass, PENDING_PRODUCTION_SCHEMA,
 } from '../lib/dataClassification.js';
 import { DSAR_SUBJECT_SOURCES } from '../lib/dsarCompile.js';
 import {
@@ -38,7 +38,9 @@ describe('NEW-44 — the DSAR invariant', () => {
   // Side (1): read the compiler's ACTUAL destructured parameter names out of
   // its own source. This is what makes the invariant derived rather than two
   // hand-maintained arrays facing each other.
-  const NON_SOURCE_PARAMS = ['canonicalEmployeeId', 'meetingFetchFailed'];
+  // Disposition flags, not data sources: they say whether a read SUCCEEDED,
+  // which is why they carry no table in the manifest.
+  const NON_SOURCE_PARAMS = ['canonicalEmployeeId', 'meetingFetchFailed', 'findingRevisionFetchFailed'];
   const compilerSignatureParams = () => {
     const src = readFileSync('src/lib/dsarCompile.js', 'utf8');
     const start = src.indexOf('export function compileSubjectData');
@@ -104,9 +106,13 @@ describe('NEW-44 — the DSAR invariant', () => {
     const included = Object.values(TABLE_CLASSIFICATION)
       .filter(m => m.dsar === DSAR_DISPOSITION.INCLUDED).length;
     // 28 before D4.3; case_decisions brings it to 29, flipped only once the
-    // compiler genuinely read it.
-    expect(included).toBe(29);
-    expect(new Set(Object.values(DSAR_SUBJECT_SOURCES)).size).toBe(29);
+    // compiler genuinely read it. IR-REPORT-01b/B2 brings it to 30 on the same
+    // terms: investigation_finding_revisions is 'included' only because
+    // compileSubjectData genuinely compiles it (metadata + review flags; the
+    // superseded wording itself is withheld pending human review, and is
+    // scanned for third-party mentions either way).
+    expect(included).toBe(30);
+    expect(new Set(Object.values(DSAR_SUBJECT_SOURCES)).size).toBe(30);
   });
 });
 
@@ -225,9 +231,21 @@ describe('NEW-44 — customer-data tables cannot silently lose RLS', () => {
     // 43 before D4.2; case_decisions brings it to 44, with RLS enabled and two
     // policies (select inheriting case access, insert requiring decision authority).
     const enabled = Object.values(RECORDED_RLS_2026_10_03).filter(r => r.rls).length;
-    expect(Object.keys(RECORDED_RLS_2026_10_03)).toHaveLength(44);
-    expect(enabled).toBe(44);
+    // 45 = the EXPECTED POST-MIGRATION schema. Split explicitly, because the
+    // reading is not uniform: 44 names were measured against production, and
+    // the remainder were measured on an isolated branch with the migration
+    // applied. Conflating the two is how a proposed table comes to be asserted
+    // as a production fact.
+    expect(Object.keys(RECORDED_RLS_2026_10_03)).toHaveLength(45);
+    expect(enabled).toBe(45);
+    const verified = Object.keys(RECORDED_RLS_2026_10_03)
+      .filter(t => !PENDING_PRODUCTION_SCHEMA.includes(t));
+    expect(verified, 'production-verified RLS readings').toHaveLength(44);
     expect(RECORDED_RLS_2026_10_03.case_decisions).toEqual({ rls: true, policies: 2 });
+    // IR-REPORT-01b/B2: one SELECT policy and one RESTRICTIVE INSERT
+    // `with check (false)`. No UPDATE or DELETE policy exists, deliberately.
+    // Branch-measured — see PENDING_PRODUCTION_SCHEMA.
+    expect(RECORDED_RLS_2026_10_03.investigation_finding_revisions).toEqual({ rls: true, policies: 2 });
   });
 
   it('RLS alone is not treated as sufficient — posture is a separate declaration', () => {
@@ -267,9 +285,10 @@ describe('NEW-44D — structural tenancy is derived from the corpus', () => {
   it('discovers org-scoped tables from the corpus, matching the live count', () => {
     const { tables } = orgScopedShapes(corpus());
     // 37 org_id-bearing base tables measured live on 2026-10-03, plus
-    // case_decisions from D4.2 = 38. The parser is checked against production,
-    // not against another list in this repository.
-    expect(tables).toHaveLength(38);
+    // case_decisions from D4.2 = 38, + investigation_finding_revisions from
+    // IR-REPORT-01b/B2 = 39. The parser is checked against production, not
+    // against another list in this repository.
+    expect(tables).toHaveLength(39);
     for (const t of tables) expect(t.columns, `${t.name}`).toContain('org_id');
   });
 

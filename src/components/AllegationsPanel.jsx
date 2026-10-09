@@ -42,7 +42,12 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
   // decision point (disciplinary hearing / grievance meeting)? Derived by
   // CaseViewScreen from the canonical hasReachedOutcomeStage, never here.
   // canRecordInvestigation: may this user write the investigation narrative —
-  // true for HR, the disciplinary officer, AND the assigned investigator.
+  // true for HR and the assigned investigator ONLY. It admitted the
+  // disciplinary officer until the IR-REPORT-01b/B2 review, which found that
+  // was inherited from canDecide rather than decided; findings belong to the
+  // investigation workflow. Note the default below is still `canDecide`, which
+  // is a CALLER-less fallback for tests — CaseViewScreen always passes the
+  // mayRecordInvestigationNarrative() result explicitly.
   atDecisionStage = true, canRecordInvestigation = canDecide,
   // IR-REPORT-01a. canConcludeInvestigation is NARROWER than
   // canRecordInvestigation: HR or this case's assigned investigator, and
@@ -197,8 +202,10 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                   )}
 
                   {/* The INVESTIGATION question, and the investigator's own
-                      fields. Writable by the assigned investigator as well as
-                      HR / the disciplinary officer. Relabelled "assessment":
+                      fields. Writable by HR and the assigned investigator; the
+                      disciplinary officer reads them (outcome letter, hearing
+                      pack, evidence matrix) and records their own reasoning
+                      separately. Relabelled "assessment":
                       "finding" invited confusion with the disciplinary finding,
                       and the old label referred to a reasoning box that is no
                       longer on screen during investigation. */}
@@ -335,7 +342,13 @@ export function AllegationsPanel({ cs, allegations, allAllegations, createAllega
                       witness evidence summary. Gated on canRecordInvestigation
                       — the same authority as the investigator's assessment,
                       because a witness evidence summary is investigation
-                      material, which is exactly what that gate is for. */}
+                      material, which is exactly what that gate is for.
+                      B2 REVIEW: that gate no longer admits the disciplinary
+                      officer. If a disciplinary officer hears new witness
+                      evidence AT the hearing they can no longer record it
+                      here, and must route it to the investigator or HR — the
+                      one practitioner-visible consequence of the narrowing,
+                      flagged for decision rather than quietly carved out. */}
                   {canRecordInvestigation ? (
                     <div style={{marginBottom:14}}>
                       <label htmlFor={`allegation-witness-evidence-${a.id}`} style={labelStyle}>Witness evidence summary</label>

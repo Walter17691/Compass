@@ -98,6 +98,28 @@ export const SECURITY_POSTURE = Object.freeze({
 // check that is not the declaration itself; re-verified against the live
 // database by scripts/schema-drift-check.mjs, which is the half that notices
 // RLS being switched off or a policy being dropped.
+// ┌─ TABLES THIS REPOSITORY DECLARES BUT PRODUCTION DOES NOT YET HAVE ──────┐
+// │ The single source of truth for "proposed, not deployed". Every gate that │
+// │ would otherwise assert a production fact about one of these names reads   │
+// │ this list instead, so the pending state cannot be lost in a comment.     │
+// │                                                                          │
+// │ A name here means: the migration corpus creates the table, the           │
+// │ classification and RLS entries below describe the posture MEASURED on an  │
+// │ isolated Supabase branch with the migration applied, and NO reading has   │
+// │ been taken against production. On deployment, re-read pg_class and        │
+// │ pg_policies against production, confirm the entries below match, and      │
+// │ remove the name from this list. If a slice is abandoned, delete the name  │
+// │ together with its migration file and its entries below.                   │
+// └─────────────────────────────────────────────────────────────────────────┘
+export const PENDING_PRODUCTION_SCHEMA = Object.freeze([
+  // IR-REPORT-01b/B2 — supabase/investigation_finding_revisions_2026-10-08.sql.
+  // Posture below ({ rls: true, policies: 2 }) was measured on branch
+  // qlgspfzzfjepwzaryeoi, not on production.
+  'investigation_finding_revisions',
+]);
+
+// The live RLS reading. Every entry EXCEPT those named in
+// PENDING_PRODUCTION_SCHEMA above was read from production on 2026-10-03.
 export const RECORDED_RLS_2026_10_03 = Object.freeze({
   allegations: { rls: true, policies: 1 },
   api_rate_limits: { rls: true, policies: 0 },
@@ -126,6 +148,13 @@ export const RECORDED_RLS_2026_10_03 = Object.freeze({
   hr_review_requests: { rls: true, policies: 3 },
   improvement_initiatives: { rls: true, policies: 4 },
   integration_events: { rls: true, policies: 1 },
+  // IR-REPORT-01b/B2. Two policies: one SELECT (HR or the case's CURRENT
+  // investigator) and one RESTRICTIVE INSERT `with check (false)`. There is
+  // deliberately no UPDATE or DELETE policy at all — that absence is half of
+  // append-only, and investigation_finding_revisions_append_only_trg is the
+  // other half (a policy denial is invisible; the trigger is loud, and is the
+  // only thing in front of a caller that bypasses RLS).
+  investigation_finding_revisions: { rls: true, policies: 2 },
   leaver_instances: { rls: true, policies: 4 },
   locations: { rls: true, policies: 4 },
   manager_capability_insights: { rls: true, policies: 1 },
@@ -238,6 +267,28 @@ export const TABLE_CLASSIFICATION = {
         + 'outcome_notes is review-required exactly as cases.outcomeNotes already is, unknown '
         + 'decided_at stays null rather than being inferred, and a legacy_unmapped row is shown '
         + 'as the string actually recorded with no reinterpretation.' }),
+
+  investigation_finding_revisions: t(
+    'Append-only history of superseded investigator narratives on allegations '
+    + '(investigator_finding, outstanding_uncertainty, witness_evidence): the previous and '
+    + 'replacing wording, who changed it and when.', C,
+    { org: 1, person: 1, case_: 1 }, D.INCLUDED,
+    { dsarNote: 'IR-REPORT-01b/B2, decision A4 — superseded investigator narratives are '
+        + 'POTENTIALLY DISCLOSABLE personal data, not internal working material to be withheld '
+        + 'wholesale and not a table to omit silently. Wired into compileSubjectData, so '
+        + 'included is truthful rather than aspirational (the standard this file set for '
+        + 'case_decisions). Three constraints the wiring honours. (1) It is NOT an automatic '
+        + 'disclosure of every draft: the compiled pack is the input to the documented human '
+        + 'review, which reviewed_flagged_sections in supabase/dsar_2026-07-24.sql gates before '
+        + 'any response goes out. (2) Superseded text is scanned for THIRD-PARTY mentions on the '
+        + 'same terms as the live text — the three captured columns are already in '
+        + 'ALLEGATION_FREE_TEXT_FIELDS, so an earlier draft naming a colleague is flagged for '
+        + 'review exactly as the current wording is, never auto-redacted. (3) changed_by is '
+        + 'withheld as an internal actor, consistent with decided_by on case_decisions; '
+        + 'actor_kind IS disclosed, because whether a person or a system changed a record about '
+        + 'the subject is the subject\'s own information. RETENTION IS THE OPEN QUESTION: this '
+        + 'is a NEW category of retained personal data and nothing purges it (decision A3 '
+        + 'forbids inventing a period); it is destroyed only with its case.' }),
 
   // ── audit ──
   audit_log: t('Immutable action log; the deletion event itself survives as one row.', C, { org: 1, person: 1, case_: 1 }, D.INCLUDED),

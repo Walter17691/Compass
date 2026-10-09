@@ -7,6 +7,7 @@ import {
   TABLE_CATEGORIES, allClassifiedTables, classifyTable, unclassifiedTables,
   isRelevantTable, NON_RELEVANT_SCHEMAS,
 } from '../lib/dataInventory.js';
+import { PENDING_PRODUCTION_SCHEMA } from '../lib/dataClassification.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // NEW-44 — the live-schema CI check that src/test/dataInventory.test.js
@@ -147,11 +148,25 @@ describe('NEW-44 — the derived schema matches production', () => {
   // without this fixture being touched. That separation is the whole fix: the
   // thing that must stay fresh is now computed, and the hand-typed thing has
   // no power to make a gap look green.
-  const LIVE_PUBLIC_TABLES_2026_10_02 = [
+  // ┌─ TWO LISTS, AND THE DIFFERENCE BETWEEN THEM IS THE POINT ──────────────┐
+  // │ VERIFIED_LIVE_* is a MEASUREMENT: every name was read back out of      │
+  // │ pg_class after being applied. PENDING_MIGRATION_* is a CLAIM: the       │
+  // │ corpus declares it and production does not have it yet.                 │
+  // │                                                                         │
+  // │ They were one list until IR-REPORT-01b/B2, when merging the two would   │
+  // │ have meant asserting a table existed in production when it did not.     │
+  // │ Keeping them apart means the pending state is structural — a name       │
+  // │ cannot drift from "proposed" to "verified" because someone edited a     │
+  // │ comment.                                                                │
+  // └─────────────────────────────────────────────────────────────────────────┘
+
+  // MEASURED. 44 tables, read from pg_class on 2026-10-02 (+ case_decisions
+  // re-read 2026-10-03 after Wave D4.2 was applied: 44 base tables, 44 with
+  // RLS, 0 views). NOTHING may be added here without a fresh reading taken
+  // AFTER the migration has been applied to production.
+  const VERIFIED_LIVE_PUBLIC_TABLES_2026_10_02 = [
     'allegations', 'api_rate_limits', 'audit_log', 'calendar_connections',
     'calendar_synced_events', 'case_access', 'case_signals', 'case_tasks', 'case_themes',
-    // case_decisions added by Wave D4.2 and applied to production 2026-10-03,
-    // re-read from pg_class afterwards: 44 base tables, 44 with RLS, 0 views.
     'case_decisions',
     'case_views', 'cases', 'concern_referrals', 'customer_contracts', 'dsar_requests',
     'employee_activities', 'employee_activity_records', 'employee_employment_events',
@@ -164,17 +179,48 @@ describe('NEW-44 — the derived schema matches production', () => {
     'starter_instances', 'team_invites', 'wellbeing_notes',
   ];
 
-  it('replaying supabase/ reproduces the live schema exactly, in both directions', () => {
+  // NOT MEASURED. Declared by the migration corpus, NOT applied to production.
+  // Each entry is a pending deployment. On deployment: re-read pg_class, move
+  // the name into VERIFIED_LIVE_* above with the new date and counts, and empty
+  // this list. If the slice is abandoned, delete the name here AND its
+  // migration file.
+  // Imported, not restated: PENDING_PRODUCTION_SCHEMA in
+  // src/lib/dataClassification.js is the one place a slice is marked
+  // "proposed, not deployed", so this gate and the RLS/classification gates
+  // cannot disagree about which tables are live.
+  const PENDING_MIGRATION_TABLES = [...PENDING_PRODUCTION_SCHEMA];
+
+  const EXPECTED_POST_MIGRATION_TABLES =
+    [...VERIFIED_LIVE_PUBLIC_TABLES_2026_10_02, ...PENDING_MIGRATION_TABLES].sort();
+
+  it('replaying supabase/ reproduces the EXPECTED POST-MIGRATION schema', () => {
+    // The corpus describes the schema as it will be once every pending
+    // migration is applied — which is what a repository can honestly know.
     const declared = declaredPublicTables(corpus());
-    expect(declared).toEqual([...LIVE_PUBLIC_TABLES_2026_10_02].sort());
+    expect(declared).toEqual(EXPECTED_POST_MIGRATION_TABLES);
+  });
+
+  it('keeps the VERIFIED live reading free of anything merely proposed', () => {
+    // The guard against the easy mistake: adding a pending table to the
+    // measured list, which would assert it exists in production when it does
+    // not. These two sets must stay disjoint.
+    const leaked = PENDING_MIGRATION_TABLES.filter(t => VERIFIED_LIVE_PUBLIC_TABLES_2026_10_02.includes(t));
+    expect(
+      leaked,
+      `Proposed table(s) have been added to the VERIFIED live reading: ${leaked.join(', ')}. `
+      + 'A name belongs there only after it has been applied to production and read back '
+      + 'out of pg_class.',
+    ).toEqual([]);
+    expect(VERIFIED_LIVE_PUBLIC_TABLES_2026_10_02).toHaveLength(44);
   });
 
   it('proves no live table was created outside the migration corpus', () => {
     // The equality above implies this, but it is the property that matters and
     // it deserves to fail by its own name: if someone creates a table in the
     // Supabase dashboard, the repository-derived gate cannot see it, and this
-    // is where that shows up.
-    const undeclared = LIVE_PUBLIC_TABLES_2026_10_02.filter(t => !declaredPublicTables(corpus()).includes(t));
+    // is where that shows up. Asserted against the VERIFIED list only —
+    // a pending table is absent from production by definition, not undeclared.
+    const undeclared = VERIFIED_LIVE_PUBLIC_TABLES_2026_10_02.filter(t => !declaredPublicTables(corpus()).includes(t));
     expect(undeclared, `Live but declared by no migration: ${undeclared.join(', ')}`).toEqual([]);
   });
 });
