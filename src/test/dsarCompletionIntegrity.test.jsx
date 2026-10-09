@@ -91,7 +91,13 @@ async function compileAndCapture(req, propsFor = baseProps) {
     const user = userEvent.setup();
     render(<DsarScreen {...propsFor(req)} />);
     await user.click(screen.getByRole('button', { name: 'Compile data' }));
-    const label = req.reviewedFlaggedSections ? 'Download response package' : 'Download draft for review';
+    // THREE states, not two: an attestation that cannot be attributed to a
+    // named reviewer is neither a draft nor a fully evidenced approval.
+    const label = !req.reviewedFlaggedSections
+      ? 'Download draft for review'
+      : req.reviewedBy
+        ? 'Download response package'
+        : 'Download response package (reviewer not recorded)';
     await waitFor(() => expect(screen.getByRole('button', { name: label })).toBeInTheDocument(), { timeout: 5000 });
     await user.click(screen.getByRole('button', { name: label }));
     expect(blobs).toHaveLength(1);
@@ -135,12 +141,18 @@ describe('the artefact does not present itself as approved while review is outst
     expect(pkg.flaggedThirdPartyMentions).toBeTruthy();
   });
 
-  it('becomes the official response once the review is recorded', async () => {
-    const { label, filename, pkg } = await compileAndCapture(request({ reviewedFlaggedSections: true }));
+  it('becomes the official response once the review is recorded AND attributable', async () => {
+    // This fixture previously omitted reviewedBy, which made it the HISTORICAL
+    // state while asserting the fully-approved outcome — the exact conflation
+    // the three-state derivation exists to remove.
+    const { label, filename, pkg } = await compileAndCapture(request({
+      reviewedFlaggedSections: true, reviewedBy: 'user-hr-7', reviewedAt: '2026-09-02T10:00:00Z',
+    }));
     expect(label).toBe('Download response package');
-    expect(filename).not.toMatch(/DRAFT/);
+    expect(filename).not.toMatch(/DRAFT|REVIEWER_NOT_RECORDED/);
     expect(pkg.responseStatus).toBe('approved_for_release');
     expect(pkg.reviewRecorded).toBe(true);
+    expect(pkg.reviewAttributable).toBe(true);
     expect(pkg).not.toHaveProperty('warning');
   });
 
@@ -465,5 +477,161 @@ describe('STAGE2-UX-01 — ?screen=dsar refuses visibly instead of rendering not
     ]} cases={[]} employeeRecords={[]} orgId="org-1" audit={vi.fn()} updateDsarRequest={vi.fn()} />);
     expect(screen.queryByText(/Only an HR Director can work on subject access requests/i)).toBeNull();
     expect(screen.getByText(/Someone/)).toBeTruthy();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DISCLOSURE INTEGRITY — THREE ATTESTATION STATES.
+//
+// `!!reviewedFlaggedSections` collapsed two different facts: that an
+// attestation EXISTS, and that it can be ATTRIBUTED to a named human. A request
+// attested before the completion-integrity migration added reviewed_by/
+// reviewed_at therefore exported as `approved_for_release` with
+// `reviewRecorded: true` and a null reviewer — a compliance artefact asserting
+// an approval the system cannot evidence.
+//
+// The historical attestation is NOT revoked and the record is NOT altered. Only
+// the claim the package makes about it changes.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('three attestation states are distinguishable in the exported package', () => {
+  it('STATE 1 — no attestation: a draft that says so', async () => {
+    const { label, filename, pkg } = await compileAndCapture(request({ reviewedFlaggedSections: false }));
+    expect(label).toBe('Download draft for review');
+    expect(filename).toMatch(/_DRAFT_NOT_APPROVED\.json$/);
+    expect(pkg.responseStatus).toBe('draft_review_outstanding');
+    expect(pkg.reviewRecorded).toBe(false);
+    expect(pkg.reviewAttributable).toBe(false);
+    expect(pkg.reviewedBy).toBeNull();
+    expect(pkg.warning).toMatch(/must not be sent/i);
+  });
+
+  it('STATE 2 — historical attestation, no attributable reviewer', async () => {
+    const { label, filename, pkg } = await compileAndCapture(request({
+      reviewedFlaggedSections: true, reviewedBy: null, reviewedAt: null,
+    }));
+    // NOT presented as a fully evidenced approval...
+    expect(pkg.responseStatus).toBe('approved_reviewer_not_recorded');
+    expect(pkg.responseStatus).not.toBe('approved_for_release');
+    expect(pkg.reviewAttributable).toBe(false);
+    // ...and NOT downgraded to a draft either — the review genuinely happened.
+    expect(pkg.responseStatus).not.toBe('draft_review_outstanding');
+    expect(pkg.reviewRecorded).toBe(true);
+    // the caveat travels with the artefact, and the filename carries it too
+    expect(filename).toMatch(/_REVIEWER_NOT_RECORDED\.json$/);
+    expect(label).toBe('Download response package (reviewer not recorded)');
+    expect(pkg.warning).toMatch(/no reviewer can be evidenced/i);
+    expect(pkg.warning).toMatch(/not withdrawn/i);
+    // the warning must name BOTH missing facts — who, and when — so the
+    // artefact explains itself without the reader consulting anything else
+    expect(pkg.warning).toMatch(/\bWHO\b/);
+    expect(pkg.warning).toMatch(/\bWHEN\b/);
+    // and it must say the attestation EXISTS, not that review is outstanding
+    expect(pkg.warning).toMatch(/recorded as reviewed/i);
+    expect(pkg.warning).not.toMatch(/must not be sent/i);
+  });
+
+  it('STATE 3 — new attestation with database-recorded provenance', async () => {
+    const { label, filename, pkg } = await compileAndCapture(request({
+      reviewedFlaggedSections: true,
+      reviewedBy: '6dc60cca-5bae-475f-8e1a-bae85072455f',
+      reviewedAt: '2026-10-09T12:00:00Z',
+    }));
+    expect(label).toBe('Download response package');
+    expect(filename).not.toMatch(/DRAFT|REVIEWER_NOT_RECORDED/);
+    expect(pkg.responseStatus).toBe('approved_for_release');
+    expect(pkg.reviewRecorded).toBe(true);
+    expect(pkg.reviewAttributable).toBe(true);
+    expect(pkg.reviewedBy).toBe('6dc60cca-5bae-475f-8e1a-bae85072455f');
+    expect(pkg.reviewedAt).toBe('2026-10-09T12:00:00Z');
+    expect(pkg).not.toHaveProperty('warning');
+  });
+
+  it('the three states produce three DIFFERENT responseStatus values', async () => {
+    const a = await compileAndCapture(request({ reviewedFlaggedSections: false }));
+    const b = await compileAndCapture(request({ reviewedFlaggedSections: true }));
+    const c = await compileAndCapture(request({ reviewedFlaggedSections: true, reviewedBy: 'u1', reviewedAt: '2026-10-09T12:00:00Z' }));
+    const statuses = [a.pkg.responseStatus, b.pkg.responseStatus, c.pkg.responseStatus];
+    expect(new Set(statuses).size).toBe(3);
+  });
+
+  it('the historical state is never silently upgraded by a non-null reviewedAt alone', async () => {
+    // Attribution means a PERSON. A timestamp without one is not attribution.
+    const { pkg } = await compileAndCapture(request({
+      reviewedFlaggedSections: true, reviewedBy: null, reviewedAt: '2026-10-09T12:00:00Z',
+    }));
+    expect(pkg.reviewAttributable).toBe(false);
+    expect(pkg.responseStatus).toBe('approved_reviewer_not_recorded');
+  });
+
+  it('IMMEDIATELY after a new review, the downloaded package carries the provenance', async () => {
+    // The F2 round trip end to end: the reviewer ticks the box, updateDsarRequest
+    // reads the row back, and the row the DATABASE returned (not the client's
+    // optimistic guess) is what the very next download stamps — no page reload.
+    const user = userEvent.setup();
+    const DB_REVIEWER = '6dc60cca-5bae-475f-8e1a-bae85072455f';
+    const DB_AT = '2026-10-09T12:34:56Z';
+
+    let row = { ...request({ reviewedFlaggedSections: false }) };
+    const updateDsarRequest = vi.fn(async (_id, fields) => {
+      // what src/App.jsx does: merge the returned row, provenance included
+      row = { ...row, ...fields,
+              reviewedBy: fields.reviewedFlaggedSections ? DB_REVIEWER : null,
+              reviewedAt: fields.reviewedFlaggedSections ? DB_AT : null };
+      rerenderWith(row);
+      return true;
+    });
+
+    const blobs = []; const names = [];
+    const origCreate = URL.createObjectURL; const origCreateEl = document.createElement.bind(document);
+    URL.createObjectURL = (b) => { blobs.push(b); return 'blob:x'; };
+    document.createElement = (t) => { const e = origCreateEl(t); if (t === 'a') {
+      Object.defineProperty(e, 'download', { set(v){ names.push(v); }, get(){ return names[names.length-1]; }, configurable: true });
+      e.click = () => {}; } return e; };
+
+    let rerender;
+    const rerenderWith = (r) => rerender(<DsarScreen {...baseProps(r)} updateDsarRequest={updateDsarRequest} />);
+    try {
+      const view = render(<DsarScreen {...baseProps(row)} updateDsarRequest={updateDsarRequest} />);
+      rerender = view.rerender;
+
+      await user.click(screen.getByRole('button', { name: 'Compile data' }));
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Download draft for review' })).toBeInTheDocument(), { timeout: 5000 });
+
+      // record the review
+      await user.click(screen.getByRole('checkbox'));
+      expect(updateDsarRequest).toHaveBeenCalledWith(row.id, { reviewedFlaggedSections: true });
+
+      // download straight away — no reload
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Download response package' })).toBeInTheDocument(), { timeout: 5000 });
+      await user.click(screen.getByRole('button', { name: 'Download response package' }));
+
+      const pkg = JSON.parse(await blobs[blobs.length - 1].text());
+      expect(pkg.responseStatus).toBe('approved_for_release');
+      expect(pkg.reviewAttributable).toBe(true);
+      expect(pkg.reviewedBy).toBe(DB_REVIEWER);
+      expect(pkg.reviewedAt).toBe(DB_AT);
+      expect(pkg).not.toHaveProperty('warning');
+      expect(names[names.length - 1]).not.toMatch(/DRAFT|REVIEWER_NOT_RECORDED/);
+    } finally {
+      URL.createObjectURL = origCreate; document.createElement = origCreateEl;
+    }
+  });
+
+  it('[UI] explains the historical state next to the attestation, and only then', async () => {
+    // The note sits inside the flagged-sections panel, which only exists once
+    // the package has been compiled — so compile first, then assert.
+    const note = /recorded before Compass captured who performed it/i;
+    const user = userEvent.setup();
+    const { rerender } = render(<DsarScreen {...baseProps(request({ reviewedFlaggedSections: true, reviewedBy: null }))} />);
+    await user.click(screen.getByRole('button', { name: 'Compile data' }));
+    await waitFor(() => expect(screen.getByText(note)).toBeInTheDocument(), { timeout: 5000 });
+
+    // attributable review -> no note
+    rerender(<DsarScreen {...baseProps(request({ reviewedFlaggedSections: true, reviewedBy: 'u1' }))} />);
+    expect(screen.queryByText(note)).toBeNull();
+
+    // no attestation at all -> no note (it would be meaningless)
+    rerender(<DsarScreen {...baseProps(request({ reviewedFlaggedSections: false }))} />);
+    expect(screen.queryByText(note)).toBeNull();
   });
 });

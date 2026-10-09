@@ -22,7 +22,13 @@ const noop = () => {};
 // PACKAGE contains, which is the approved-response path. The draft path — where
 // review is still outstanding and the artefact must not present itself as
 // approved — has its own tests in src/test/dsarCompletionIntegrity.test.jsx.
-const dsarRequests = [{ id: 'r1', employeeName: 'Sam Employee', requestedBy: '', receivedDate: '2026-08-01', dueDate: '2026-09-01', status: 'received', extended: false, reviewedFlaggedSections: true }];
+//
+// reviewedBy/reviewedAt are set because "the approved-response path" means an
+// attestation that can be ATTRIBUTED to a named reviewer. The flag on its own
+// now yields the third state — recorded, but with no reviewer on record — which
+// is deliberately named and labelled differently and has its own tests in that
+// same file.
+const dsarRequests = [{ id: 'r1', employeeName: 'Sam Employee', requestedBy: '', receivedDate: '2026-08-01', dueDate: '2026-09-01', status: 'received', extended: false, reviewedFlaggedSections: true, reviewedBy: '6dc60cca-5bae-475f-8e1a-bae85072455f', reviewedAt: '2026-10-09T12:00:00Z' }];
 
 const baseProps = {
   // DSAR administration is hr_director only; the screen default-denies without

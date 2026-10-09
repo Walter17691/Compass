@@ -186,27 +186,68 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
 
             reviewedBy/reviewedAt come from the row the DATABASE returned after
             the attestation was saved (see updateDsarRequest), never from
-            anything the client assembled. */}
+            anything the client assembled.
+
+            ── THREE STATES, NOT TWO ────────────────────────────────────────
+            This derived everything from one boolean, `!!reviewedFlaggedSections`,
+            which collapsed two different facts: that an attestation EXISTS, and
+            that it can be ATTRIBUTED to a named human. A request attested before
+            the completion-integrity migration added reviewed_by/reviewed_at
+            therefore exported as `approved_for_release` with `reviewRecorded:
+            true` and a null reviewer — a compliance artefact asserting approval
+            that the system cannot evidence.
+
+            The attestation is REAL and is not revoked here: a human did tick the
+            box, and nothing may retrospectively withdraw that. What changes is
+            that the package stops claiming more than the record supports. The
+            three states are named, and `reviewAttributable` is emitted so a
+            reader never has to infer meaning from a null. */}
         {compiled&&!compiled.identityRequiresReconciliation&&(()=>{
-          const approved = !!req.reviewedFlaggedSections;
+          const attested     = !!req.reviewedFlaggedSections;
+          const attributable = attested && !!req.reviewedBy;
+          const state = !attested ? "draft" : attributable ? "approved" : "unattributed";
           const safeName = req.employeeName.replace(/\s+/g,"_");
-          const filename = approved
-            ? `DSAR_${safeName}_${req.receivedDate}.json`
-            : `DSAR_${safeName}_${req.receivedDate}_DRAFT_NOT_APPROVED.json`;
+          const SUFFIX = { draft: "_DRAFT_NOT_APPROVED", unattributed: "_REVIEWER_NOT_RECORDED", approved: "" };
+          const filename = `DSAR_${safeName}_${req.receivedDate}${SUFFIX[state]}.json`;
+          const STATUS = {
+            draft:        "draft_review_outstanding",
+            unattributed: "approved_reviewer_not_recorded",
+            approved:     "approved_for_release",
+          };
+          const WARNING = {
+            draft: "DRAFT. The flagged sections have not been reviewed, so this is not an approved subject access response and must not be sent.",
+            unattributed: "The flagged sections were recorded as reviewed, but this request predates Compass recording WHO performed that review and WHEN. The review is not withdrawn and the record is unaltered — but no reviewer can be evidenced for it, so do not represent this package as a review attributable to a named person.",
+          };
+          const LABEL = {
+            draft: "Download draft for review",
+            unattributed: "Download response package (reviewer not recorded)",
+            approved: "Download response package",
+          };
+          const AUDIT = {
+            draft: "DSAR draft downloaded (review outstanding)",
+            unattributed: "DSAR response downloaded (reviewer not recorded)",
+            approved: "DSAR response downloaded",
+          };
           return (
             <Btn variant="secondary" onClick={()=>{
               downloadJson({
                 // Stamped into the file itself, because a filename can be
                 // renamed and a label is not carried with the artefact.
-                responseStatus: approved ? "approved_for_release" : "draft_review_outstanding",
-                reviewRecorded: approved,
+                responseStatus: STATUS[state],
+                // Unchanged meaning: the attestation flag is set. Kept true for
+                // the historical state because it IS set — withdrawing it here
+                // would misreport the record in the opposite direction.
+                reviewRecorded: attested,
+                // The new fact. Answers "can this review be attributed to a
+                // person?" without the reader having to interpret a null.
+                reviewAttributable: attributable,
                 reviewedBy: req.reviewedBy || null,
                 reviewedAt: req.reviewedAt || null,
-                ...(approved ? {} : { warning: "DRAFT. The flagged sections have not been reviewed, so this is not an approved subject access response and must not be sent." }),
+                ...(WARNING[state] ? { warning: WARNING[state] } : {}),
                 ...compiled,
               }, filename);
-              audit?.(approved ? "DSAR response downloaded" : "DSAR draft downloaded (review outstanding)", req.employeeName);
-            }}>{approved ? "Download response package" : "Download draft for review"}</Btn>
+              audit?.(AUDIT[state], req.employeeName);
+            }}>{LABEL[state]}</Btn>
           );
         })()}
         {compiled&&compiled.identityRequiresReconciliation&&(
@@ -445,6 +486,15 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
             <input type="checkbox" checked={!!req.reviewedFlaggedSections} onChange={e=>updateDsarRequest(req.id, {reviewedFlaggedSections:e.target.checked})} style={{cursor:"pointer"}}/>
             I have reviewed the flagged sections{compiled.evidenceRequiringReview.length>0?" and evidence files":""} (required before marking as completed)
           </label>
+          {/* Why the download says what it says. Without this the reviewer sees
+              a ticked box and a differently-labelled button with no explanation,
+              and the only account of it is inside a file they may not open. */}
+          {req.reviewedFlaggedSections&&!req.reviewedBy&&(
+            <div style={{fontSize:11,color:"#7A5C1A",background:"#FEF5E7",border:"1px solid #F5E6C4",borderRadius:6,padding:"8px 10px",marginTop:8,lineHeight:1.6}}>
+              This review was recorded before Compass captured who performed it. The review stands and is not withdrawn,
+              but no reviewer can be evidenced for it, so the response package will state that the reviewer is not on record.
+            </div>
+          )}
         </div>
         );
       })()}
