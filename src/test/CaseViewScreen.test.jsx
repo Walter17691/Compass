@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CaseViewScreen } from '../screens/CaseViewScreen.jsx';
@@ -1221,5 +1221,117 @@ describe('E1.4 — no guided next step, said plainly', () => {
     const body = document.body.textContent;
     ['unsupported', 'null', 'missing recipe', 'configuration error', 'not configured', 'error', 'invalid', 'unrecognised']
       .forEach(word => expect(body.toLowerCase()).not.toContain(word));
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Years of service — the reference date is captured once, not read during
+// render (react-hooks/purity correction).
+//
+// CaseViewScreen used to compute years of service with a bare Date.now() in
+// its render body. That is impure: the same props could yield a different
+// figure on a re-render React chose to do for its own reasons. It is now a
+// useState lazy initialiser, captured once per mount.
+//
+// useMemo(() => Date.now(), []) was considered and rejected — its factory also
+// runs during render, so this repo's own lint config flags it exactly as it
+// flagged the bare call, and useMemo is a performance hint React may discard
+// rather than a guarantee the value is computed once.
+//
+// These are behavioural tests through the rendered basic-award figure, the
+// only consumer of yearsService, not assertions about the source text.
+// ═══════════════════════════════════════════════════════════════════════════
+const YEAR_MS = 1000 * 60 * 60 * 24 * 365.25; // the same year length the calculation uses
+const DAY_MS = 86400000;
+const FIXED_NOW = Date.UTC(2026, 5, 15, 12, 0, 0);
+
+// Positive offsetDays moves the start date LATER, i.e. shortens the tenure.
+// Dates are emitted as YYYY-MM-DD, which parses back to UTC midnight and so
+// lengthens tenure by up to a day — well inside the 2-day margins used below.
+const startDateYearsAgo = (years, offsetDays = 0) =>
+  new Date(FIXED_NOW - years * YEAR_MS + offsetDays * DAY_MS).toISOString().slice(0, 10);
+
+// weeklyPay 500 is under the £700 statutory week's-pay cap, and with no age
+// recorded the calculation assumes the 22-40 band (multiplier 1), so the basic
+// award is simply completed_years x 500 — one moving part, which is the point.
+const exposureProps = (startDate, weeklyPay = 500) => ({
+  ...baseProps,
+  initialTab: 'exposure',
+  shell: {
+    ...baseProps.shell,
+    cases: [{ ...cs, estimatedWeeklyPay: weeklyPay }],
+    getEmployeeRecord: () => (startDate === undefined ? null : { startDate }),
+  },
+});
+
+describe('CaseViewScreen — years of service uses a mount-time reference date', () => {
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(FIXED_NOW); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('computes the basic award from a valid employment start date', () => {
+    render(<CaseViewScreen {...exposureProps(startDateYearsAgo(5, -10))} />);
+    // 5 completed years x £500 = £2,500
+    expect(screen.getByText(/Basic award £2,500/)).toBeInTheDocument();
+  });
+
+  it('treats a missing employee record as no recorded service, not as zero years silently', () => {
+    render(<CaseViewScreen {...exposureProps(undefined)} />);
+    // The panel still renders and still shows the compensatory range — only the
+    // service-dependent part is absent, which is the honest result.
+    expect(screen.getByText(/Basic award £0/)).toBeInTheDocument();
+    expect(screen.getByText(/compensatory range £3,900–£26,000/)).toBeInTheDocument();
+  });
+
+  it('treats an unparseable start date the same way, rather than rendering NaN', () => {
+    render(<CaseViewScreen {...exposureProps('not-a-real-date')} />);
+    expect(screen.getByText(/Basic award £0/)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/NaN|Infinity|£NaN/);
+  });
+
+  it('counts only COMPLETED years either side of a service anniversary', () => {
+    // Two days short of five years.
+    const { unmount } = render(<CaseViewScreen {...exposureProps(startDateYearsAgo(5, 2))} />);
+    expect(screen.getByText(/Basic award £2,000/)).toBeInTheDocument(); // 4 completed years
+    unmount();
+    // Two days past it.
+    render(<CaseViewScreen {...exposureProps(startDateYearsAgo(5, -2))} />);
+    expect(screen.getByText(/Basic award £2,500/)).toBeInTheDocument(); // 5 completed years
+  });
+
+  it('does not re-read the clock on re-render: the anniversary passing mid-session does not move the figure', () => {
+    // Mounted two days before the five-year anniversary.
+    const props = exposureProps(startDateYearsAgo(5, 2));
+    const { rerender } = render(<CaseViewScreen {...props} />);
+    expect(screen.getByText(/Basic award £2,000/)).toBeInTheDocument(); // 4 years x £500
+
+    // The anniversary passes while the screen stays mounted, then something
+    // unrelated changes and React re-renders.
+    vi.setSystemTime(FIXED_NOW + 10 * DAY_MS);
+    const repriced = exposureProps(startDateYearsAgo(5, 2), 600);
+    rerender(<CaseViewScreen {...repriced} />);
+
+    // CONTROL: the figure DID recompute — £600 a week now, not £500. So this
+    // test cannot pass by the component simply failing to re-render.
+    // 4 completed years x £600 = £2,400. Had the clock been read during render
+    // it would be 5 x £600 = £3,000.
+    expect(screen.getByText(/Basic award £2,400/)).toBeInTheDocument();
+    expect(screen.queryByText(/Basic award £3,000/)).not.toBeInTheDocument();
+  });
+
+  it('picks up the new figure on a fresh mount, so the value is stale only within a session', () => {
+    const props = exposureProps(startDateYearsAgo(5, 2));
+    const { unmount } = render(<CaseViewScreen {...props} />);
+    expect(screen.getByText(/Basic award £2,000/)).toBeInTheDocument();
+    unmount();
+
+    vi.setSystemTime(FIXED_NOW + 10 * DAY_MS);
+    render(<CaseViewScreen {...props} />);
+    expect(screen.getByText(/Basic award £2,500/)).toBeInTheDocument(); // 5 completed years
+  });
+
+  it('leaves unrelated case information untouched', () => {
+    render(<CaseViewScreen {...baseProps} initialTab="information" />);
+    expect(screen.getByText('Description')).toBeInTheDocument();
+    expect(screen.getAllByText(/Sam Employee/).length).toBeGreaterThan(0);
   });
 });

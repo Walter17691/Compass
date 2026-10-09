@@ -160,6 +160,13 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   // a not-yet-loaded/missing case, and React's hooks must never be called
   // conditionally relative to that.
   const [closingCase, setClosingCase] = useState(false);
+  // Reference "now" for the years-of-service figure, captured ONCE here for
+  // the same reason closingCase is declared up here: the early return below
+  // means a hook further down would be called conditionally. Read the clock
+  // during render and the same props can yield a different figure on a
+  // re-render React chose to do for its own reasons — which is what
+  // react-hooks/purity objects to. See its use near yearsService below.
+  const [tenureReferenceNow] = useState(() => Date.now());
   const cs = cases.find(x=>x.id===activeCaseId);
   // Release 1 Phase 2.2 — deterministic live-meeting discovery. Declared
   // status only; never inferred from record/transcript/latest-meeting.
@@ -258,11 +265,25 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   const automationSuggestions = evaluateAutomationRules(cs, { caseTasks: caseTaskList, caseSignals });
   // Years of service feeds the basic-award multiplier. Fractional years by
   // design — see tribunalEstimate.js. Unchanged from OverviewTab.
+  //
+  // tenureReferenceNow (declared with the other hooks at the top) replaces a
+  // Date.now() that used to be read right here, during render.
+  //
+  // useState's lazy initialiser is the right tool and useMemo is NOT:
+  // useMemo's factory also runs during render, so it remains impure — verified
+  // against this repo's own lint config, which flags it exactly as it flagged
+  // the bare call — and useMemo is documented as a performance hint React may
+  // discard, not a guarantee the value is computed once.
+  //
+  // Freezing at mount is not a behavioural loss. basicAward() floors this to
+  // whole years, so the figure can only move when a service ANNIVERSARY passes,
+  // and even before this change it never updated live — it only recomputed
+  // when something else happened to trigger a render.
   const yearsService = (() => {
     if(!empRecord?.startDate) return null;
     const start = new Date(empRecord.startDate.includes("/") ? empRecord.startDate.split("/").reverse().join("-") : empRecord.startDate);
     if(isNaN(start)) return null;
-    return (Date.now()-start.getTime())/(1000*60*60*24*365.25);
+    return (tenureReferenceNow-start.getTime())/(1000*60*60*24*365.25);
   })();
   const screens = SCREENS;
 
