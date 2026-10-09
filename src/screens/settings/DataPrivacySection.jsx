@@ -3,7 +3,7 @@ import { Btn, Card } from '../../components/Primitives';
 import { UK_JURISDICTIONS } from '../../lib/ukBankHolidays';
 import { COLOR, FONT } from '../../styles/tokens';
 
-export function DataPrivacySection({ isHR, exportCSV, exportPDF, cases, policies, auditLog, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, lsSet, dataRetentionYears, saveDataRetentionYears, ukJurisdiction, saveUkJurisdiction }) {
+export function DataPrivacySection({ isHR, mayExportOrgData = false, exportCSV, exportPDF, cases, policies, auditLog, exportAllData, deleteAllData, setGdprAccepted, setShowGdpr, lsSet, dataRetentionYears, saveDataRetentionYears, ukJurisdiction, saveUkJurisdiction }) {
   const [retentionDraft, setRetentionDraft] = useState(dataRetentionYears ?? "");
   return (
     <>
@@ -64,7 +64,15 @@ export function DataPrivacySection({ isHR, exportCSV, exportPDF, cases, policies
           ))}
         </div>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-          <Btn variant="secondary" onClick={exportAllData}>Export all data</Btn>
+          {/* SECURITY FIX — this card is deliberately NOT inside an isHR
+              wrapper, because "View privacy notice" belongs to everyone. The
+              two whole-organisation actions inside it are gated individually:
+              "Delete all data" has always been enforced server-side
+              (api/delete-org-data.js refuses anyone but an HR Director), and
+              "Export all data" now matches it. The export is also enforced
+              inside exportAllData itself, so this is presentation, not the
+              boundary. */}
+          {mayExportOrgData&&<Btn variant="secondary" onClick={exportAllData}>Export all data</Btn>}
           <Btn variant="danger" onClick={deleteAllData} style={{color:"#C84B2F"}}>Delete all data</Btn>
           <button onClick={()=>{setGdprAccepted(false);lsSet("compass_gdpr",false);setShowGdpr(true);}} style={{background:"none",border:"none",color:"#6B6880",fontSize:12,cursor:"pointer",textDecoration:"underline"}}>View privacy notice</button>
         </div>

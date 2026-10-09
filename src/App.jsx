@@ -115,6 +115,7 @@ import { sourceFidelity, dialoguePermitted, discussionHeading, discussionInstruc
 import { mergeSuggestions, suggestionKey } from './lib/suggestionIdentity';
 import { appealLinkCandidates } from './lib/appealLink';
 import { reconcileCaseEmployeeWrite, describeReconcileOutcome, shouldReloadAfter, correctCaseEmployeeWrite, describeCorrectionOutcome, CORRECT_RESULT } from './lib/reconciliationWrites';
+import { mayExportOrganisationData, ORG_EXPORT_REFUSAL } from './lib/exportAuthority.js';
 import { isHrRole, CASE_ACCESS_LEVEL_LABELS, canCorrectEmployeeIdentity } from './lib/roles';
 import { computeSelectionScore } from './lib/redundancyScoring';
 import { parseCsv, toCsv, csvRowsToObjects } from './lib/csv';
@@ -1362,6 +1363,9 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   };
 
   const exportEmployeesCsv = () => {
+    // SECURITY FIX — the whole employee roster. Its sibling exports in the same
+    // Settings pane are isHR-gated; this one was not gated at all.
+    if (!isHR) { showToast("Only HR can export the employee roster.", "error"); return; }
     const rows = [["Name","Job title","Start date","Location","Employee number","Department","Manager","Status","Working pattern","Probation end date"]];
     employeeRecords.forEach(r => rows.push([r.name||"", r.jobTitle||"", r.startDate||"", r.location||"", r.employeeNumber||"", r.department||"", r.manager||"", r.status||"", r.workingPattern||"", r.probationEndDate||""]));
     const csv = toCsv(rows);
@@ -4511,6 +4515,17 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // compiler uses, just without an employeeName filter so it returns
   // every row for the org instead of one subject's.
   const exportAllData = async () => {
+    // SECURITY FIX — enforced in the FUNCTION, not only by whether a button is
+    // rendered. This is the operative check on who may assemble and emit the
+    // whole-organisation aggregate; see src/lib/exportAuthority.js for why the
+    // role is hr_director and for an honest account of what this does and does
+    // not bound. The audit records the refusal as well as the export, so an
+    // attempt is not invisible.
+    if (!mayExportOrganisationData({ role: member?.role })) {
+      audit("Organisation data export refused", ORG_EXPORT_REFUSAL);
+      showToast(ORG_EXPORT_REFUSAL, "error");
+      return;
+    }
     let signingRequests = [];
     let portalAccounts = [];
     let portalInvites = [];
@@ -4542,7 +4557,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href=url; a.download="compass_data_export.json"; a.click();
     URL.revokeObjectURL(url);
-    audit("Data exported (GDPR)");
+    audit("Data exported (GDPR)", `${cases.length} case(s), ${employeeRecords.length} employee record(s), ${allegations.length} allegation(s) and 22 further collections`, null, { dataUsed: "whole-organisation export" });
   };
   const deleteAllData = async () => {
     const ok = await confirmDialog({
@@ -13124,6 +13139,7 @@ Please produce:
       {screen===SCREENS.SETTINGS&&(
         <SettingsScreen
           isHR={isHR}
+          mayExportOrgData={mayExportOrganisationData({ role: member?.role })}
           isMobile={isMobile}
           initialSection={settingsSection}
           clearInitialSection={()=>setSettingsSection(null)}

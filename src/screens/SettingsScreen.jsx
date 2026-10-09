@@ -38,6 +38,9 @@ import { HelpSection } from './settings/HelpSection';
 // sections read them identically and grouping would only add indirection.
 export function SettingsScreen({
   isHR, isMobile, initialSection, clearInitialSection, setScreen, showToast, auditLog, lsSet,
+  // Whole-organisation export authority, computed once in App.jsx from the
+  // member's role (src/lib/exportAuthority.js). Narrower than isHR by design.
+  mayExportOrgData = false,
   org = {},
   team = {},
   portal = {},
@@ -192,7 +195,7 @@ export function SettingsScreen({
           {active==="notifications"&&<NotificationsSection dueSoon={notifications.dueSoon} caseTasks={notifications.caseTasks} createCaseTask={notifications.createCaseTask} requestNotifications={notifications.requestNotifications} notifGranted={notifications.notifGranted} emailDigestOptIn={notifications.emailDigestOptIn} toggleEmailDigest={notifications.toggleEmailDigest} orgWebhookUrl={integrations.orgWebhookUrl} orgWebhookType={integrations.orgWebhookType} saveOrgWebhook={integrations.saveOrgWebhook} sendTestWebhook={integrations.sendTestWebhook}/>}
           {active==="automations"&&isHR&&<AutomationsSection automationLevels={automation.automationLevels} saveAutomationLevel={automation.saveAutomationLevel}/>}
           {active==="audit-trail"&&<AuditTrailSection auditLog={auditLog}/>}
-          {active==="data-privacy"&&<DataPrivacySection isHR={isHR} exportCSV={dataPrivacy.exportCSV} exportPDF={dataPrivacy.exportPDF} cases={dataPrivacy.cases} policies={policies.policies} auditLog={auditLog} exportAllData={dataPrivacy.exportAllData} deleteAllData={dataPrivacy.deleteAllData} setGdprAccepted={dataPrivacy.setGdprAccepted} setShowGdpr={dataPrivacy.setShowGdpr} lsSet={lsSet} dataRetentionYears={dataPrivacy.dataRetentionYears} saveDataRetentionYears={dataPrivacy.saveDataRetentionYears} ukJurisdiction={dataPrivacy.ukJurisdiction} saveUkJurisdiction={dataPrivacy.saveUkJurisdiction}/>}
+          {active==="data-privacy"&&<DataPrivacySection isHR={isHR} mayExportOrgData={mayExportOrgData} exportCSV={dataPrivacy.exportCSV} exportPDF={dataPrivacy.exportPDF} cases={dataPrivacy.cases} policies={policies.policies} auditLog={auditLog} exportAllData={dataPrivacy.exportAllData} deleteAllData={dataPrivacy.deleteAllData} setGdprAccepted={dataPrivacy.setGdprAccepted} setShowGdpr={dataPrivacy.setShowGdpr} lsSet={lsSet} dataRetentionYears={dataPrivacy.dataRetentionYears} saveDataRetentionYears={dataPrivacy.saveDataRetentionYears} ukJurisdiction={dataPrivacy.ukJurisdiction} saveUkJurisdiction={dataPrivacy.saveUkJurisdiction}/>}
           {active==="help"&&<HelpSection setOnboardStep={onboarding.setOnboardStep} setShowOnboard={onboarding.setShowOnboard}/>}
 
           <div style={{marginTop:24}}>

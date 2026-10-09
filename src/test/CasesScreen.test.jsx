@@ -183,6 +183,18 @@ describe('CasesScreen — bulk close is hidden for non-HR (Destructive & Decisio
     render(<CasesScreen {...baseProps} cases={oneCase} isHR={false} />);
     await user.click(screen.getByLabelText('Select Sam Employee'));
     expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+    // SECURITY FIX (org-wide export restriction). This previously asserted that Export IS
+    // available to a non-HR user — the vulnerability, pinned as intended
+    // behaviour. bulkExport downloads the full unredacted case JSON including
+    // meeting transcripts, evidence and allegations, so it was the MORE
+    // sensitive of the two buttons and the only ungated one.
+    expect(screen.queryByRole('button', { name: 'Export' })).not.toBeInTheDocument();
+  });
+
+  it('renders the bulk Export button for an HR user, so the capability is not lost', async () => {
+    const user = userEvent.setup();
+    render(<CasesScreen {...baseProps} cases={oneCase} isHR={true} />);
+    await user.click(screen.getByLabelText('Select Sam Employee'));
     expect(screen.getByRole('button', { name: 'Export' })).toBeInTheDocument();
   });
 

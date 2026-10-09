@@ -222,6 +222,12 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
   // meta so the audit entry says what actually left the app, not just
   // that "an export happened."
   const bulkExport = () => {
+    // SECURITY FIX — this emits the full unredacted case JSON (transcripts,
+    // evidence, allegations). It was ungated while the "Close" button beside it
+    // was isHR-gated, so the more sensitive of the two actions was the open
+    // one. Enforced in the function as well as on the button, so rendering is
+    // not the boundary.
+    if (!isHR) { showToast?.("Only HR can export case files.", "error"); return; }
     const chosen = cases.filter(c=>selected.has(c.id));
     downloadJson(chosen, `compass_cases_export_${new Date().toISOString().split("T")[0]}.json`);
     audit?.("Bulk case export", `${chosen.length} case${chosen.length!==1?"s":""} exported as JSON`, null, { dataUsed: chosen.map(c=>c.employeeName).join(", ") });
@@ -272,7 +278,7 @@ export function CasesScreen({ cases, casesLoading, locations, orgMembers, setInt
         {selected.size>0&&(
           <div style={{position:"sticky",top:0,zIndex:10,display:"flex",alignItems:"center",gap:12,background:COLOR.ink,borderRadius:RADIUS.surface,padding:"12px 16px",marginBottom:SPACE.lg}}>
             <span style={{fontSize:13,color:"#fff",fontWeight:500}}>{selected.size} selected</span>
-            <button onClick={bulkExport} style={{fontSize:12,background:"none",border:"1px solid #FFFFFF44",borderRadius:6,padding:"6px 14px",color:"#fff",cursor:"pointer",fontFamily:FONT.sans}}>Export</button>
+            {isHR&&<button onClick={bulkExport} style={{fontSize:12,background:"none",border:"1px solid #FFFFFF44",borderRadius:6,padding:"6px 14px",color:"#fff",cursor:"pointer",fontFamily:FONT.sans}}>Export</button>}
             {isHR&&<button onClick={bulkClose} style={{fontSize:12,background:"none",border:"1px solid #FFFFFF44",borderRadius:6,padding:"6px 14px",color:"#fff",cursor:"pointer",fontFamily:FONT.sans}}>Close</button>}
             <button onClick={()=>setSelected(new Set())} style={{fontSize:12,background:"none",border:"none",color:COLOR.inkQuiet,cursor:"pointer",marginLeft:"auto",fontFamily:FONT.sans}}>Clear</button>
           </div>
