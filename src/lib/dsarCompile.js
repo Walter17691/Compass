@@ -4,6 +4,7 @@ import { splitMeetingRecord } from './meetingRecordSections.js';
 import { disclosableCase, summariseCaseDisclosure, MEETING_WITHHELD_INTERNAL } from './dsarCaseDisclosure.js';
 import { disclosableAllegation, summariseAllegationDisclosure } from './dsarAllegationDisclosure.js';
 import { disclosableSigningRequest, summariseSigningDisclosure } from './dsarSigningDisclosure.js';
+import { classifyReportVersion, REPORT_VERSION_STATE } from './reportVersionGateway.js';
 import {
   disclosableStaffRoleCase, disclosableStaffRoleWellbeingNote, disclosableStaffRoleHrReview,
   disclosableOwnHrReview, disclosableRedundancyCase, disclosableStaffRoleEmployeeRecord,
@@ -133,6 +134,7 @@ export const DSAR_SUBJECT_SOURCES = Object.freeze({
   concernReferrals: 'concern_referrals',
   caseDecisions: 'case_decisions',
   findingRevisions: 'investigation_finding_revisions',
+  reportVersions: 'investigation_report_versions',
   allegations: 'allegations',
   caseSignals: 'case_signals',
   caseTasks: 'case_tasks',
@@ -161,6 +163,7 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
     employeeActivities = [], employeeActivityRecords = [], employmentEvents = [],
     caseDecisions = [],
     findingRevisions = [], findingRevisionFetchFailed = false,
+    reportVersions = [], reportVersionFetchFailed = false,
   } = {}) {
   // ── Phase E0.5B — CANONICAL IDENTITY TAKES PRECEDENCE OVER THE NAME ───────
   //
@@ -447,6 +450,52 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
     replacementTextRequiresReview: !!(r.newValue && String(r.newValue).trim()),
   }));
 
+  // ── B3.4 — SAVED INVESTIGATION REPORT VERSIONS ───────────────────────────
+  //
+  // An investigation report is a document ABOUT the subject, so its saved
+  // versions are their personal data. They are NOT all the same thing, and
+  // flattening them would be the error: the current official document, one
+  // that was official and has been replaced, and a draft that was never
+  // adopted carry entirely different weight for a reviewer.
+  //
+  // The WORDING IS NOT REPRODUCED, in any state. That is not blanket
+  // withholding — nothing here is dropped, every version is listed and
+  // counted, and each one carries a flag saying there is text to decide about.
+  // It is the treatment cases.investigationReport itself already gets
+  // (CASE_REVIEW_REQUIRED, "often full of third-party statements, Compass does
+  // not record whether it was shared, so it must not assume") and the
+  // treatment B2 gave superseded investigator wording. Releasing a draft
+  // automatically would disclose an account the investigator reconsidered
+  // before it was ever official; withholding every draft by default would hide
+  // the fact that it exists. Both remove the decision from the person
+  // answerable for it, so the decision is surfaced instead.
+  //
+  // created_by/adopted_by are withheld as internal actors (as changed_by and
+  // decided_by are). author_kind and adoption_basis ARE disclosed: whether a
+  // person or a system wrote a document about the subject, and whether it
+  // became official through the assigned investigator or an HR exception, is
+  // provenance about them.
+  //
+  // adoption_reason is HR's own written justification for overriding the
+  // normal rule. It is review-flagged rather than reproduced, exactly as
+  // outcomeNotes is — the same judgement, for the same reason.
+  const versionsForSubject = (Array.isArray(reportVersions) ? reportVersions : [])
+    .filter(v => v && subjectCaseIds.has(v.caseId));
+  const subjectReportVersions = versionsForSubject.map(v => ({
+    caseId: v.caseId,
+    versionNo: v.versionNo ?? null,
+    state: classifyReportVersion(v),
+    // 'generated' or 'edited' — whether a human rewrote it matters to a reader.
+    source: v.source || null,
+    createdAt: v.createdAt || null,
+    authorKind: v.authorKind || null,
+    adoptedAt: v.adoptedAt || null,
+    adoptionBasis: v.adoptionBasis || null,
+    supersededAt: v.supersededAt || null,
+    bodyRequiresReview: !!(v.body && String(v.body).trim()),
+    adoptionReasonRequiresReview: !!(v.adoptionReason && String(v.adoptionReason).trim()),
+  }));
+
   const subjectCaseSignals = caseSignals.filter(s => subjectCaseIds.has(s.caseId));
   const subjectCaseTasks = caseTasks.filter(t => subjectCaseIds.has(t.caseId));
   // hr_review_requests isn't remapped to camelCase at load time
@@ -702,6 +751,28 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
       caseId: r.caseId, allegationId: r.allegationId || null, seq: r.seq ?? null,
     });
   });
+  // B3.4 — every saved report body is scanned, in EVERY state, on the same
+  // terms as the live report. An investigation report is the single most
+  // third-party-dense document on a case: it quotes witnesses by name. A
+  // colleague named in a draft the investigator later rewrote, or in a version
+  // that was adopted and then superseded, must be flagged precisely because
+  // that wording is no longer visible in the current document — which is the
+  // same reasoning B2 applied to superseded narratives one block above.
+  //
+  // The state is carried into the field path so a reviewer can see WHICH
+  // document a flagged mention came from, not merely that one exists.
+  versionsForSubject.forEach(v => {
+    const state = classifyReportVersion(v);
+    scanText(v.body, {
+      field: `reportVersion.${state}.body`,
+      caseId: v.caseId, allegationId: null, versionNo: v.versionNo ?? null,
+    });
+    // HR's written reason for adopting under exception names people too.
+    scanText(v.adoptionReason, {
+      field: `reportVersion.${state}.adoptionReason`,
+      caseId: v.caseId, allegationId: null, versionNo: v.versionNo ?? null,
+    });
+  });
   // signingRequests/portalAccounts are already scoped to this employeeName
   // server-side (api/portal/_dsar-lookup.js filters by org_id+employee_name
   // directly) — filtered again here defensively, matching every other
@@ -872,7 +943,7 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
       concernReferrals: canonicalEmployeeId ? "employee_id" : "employee_name",
       // Derived through their case, which is the authoritative parent.
       allegations: "case_id", caseTasks: "case_id", caseSignals: "case_id", hrReviewRequests: "case_id",
-      caseDecisions: "case_id", findingRevisions: "case_id",
+      caseDecisions: "case_id", findingRevisions: "case_id", reportVersions: "case_id",
       // No employee column exists on these tables at all.
       onboarding: "employee_name", offboarding: "employee_name",
       signingRequests: "employee_name", portalAccounts: "employee_name",
@@ -985,6 +1056,26 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
         : subjectFindingRevisions.length === 0
         ? "No investigator finding, outstanding uncertainty or witness evidence summary on this subject's cases has been rewritten since revision recording began, so there is no superseded wording to consider."
         : "Superseded investigator wording exists for this subject and is listed with the field, the issue, the order of the change and whether a person or a system made it. The wording ITSELF is not reproduced here: each entry is flagged for a disclosure decision, so a reviewer releases, redacts or withholds it deliberately. Earlier drafts were scanned for third-party mentions on the same terms as the live text.",
+    },
+    reportVersions: subjectReportVersions,
+    // B3.4 — the same honesty the meeting and revision dispositions apply, with
+    // one addition they do not need: a COUNT PER STATE. "Three saved versions"
+    // tells a reviewer nothing useful; "one current, one replaced, one never
+    // adopted" tells them what decisions they are actually facing.
+    reportVersionDisposition: {
+      excluded: subjectReportVersions.length === 0,
+      readFailed: !!reportVersionFetchFailed,
+      counts: {
+        currentAdopted: subjectReportVersions.filter(v => v.state === REPORT_VERSION_STATE.CURRENT_ADOPTED).length,
+        historicallyAdopted: subjectReportVersions.filter(v => v.state === REPORT_VERSION_STATE.HISTORICALLY_ADOPTED).length,
+        drafts: subjectReportVersions.filter(v => v.state === REPORT_VERSION_STATE.DRAFT).length,
+        unexpected: subjectReportVersions.filter(v => v.state === REPORT_VERSION_STATE.UNEXPECTED).length,
+      },
+      note: reportVersionFetchFailed
+        ? "Compass could not read the saved investigation report versions while compiling this package, so none are included and completeness cannot be confirmed for them. Re-compile before responding."
+        : subjectReportVersions.length === 0
+        ? "No investigation report on this subject's cases has been saved as a version. Any investigation report held on a case itself is listed with the case and is flagged there for a disclosure decision in the usual way."
+        : "Saved investigation report versions exist for this subject. Each is listed with its version number, whether it is the current adopted report, a previously adopted report that has been replaced, or a draft that was never adopted, together with when it was saved, whether a person or a system authored it, and — where adopted — on what basis. The WORDING ITSELF is not reproduced in any state: each version is flagged so a reviewer releases, redacts or withholds it deliberately. A draft is not automatically exempt and is not automatically released. Every version's text, adopted or not, was scanned for third-party mentions on the same terms as the live report. The meetings, evidence and signature or dispute provenance a report refers to are disclosed in their own categories of this package, not restated here.",
     },
     allegations: disclosedAllegations,
     allegationDisclosure,

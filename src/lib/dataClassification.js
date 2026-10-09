@@ -112,11 +112,20 @@ export const SECURITY_POSTURE = Object.freeze({
 // │ together with its migration file and its entries below.                   │
 // └─────────────────────────────────────────────────────────────────────────┘
 export const PENDING_PRODUCTION_SCHEMA = Object.freeze([
-  // B3.1 — supabase/investigation_report_versions_2026-10-09.sql.
-  // Posture below ({ rls: true, policies: 2 }) was measured on branch
-  // cjijgutnwpqovyjzdvrq, not on production. Remove this entry once the
-  // migration is applied and the live posture is confirmed.
-  'investigation_report_versions',
+  // Empty, and that is a true statement rather than an oversight: every table
+  // this codebase declares now exists in production.
+  //
+  // investigation_report_versions (B3.1) was the last entry. Its posture had
+  // been measured on branch cjijgutnwpqovyjzdvrq rather than on production,
+  // and the entry said to remove it once the migration was applied and the
+  // live posture confirmed. The migration was applied on 2026-10-09 and
+  // pg_class/pg_policies were re-read afterwards: 46 base tables, the table
+  // present, RLS enabled, exactly two policies — matching the recorded
+  // posture. So it moved into the verified live reading in
+  // src/test/schemaInventoryGate.test.js, and this list is empty.
+  //
+  // Leaving it non-empty would have been the cheaper lie: it would have kept
+  // claiming a migration was outstanding when it was not.
 ]);
 
 // The live RLS reading. Every entry EXCEPT those named in
@@ -301,17 +310,17 @@ export const TABLE_CLASSIFICATION = {
     'Immutable saved versions of the investigation report: the report body, who saved it and '
     + 'when, and for adopted versions who adopted it, on what basis and — for an HR exception — '
     + 'the written reason.', C,
-    { org: 1, person: 1, case_: 1 }, D.INCLUDED_NOT_WIRED,
-    { dsarDefect: 'B3.4',
-      dsarNote: 'B3.1 — the investigation report is a document ABOUT the subject, so superseded '
-        + 'and adopted versions are disclosable personal data on the same footing as the report '
-        + 'already held in cases.investigation_report. Marked INCLUDED because the adopted '
-        + 'current version is already disclosed today through that column; what this table adds '
-        + 'is the superseded ones. INCLUDED_NOT_WIRED rather than INCLUDED, deliberately: B3.1 '
-        + 'creates the store and nothing reads it yet, and the B2 review established that a '
-        + 'manifest entry is not an integration — claiming INCLUDED here would record a '
-        + 'disclosure obligation that no code performs. It flips to INCLUDED in B3.4, when '
-        + 'compileSubjectData actually reads it. Three things that wiring must honour. '
+    { org: 1, person: 1, case_: 1 }, D.INCLUDED,
+    { dsarNote: 'B3.4 WIRED IT — the investigation report is a document ABOUT the subject, so '
+        + 'superseded and adopted versions are disclosable personal data on the same footing as '
+        + 'the report already held in cases.investigation_report. This was INCLUDED_NOT_WIRED '
+        + 'with dsarDefect B3.4 from B3.1 until 2026-10-09, because B3.1 created the store and '
+        + 'nothing read it, and the B2 review established that a manifest entry is not an '
+        + 'integration — claiming INCLUDED then would have recorded a disclosure obligation no '
+        + 'code performed. It is INCLUDED now because src/lib/reportVersionGateway.js fetches '
+        + 'the rows and compileSubjectData consumes them, proven by a wiring test that asserts '
+        + 'the screen calls the gateway rather than by a fixture handed to the compiler. '
+        + 'Three things that wiring honours. '
         + '(1) NOT automatic release of '
         + 'every draft: superseded wording is listed with its version, author and date and '
         + 'flagged for a human disclosure decision, exactly as investigation_finding_revisions '

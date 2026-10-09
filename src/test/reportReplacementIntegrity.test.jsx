@@ -260,9 +260,30 @@ describe('F/G/H/I. failure paths write nothing', () => {
     expect(reuse).not.toMatch(/showToast/);
   });
 
-  it('no report version or history architecture was added', () => {
-    expect(fs.readdirSync(path.resolve(__dirname, '..', '..', 'src', 'lib'))
-      .some(f => /reportVersion|reportHistory/i.test(f))).toBe(false);
+  it('no report version WRITING architecture was added to the replacement path', () => {
+    // This asserted that no src/lib file was named /reportVersion|reportHistory/
+    // at all. That was right for IR-0, which deliberately added no versioning
+    // and said so. It is superseded by decision, not by drift: B3.1 created
+    // public.investigation_report_versions and B3.4 added
+    // src/lib/reportVersionGateway.js so the DSAR compiler can disclose what
+    // the store holds about a subject.
+    //
+    // What this test is FOR survives intact, and is now stated precisely: the
+    // legacy generate-and-replace path in App.jsx must not have grown
+    // versioning, and nothing may WRITE a version. A read for disclosure is
+    // not a lifecycle change — B3.2 is, and it is not this release.
+    const libs = fs.readdirSync(path.resolve(__dirname, '..', '..', 'src', 'lib'))
+      .filter(f => /reportVersion|reportHistory/i.test(f));
+    expect(libs).toEqual(['reportVersionGateway.js']);
+
+    // The gateway reads. It does not write, and it does not adopt.
+    const gateway = read('src/lib/reportVersionGateway.js').replace(/^\s*\/\/.*$/gm, '');
+    expect(gateway).toContain('.select(');
+    expect(gateway).not.toMatch(/\.insert\(|\.update\(|\.upsert\(|\.delete\(|\.rpc\(/);
+    expect(gateway).not.toMatch(/adopt_investigation_report_version/);
+
+    // App.jsx — the legacy replacement path — still knows nothing about any
+    // of it. This is the assertion that keeps the old flow the only flow.
     expect(app).not.toMatch(/investigationReportVersions|investigationReportHistory|investigation_report_versions/);
     const sql = read('supabase/hr_review_pending_uniqueness_2026-10-08.sql').replace(/^\s*--.*$/gm, '');
     expect(sql).not.toMatch(/create table/i);

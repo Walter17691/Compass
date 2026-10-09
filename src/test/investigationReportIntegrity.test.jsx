@@ -379,21 +379,74 @@ describe('nothing else was touched', () => {
     expect(tab).toContain('invMeetings.some(m=>m.record)');
   });
 
-  it('the B3.1 version store exists in the schema but is NOT wired into the app', () => {
-    // This asserted `no schema change` — that no supabase/ file matched
-    // /investigation_report/i — and it was right for IR-0, which deliberately
-    // added no versioning. B3.1 adds exactly that store, so the premise is
-    // superseded by decision rather than by drift.
+  it('the B3.1 version store is READ by the DSAR compiler and written by nothing', () => {
+    // History of this assertion, because the premise has moved twice and the
+    // comment must not outlive the truth.
     //
-    // The half of the guard that still matters is kept and is now the point:
-    // B3.1 is a DATABASE-ONLY slice. The store exists; nothing reads or writes
-    // it; generation still advances the stage and still requests HR review
-    // through the legacy path until B3.2 separates them. If application code
-    // starts using the store before that slice lands, the assertion above at
-    // 'the legacy flow is untouched' fails — and so does this one.
+    // IR-0: asserted `no schema change` — no supabase/ file matched
+    // /investigation_report/i. Correct then; IR-0 deliberately added no
+    // versioning.
+    //
+    // B3.1: added exactly that store, database-only. The assertion became
+    // "the store exists and NOTHING READS OR WRITES IT".
+    //
+    // B3.4: that is no longer true and saying so would be the quiet kind of
+    // wrong. compileSubjectData now reads the store through
+    // src/lib/reportVersionGateway.js, because an investigation report is the
+    // subject's personal data and the obligation was recorded as outstanding
+    // (INCLUDED_NOT_WIRED, dsarDefect B3.4) precisely so it could be closed.
+    //
+    // THE LINE THAT MATTERS NOW IS READ-vs-WRITE, and it is what this asserts.
+    // B3.4 reads. It does not create a version, does not adopt one, and does
+    // not touch the submission flow — B3.2 does that, and it is not this
+    // release.
     const files = fs.readdirSync(path.resolve(__dirname, '..', '..', 'supabase'));
     expect(files.some(f => /investigation_report_versions/i.test(f))).toBe(true);
 
+    // The gateway is the ONLY module permitted to name the table, so that
+    // "who can touch this" is answerable by reading one import list.
+    const srcDir = path.resolve(__dirname, '..');
+    const sources = [];
+    (function walk(dir) {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) { if (entry.name !== 'test') walk(full); continue; }
+        if (/\.(js|jsx)$/.test(entry.name)) sources.push(full);
+      }
+    })(srcDir);
+
+    const namesTable = sources.filter(f => {
+      const body = stripComments(fs.readFileSync(f, 'utf8'));
+      return /investigation_report_versions/.test(body);
+    }).map(f => path.relative(srcDir, f));
+    // Four files, each for a stated reason, and no component among them:
+    //   dataClassification — the disclosure classification
+    //   dataInventory      — the erasure classification (cascade-covered)
+    //   dsarCompile        — the DSAR subject-source manifest entry
+    //   reportVersionGateway — the only module that actually queries it
+    expect(namesTable).toEqual([
+      'lib/dataClassification.js',
+      'lib/dataInventory.js',
+      'lib/dsarCompile.js',
+      'lib/reportVersionGateway.js',
+    ]);
+
+    // NOTHING anywhere calls the adoption RPC. Not App.jsx, not a component,
+    // not the gateway. This is the assertion that B3.2 will have to change
+    // deliberately, which is the point of it.
+    for (const f of sources) {
+      const body = stripComments(fs.readFileSync(f, 'utf8'));
+      expect(body, `${path.relative(srcDir, f)} must not call the adoption RPC`)
+        .not.toMatch(/adopt_investigation_report_version/);
+    }
+
+    // And no write verb reaches the table: the gateway selects, and that is all.
+    const gateway = stripComments(read('src/lib/reportVersionGateway.js'));
+    expect(gateway).toContain('.select(');
+    expect(gateway).not.toMatch(/\.insert\(|\.update\(|\.upsert\(|\.delete\(|\.rpc\(/);
+
+    // The legacy submission path is untouched: App.jsx still knows nothing
+    // about versions or adoption.
     const app = stripComments(read('src/App.jsx'));
     expect(app).not.toMatch(/investigation_report_versions|adopt_investigation_report_version/);
   });

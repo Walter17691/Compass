@@ -85,9 +85,15 @@ describe('B2 — the revision table is registered, classified and erasable', () 
     // So the name moved out of PENDING and into the verified live reading in
     // src/test/schemaInventoryGate.test.js.
     expect(PENDING_PRODUCTION_SCHEMA).not.toContain('investigation_finding_revisions');
-    // and the slot is now held by the next proposed table, not left empty —
-    // an empty PENDING list would hide the fact that B3.1 is still unapplied.
-    expect(PENDING_PRODUCTION_SCHEMA).toContain('investigation_report_versions');
+    // The slot was then held by investigation_report_versions, so that an empty
+    // list could not hide the fact that B3.1 was still unapplied. B3.1 WAS
+    // applied on 2026-10-09 and its live posture confirmed (46 base tables, RLS
+    // enabled, two policies), so that name left too and the list is now empty.
+    //
+    // Asserted as empty rather than deleted: "nothing is pending" is a claim
+    // worth failing on the day it stops being true.
+    expect(PENDING_PRODUCTION_SCHEMA).not.toContain('investigation_report_versions');
+    expect(PENDING_PRODUCTION_SCHEMA).toEqual([]);
   });
 });
 

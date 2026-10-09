@@ -4,6 +4,7 @@ import { DateInput } from '../components/DateInput';
 import { Btn, Card, Badge } from '../components/Primitives';
 import { compileSubjectData } from '../lib/dsarCompile';
 import { fetchDsarFindingRevisions } from '../lib/findingRevisionGateway';
+import { fetchDsarReportVersions } from '../lib/reportVersionGateway';
 import { useLoadMore } from '../hooks/useLoadMore';
 import { daysBetween } from '../lib/dateMath';
 import { authedFetch } from '../lib/authedFetch';
@@ -93,6 +94,25 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
     const revisionResult = await fetchDsarFindingRevisions(supabase, { orgId });
     if (revisionResult.ok) findingRevisions = revisionResult.revisions;
     else findingRevisionFetchFailed = true;
+
+    // ── B3.4 — saved investigation report versions ──────────────────────────
+    //
+    // B3.1 shipped the store classified INCLUDED_NOT_WIRED with defect B3.4
+    // precisely because this call did not exist. It exists now, and it is a
+    // READ ONLY: nothing in this release creates a version or adopts one.
+    //
+    // Same ordinary authenticated client, same reasoning as the two fetches
+    // above — the service-role route would hand the compiler versions from
+    // cases this person cannot otherwise see, and completeness is never a
+    // reason to widen access.
+    //
+    // A failure does NOT block the package and must not read as "no report was
+    // ever saved" — reportVersionDisposition reports it.
+    let reportVersions = [];
+    let reportVersionFetchFailed = false;
+    const versionResult = await fetchDsarReportVersions(supabase, { orgId });
+    if (versionResult.ok) reportVersions = versionResult.versions;
+    else reportVersionFetchFailed = true;
     setCompiled(compileSubjectData(req.employeeName, {
       // Phase E0.6 — the canonical subject, where the request recorded one. With
       // it, cases/wellbeing/referrals are selected by employee_id and a same-name
@@ -116,6 +136,8 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
       meetingFetchFailed,
       findingRevisions,
       findingRevisionFetchFailed,
+      reportVersions,
+      reportVersionFetchFailed,
       // ── the ORIGINAL position, for the record ───────────────────────────
       //
       // The audit finding: this parameter has existed since Phase 4C.1 but no
@@ -306,6 +328,22 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
             .map(r => ({
               reason: `An investigator's ${String(r.field || 'finding').replace(/_/g, ' ')} on this subject's case was rewritten — decide whether the superseded wording is disclosed, redacted or withheld`,
             })),
+          // B3.4 — a FOURTH classifier, merged here for the reason the block
+          // above states: a flag that never reaches this banner is a flag
+          // nobody acts on. The compiler withholds every saved report body
+          // pending a decision, and without this the version flags would reach
+          // the downloaded JSON and no human.
+          ...(compiled.reportVersions || [])
+            .filter(v => v.bodyRequiresReview || v.adoptionReasonRequiresReview)
+            .map(v => ({
+              reason: v.state === 'current_adopted'
+                ? `The current adopted investigation report (version ${v.versionNo}) on this subject's case — decide whether it is disclosed, redacted or withheld`
+                : v.state === 'historically_adopted'
+                ? `A previously adopted investigation report (version ${v.versionNo}) that has since been replaced — decide whether the earlier official wording is disclosed, redacted or withheld`
+                : v.state === 'draft'
+                ? `A saved investigation report draft (version ${v.versionNo}) that was never adopted — decide whether it is disclosed, redacted or withheld; a draft is neither automatically exempt nor automatically released`
+                : `A saved investigation report version (${v.versionNo}) Compass could not classify — review it directly before responding`,
+            })),
         ];
         const unrecognisedWithheld = [...new Set([
           ...(compiled.caseDisclosure?.unrecognisedFieldsWithheld || []),
@@ -422,6 +460,30 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
                     ))}
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+          {compiled.reportVersionDisposition?.readFailed&&(
+            <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FEF5E7",border:"1px solid #F5E6C4",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
+              <WarningIcon size={14} color="#B87520" style={{flexShrink:0,marginTop:1}}/>
+              <div style={{fontSize:12,color:"#7A5C1A",lineHeight:1.6}}>
+                <strong>The saved investigation report versions could not be read.</strong> None are included, and
+                this package cannot be described as a complete record of the investigation reports held about this
+                person. Compile it again before responding.
+              </div>
+            </div>
+          )}
+          {compiled.reportVersions?.length>0&&(
+            <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#F4F2FA",border:"1px solid #DDD8EE",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
+              <WarningIcon size={14} color="#5B4B8A" style={{flexShrink:0,marginTop:1}}/>
+              <div style={{fontSize:12,color:"#3D3357",lineHeight:1.6}}>
+                <strong>{compiled.reportVersions.length} saved investigation report
+                version{compiled.reportVersions.length===1?"":"s"}.</strong>{" "}
+                {compiled.reportVersionDisposition?.counts?.currentAdopted||0} current,{" "}
+                {compiled.reportVersionDisposition?.counts?.historicallyAdopted||0} previously adopted and replaced,{" "}
+                {compiled.reportVersionDisposition?.counts?.drafts||0} never adopted. Each is listed with its version
+                number, state and provenance — the wording itself is not reproduced. Decide for each whether it is
+                disclosed, redacted or withheld. A draft is not automatically exempt.
               </div>
             </div>
           )}

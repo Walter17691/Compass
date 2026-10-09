@@ -40,7 +40,13 @@ describe('NEW-44 — the DSAR invariant', () => {
   // hand-maintained arrays facing each other.
   // Disposition flags, not data sources: they say whether a read SUCCEEDED,
   // which is why they carry no table in the manifest.
-  const NON_SOURCE_PARAMS = ['canonicalEmployeeId', 'meetingFetchFailed', 'findingRevisionFetchFailed'];
+  const NON_SOURCE_PARAMS = [
+    'canonicalEmployeeId', 'meetingFetchFailed', 'findingRevisionFetchFailed',
+    // B3.4. Adding a name here must stay a deliberate act: a data source
+    // misfiled as a disposition flag would vanish from the manifest invariant
+    // entirely, which is the one thing this list could be abused to do.
+    'reportVersionFetchFailed',
+  ];
   const compilerSignatureParams = () => {
     const src = readFileSync('src/lib/dsarCompile.js', 'utf8');
     const start = src.indexOf('export function compileSubjectData');
@@ -111,8 +117,10 @@ describe('NEW-44 — the DSAR invariant', () => {
     // compileSubjectData genuinely compiles it (metadata + review flags; the
     // superseded wording itself is withheld pending human review, and is
     // scanned for third-party mentions either way).
-    expect(included).toBe(30);
-    expect(new Set(Object.values(DSAR_SUBJECT_SOURCES)).size).toBe(30);
+    // 31 since B3.4 added investigation_report_versions to the manifest and to
+    // compileSubjectData's signature in the same change.
+    expect(included).toBe(31);
+    expect(new Set(Object.values(DSAR_SUBJECT_SOURCES)).size).toBe(31);
   });
 });
 
@@ -231,17 +239,23 @@ describe('NEW-44 — customer-data tables cannot silently lose RLS', () => {
     // 43 before D4.2; case_decisions brings it to 44, with RLS enabled and two
     // policies (select inheriting case access, insert requiring decision authority).
     const enabled = Object.values(RECORDED_RLS_2026_10_03).filter(r => r.rls).length;
-    // 46 = the EXPECTED POST-MIGRATION schema. Split explicitly, because the
-    // reading is not uniform: 45 names were measured against production (44 at
-    // 2026-10-02/03, plus investigation_finding_revisions re-read on 2026-10-09
-    // after IR-REPORT-01b/B2 was applied), and the remainder were measured on an
-    // isolated branch with the migration applied. Conflating the two is how a
-    // proposed table comes to be asserted as a production fact.
+    // 46 = the live schema, and as of 2026-10-09 the reading is finally
+    // UNIFORM: every one of the 46 was measured against production. It was
+    // split for a while because it genuinely was not — 44 at 2026-10-02/03,
+    // investigation_finding_revisions re-read after B2 was applied, and
+    // investigation_report_versions measured only on an isolated branch.
+    // B3.1 was applied on 2026-10-09 and pg_policies re-read afterwards, so
+    // that last branch-measured name became a production fact and
+    // PENDING_PRODUCTION_SCHEMA emptied.
+    //
+    // The split is KEPT rather than simplified away: it is what stops the next
+    // proposed table being asserted as a production fact, and it should read
+    // 46 only for as long as nothing is pending.
     expect(Object.keys(RECORDED_RLS_2026_10_03)).toHaveLength(46);
     expect(enabled).toBe(46);
     const verified = Object.keys(RECORDED_RLS_2026_10_03)
       .filter(t => !PENDING_PRODUCTION_SCHEMA.includes(t));
-    expect(verified, 'production-verified RLS readings').toHaveLength(45);
+    expect(verified, 'production-verified RLS readings').toHaveLength(46);
     expect(RECORDED_RLS_2026_10_03.case_decisions).toEqual({ rls: true, policies: 2 });
     // IR-REPORT-01b/B2: one SELECT policy and one RESTRICTIVE INSERT
     // `with check (false)`. No UPDATE or DELETE policy exists, deliberately.

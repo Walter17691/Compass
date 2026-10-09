@@ -290,8 +290,11 @@ describe('NEW-44 — retention is recorded as unenforced, not invented', () => {
     // today would record an obligation that no code performs, which is the
     // failure the B2 review named ("a manifest entry is not an integration").
     // It flips to INCLUDED, and leaves this list, in B3.4.
+    // B3.4 discharged investigation_report_versions' obligation by genuinely
+    // reading the table (reportVersionGateway + compileSubjectData, proven by
+    // a wiring test on the downloaded bytes), so it left this list. team_invites
+    // is now the only accepted-but-unimplemented obligation again.
     expect(unwired).toEqual([
-      { table: 'investigation_report_versions', defect: 'B3.4' },
       { table: 'team_invites', defect: 'NEW-45' },
     ]);
     for (const row of unwired) {

@@ -170,8 +170,15 @@ describe('NEW-44 — the derived schema matches production', () => {
   // re-read afterwards — 45 base tables, the table present, RLS enabled, two
   // policies. It moved out of PENDING_PRODUCTION_SCHEMA at the same time,
   // which is the only legitimate way a name arrives in this list.
+  //
+  // investigation_report_versions added the same day under the same rule:
+  // B3.1 was applied to production on 2026-10-09 and pg_class/pg_policies were
+  // re-read afterwards — 46 base tables, the table present, RLS enabled,
+  // exactly two policies, matching the recorded posture. It emptied
+  // PENDING_PRODUCTION_SCHEMA on the way through.
   const VERIFIED_LIVE_PUBLIC_TABLES_2026_10_02 = [
     'investigation_finding_revisions',
+    'investigation_report_versions',
     'allegations', 'api_rate_limits', 'audit_log', 'calendar_connections',
     'calendar_synced_events', 'case_access', 'case_signals', 'case_tasks', 'case_themes',
     'case_decisions',
@@ -218,7 +225,7 @@ describe('NEW-44 — the derived schema matches production', () => {
       + 'A name belongs there only after it has been applied to production and read back '
       + 'out of pg_class.',
     ).toEqual([]);
-    expect(VERIFIED_LIVE_PUBLIC_TABLES_2026_10_02).toHaveLength(45);
+    expect(VERIFIED_LIVE_PUBLIC_TABLES_2026_10_02).toHaveLength(46);
   });
 
   it('proves no live table was created outside the migration corpus', () => {
