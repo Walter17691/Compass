@@ -18,9 +18,17 @@ const { authedFetch } = await import('../lib/authedFetch');
 // requested-by fields had visual labels with no htmlFor/id association.
 // Had no test coverage at all before this.
 const noop = () => {};
-const dsarRequests = [{ id: 'r1', employeeName: 'Sam Employee', requestedBy: '', receivedDate: '2026-08-01', dueDate: '2026-09-01', status: 'received', extended: false }];
+// reviewedFlaggedSections: true because these tests assert what the compiled
+// PACKAGE contains, which is the approved-response path. The draft path — where
+// review is still outstanding and the artefact must not present itself as
+// approved — has its own tests in src/test/dsarCompletionIntegrity.test.jsx.
+const dsarRequests = [{ id: 'r1', employeeName: 'Sam Employee', requestedBy: '', receivedDate: '2026-08-01', dueDate: '2026-09-01', status: 'received', extended: false, reviewedFlaggedSections: true }];
 
 const baseProps = {
+  // DSAR administration is hr_director only; the screen default-denies without
+  // this. Set here so every render site in this file exercises the authorised
+  // path — the refusal path has its own test below.
+  canAdministerDsar: true,
   dsarRequests,
   createDsarRequest: noop,
   updateDsarRequest: noop,
@@ -41,6 +49,32 @@ const baseProps = {
   auditLog: [],
   setScreen: noop,
 };
+
+describe('DsarScreen — DSAR administration is HR-Director only', () => {
+  it('refuses the whole workspace when the capability is absent (default-deny)', () => {
+    // The prop defaults to false: a security prop that defaults open is not a
+    // gate. The real boundary is the render condition in src/App.jsx (which
+    // also closes the ?screen=dsar deep link) plus the RLS policy; this is the
+    // screen refusing on its own if a future call site forgets.
+    const { canAdministerDsar, ...withoutCapability } = baseProps;
+    render(<DsarScreen {...withoutCapability} />);
+    expect(screen.getByText(/Only an HR Director can work on subject access requests/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Compile data' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '+ Log new request' })).not.toBeInTheDocument();
+  });
+
+  it('refuses explicitly for a non-director, and names the role so they know who to ask', () => {
+    render(<DsarScreen {...baseProps} canAdministerDsar={false} />);
+    expect(screen.getByText(/Only an HR Director/i)).toBeInTheDocument();
+    // no request data rendered at all
+    expect(screen.queryByText('Sam Employee')).not.toBeInTheDocument();
+  });
+
+  it('serves the workspace to an HR Director', () => {
+    render(<DsarScreen {...baseProps} canAdministerDsar={true} />);
+    expect(screen.getByRole('button', { name: '+ Log new request' })).toBeInTheDocument();
+  });
+});
 
 describe('DsarScreen — field labelling (Phase 6.5, Batch 13)', () => {
   it('names the per-request status select after the requesting employee', () => {

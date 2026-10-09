@@ -338,7 +338,7 @@ function AccountMenu({ currentUser, org, availableOrgs=[], switchOrg, onJoinAnot
 // opens it is wired independently at the App.jsx document-keydown level
 // (see the `metaKey||ctrlKey` handler there) and needs nothing from this
 // component to keep working.
-export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShowMobileNav, meetingType, caseInfo, org, availableOrgs, switchOrg, onJoinAnotherOrg, currentUser, auditLog, onSignOut, isHR, dataLoadIssues=[], loadBannerDismissed, onRetryLoad, onDismissLoadBanner, createMenuProps }) {
+export function AppSidebar({ screen, setScreen, canAdministerDsar = false, isMobile, showMobileNav, setShowMobileNav, meetingType, caseInfo, org, availableOrgs, switchOrg, onJoinAnotherOrg, currentUser, auditLog, onSignOut, isHR, dataLoadIssues=[], loadBannerDismissed, onRetryLoad, onDismissLoadBanner, createMenuProps }) {
   const goToScreen = (s) => { setScreen(s); setShowMobileNav(false); };
 
   // Home Experience Redesign, §10 — "56 total cases" is database
@@ -401,10 +401,14 @@ export function AppSidebar({ screen, setScreen, isMobile, showMobileNav, setShow
     { label:"Intelligence", items: [
       {s:SCREENS.INSIGHTS, l:"Insights", icon:BarChartIcon},
     ]},
+    // The GROUP stays isHR — Redundancy and Wellbeing are unchanged. Only the
+    // DSAR ITEM is narrowed, because DSAR administration is hr_director only.
+    // Narrowing the group instead would have removed two unrelated
+    // destinations from every HR manager.
     ...(isHR ? [{ label:"HR Processes", items: [
       {s:SCREENS.REDUNDANCY, l:"Redundancy", icon:UsersMinusIcon},
       {s:SCREENS.WELLBEING, l:"Wellbeing", icon:HeartIcon},
-      {s:SCREENS.DSAR, l:"DSAR", icon:ShieldIcon},
+      ...(canAdministerDsar ? [{s:SCREENS.DSAR, l:"DSAR", icon:ShieldIcon}] : []),
     ]}] : []),
     { label:"Organisation", items: [
       {s:SCREENS.SETTINGS, l:"Settings", icon:GearIcon},

@@ -77,9 +77,29 @@ describe('portal dsar-lookup', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it('returns both signing requests and portal accounts for an HR caller, scoped to the org and employee (DSAR use)', async () => {
+  it('REFUSES an hr_manager — DSAR administration is hr_director only', async () => {
+    // CHANGED by the DSAR authority decision. This previously asserted 200 for
+    // an hr_manager. The route reads six tables with the SERVICE ROLE, so a
+    // too-wide role check here hands out service-role reach over another
+    // subject's signing requests, portal accounts, invites, profiles and case
+    // views. The refusal must happen BEFORE any table is read.
     const calls = stubFetch({
       members: [{ role: 'hr_manager' }],
+      signingRequests: [{ sign_id: 's1', employee_name: 'Sam Employee', document: 'x' }],
+      portalAccounts: [{ id: 'pa1', employee_name: 'Sam Employee' }],
+    });
+    const res = mockRes();
+    await dsarLookup(req({ orgId: 'org-1', employeeName: 'Sam Employee' }), res);
+    expect(res.statusCode).toBe(403);
+    expect(res.body.signingRequests).toBeUndefined();
+    expect(calls.some(u => u.includes('signing_requests'))).toBe(false);
+    expect(calls.some(u => u.includes('employee_portal_accounts'))).toBe(false);
+  });
+
+  it('SERVES an hr_director, scoped to the org and employee (DSAR use)', async () => {
+    // The capability is not lost — it moves to the authorised role.
+    const calls = stubFetch({
+      members: [{ role: 'hr_director' }],
       signingRequests: [{ sign_id: 's1', employee_name: 'Sam Employee', document: 'x' }],
       portalAccounts: [{ id: 'pa1', employee_name: 'Sam Employee' }],
     });
@@ -102,7 +122,7 @@ describe('portal dsar-lookup', () => {
   // own DSAR could never surface it.
   it('also matches signing requests where the subject is the manager-side signatory, not the employee', async () => {
     const calls = stubFetch({
-      members: [{ role: 'hr_manager' }],
+      members: [{ role: 'hr_director' }],
       signingRequests: [{ sign_id: 's1', employee_name: 'Sam Employee', manager_name: 'Priya Manager', document: 'x' }],
     });
     const res = mockRes();
@@ -117,7 +137,7 @@ describe('portal dsar-lookup', () => {
 
   it('does not apply the manager_name/employee_name OR filter to employee_portal_accounts or employee_portal_invites', async () => {
     const calls = stubFetch({
-      members: [{ role: 'hr_manager' }],
+      members: [{ role: 'hr_director' }],
       portalAccounts: [{ id: 'pa1', employee_name: 'Sam Employee' }],
       portalInvites: [{ id: 'pi1', employee_name: 'Sam Employee' }],
     });
@@ -152,7 +172,7 @@ describe('portal dsar-lookup', () => {
   // signing_requests/employee_portal_accounts above.
   it('returns portal invites scoped to the org and employee name', async () => {
     const calls = stubFetch({
-      members: [{ role: 'hr_manager', user_id: 'u-sam', name: 'Sam Employee' }],
+      members: [{ role: 'hr_director', user_id: 'u-sam', name: 'Sam Employee' }],
       portalInvites: [{ id: 'pi1', employee_name: 'Sam Employee', email: 'sam@example.com' }],
     });
     const res = mockRes();
@@ -166,7 +186,7 @@ describe('portal dsar-lookup', () => {
 
   it('resolves the matching org_members row by name, then returns that user\'s profile and case views', async () => {
     const calls = stubFetch({
-      members: [{ role: 'hr_manager', user_id: 'u-sam', name: 'Sam Employee' }],
+      members: [{ role: 'hr_director', user_id: 'u-sam', name: 'Sam Employee' }],
       profiles: [{ id: 'u-sam', name: 'Sam Employee', role: 'hr_manager' }],
       caseViews: [{ case_id: 'c1', user_id: 'u-sam', last_viewed_at: '2026-01-01' }],
     });
@@ -183,7 +203,7 @@ describe('portal dsar-lookup', () => {
 
   it('returns no profile/case-view data when the requested name matches no org member (a case-subject-only DSAR)', async () => {
     stubFetch({
-      members: [{ role: 'hr_manager' }],
+      members: [{ role: 'hr_director' }],
     });
     const res = mockRes();
     await dsarLookup(req({ orgId: 'org-1', employeeName: 'Not A Member' }), res);

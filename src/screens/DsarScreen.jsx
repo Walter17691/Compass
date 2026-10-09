@@ -186,10 +186,22 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
         const reviewRequired = [
           ...(compiled.caseDisclosure?.reviewRequired || []),
           ...(compiled.allegationDisclosure?.reviewRequired || []),
+          // SECURITY FIX — the containment decisions for the four sources that
+          // used to emit other people's records wholesale (actedAsStaff cases,
+          // wellbeing notes and HR reviews; the redundancy pool; and the
+          // subject's own HR review snapshots). Without this merge the
+          // withholding would happen and no reviewer would ever learn of it,
+          // which is the failure mode this block's own comment warns about.
+          ...(compiled.thirdPartyContainment?.reviewRequired || []),
+          // Already produced by the compiler and previously merged nowhere.
+          ...(compiled.signingDisclosure?.reviewRequired || []),
         ];
         const unrecognisedWithheld = [...new Set([
           ...(compiled.caseDisclosure?.unrecognisedFieldsWithheld || []),
           ...(compiled.allegationDisclosure?.unrecognisedFieldsWithheld || []),
+          // The third source, previously merged nowhere.
+          ...(compiled.signingDisclosure?.unrecognisedFieldsWithheld || []),
+          ...(compiled.thirdPartyContainment?.unrecognisedFieldsWithheld || []),
         ])].sort();
         return (
         <div style={{background:"#FDFAF5",border:"1px solid #E8E0D0",borderRadius:8,padding:"12px 14px"}}>
@@ -271,6 +283,34 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
               <div style={{fontSize:12,color:"#7A5C1A",lineHeight:1.6}}>
                 <strong>Meetings held outside a case could not be read.</strong> None are included, and this package
                 cannot be described as their complete record. Compile it again before responding.
+              </div>
+            </div>
+          )}
+          {/* ── WHAT WAS HELD BACK, AND WHY (containment slice) ──────────
+              The HR Director must be able to see what is being withheld pending
+              review, and on what basis — a withholding nobody is told about is
+              indistinguishable from data Compass does not hold. */}
+          {(compiled.thirdPartyContainment?.thirdPartyFieldsWithheld?.length>0||compiled.thirdPartyContainment?.legallyWithheld?.length>0)&&(
+            <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#F4F2FA",border:"1px solid #DDD8EE",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
+              <WarningIcon size={14} color="#5B4B8A" style={{flexShrink:0,marginTop:1}}/>
+              <div style={{fontSize:12,color:"#3D3357",lineHeight:1.6}}>
+                <strong>Another person's information has been held back from this response.</strong>{" "}
+                {compiled.thirdPartyContainment.thirdPartyFieldsWithheld.length} item
+                {compiled.thirdPartyContainment.thirdPartyFieldsWithheld.length===1?"":"s"} of third-party data
+                {compiled.thirdPartyContainment.legallyWithheld.length>0?`, and ${compiled.thirdPartyContainment.legallyWithheld.length} withheld on a recorded justification`:""}.
+                {" "}This is not permanent: each item names its source record so you can assess it. Records where the
+                requester appears as manager, investigator or reviewer are listed under "Also named as…" below —
+                those contain the requester's own words as well as someone else's, so the review decides what of
+                theirs is released.
+                {compiled.thirdPartyContainment.legallyWithheld.length>0&&(
+                  <div style={{marginTop:6}}>
+                    {compiled.thirdPartyContainment.legallyWithheld.map((w,i)=>(
+                      <div key={i} style={{fontSize:11,color:"#5B4B8A",marginTop:2}}>
+                        <strong>{w.source}.{w.field}</strong> — {w.reason}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -375,7 +415,7 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
   );
 }
 
-export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest, extendDsarRequest, promptDialog, cases, caseDecisions = [], employeeRecords, employeeActivities = [], employeeActivityRecords = [], employmentEvents = [], starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, orgMembers, orgEvents, improvementInitiatives, managerCapabilityInsights, organisationThemes, caseAccess, redundancyCases, orgId, audit, setScreen }) {
+export function DsarScreen({ canAdministerDsar = false, dsarRequests, createDsarRequest, updateDsarRequest, extendDsarRequest, promptDialog, cases, caseDecisions = [], employeeRecords, employeeActivities = [], employeeActivityRecords = [], employmentEvents = [], starterInstances, leaverInstances, wellbeingNotes, concernReferrals, allegations, caseSignals, caseTasks, hrReviewRequests, auditLog, orgMembers, orgEvents, improvementInitiatives, managerCapabilityInsights, organisationThemes, caseAccess, redundancyCases, orgId, audit, setScreen }) {
   const [form, setForm] = useState({ employeeId:null, employeeName:"", requestedBy:"", receivedDate:new Date().toISOString().split("T")[0] });
   // Explicit, and deliberately not inferred from an empty roster match.
   const [offRoster, setOffRoster] = useState(false);
@@ -393,6 +433,35 @@ export function DsarScreen({ dsarRequests, createDsarRequest, updateDsarRequest,
     setForm({ employeeName:"", requestedBy:"", receivedDate:new Date().toISOString().split("T")[0] });
     setShowForm(false);
   };
+
+  // ── DEFAULT-DENY, belt and braces ───────────────────────────────────────
+  //
+  // Placed HERE, after every hook, not at the top of the component. An early
+  // return above `useState`/`useLoadMore` would change the number of hooks
+  // rendered when the prop flips and React would throw "rendered fewer hooks
+  // than expected" — a correctness bug introduced by a security guard, which is
+  // the worst kind.
+  //
+  // The real boundary is the render condition in src/App.jsx (which also closes
+  // the `?screen=dsar` deep link) plus the RLS policy. This exists so the
+  // screen refuses on its own if a future call site forgets the gate. It
+  // defaults to FALSE: a security prop that defaults open is not a gate.
+  if (!canAdministerDsar) {
+    return (
+      <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>
+        <div style={{background:"#FFFFFF",borderBottom:"1px solid #EDE5D8",padding:"16px 32px"}}>
+          <PageHeader title="DSAR requests" subtitle="Subject access requests"/>
+        </div>
+        <div style={{padding:32}}>
+          <Card>
+            <div style={{fontSize:13,color:"#6B6880",lineHeight:1.6}}>
+              Only an HR Director can work on subject access requests.
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{minHeight:"100vh",background:"#FDFAF5",fontFamily:"DM Sans,system-ui,sans-serif"}}>

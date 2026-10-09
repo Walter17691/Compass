@@ -17,6 +17,7 @@ describe('isAuthorisedFor', () => {
   const level3 = { user_id: 'l3', role: 'investigator', case_access_level: 3 };
   const lineMgr = { user_id: 'linemgr', role: 'line_manager', case_access_level: 2 };
   const alice = { user_id: 'alice', role: 'hr_manager' }; // caseless-category fixture, role-only
+  const dana = { user_id: 'dana', role: 'hr_director' };   // caseless-category fixture, role-only
   const leo = { user_id: 'leo', role: 'legal_reviewer' }; // caseless-category fixture, role-only
 
   const caseC1 = { createdBy: 'alice' };
@@ -110,9 +111,26 @@ describe('isAuthorisedFor', () => {
   });
 
   describe('dsar deadlines with no case at all — is_hr_role-only RLS', () => {
-    it('an hr_manager can see a DSAR deadline', () => {
+    it('an hr_manager can NO LONGER see a DSAR deadline', () => {
+      // CHANGED by the DSAR authority decision. A DSAR deadline email names an
+      // employee and the fact they have filed a subject access request. Only an
+      // HR Director administers those requests, so only an HR Director is told
+      // they exist. This cron runs with the service-role key and bypasses RLS,
+      // so its own recipient gate had to be narrowed in step.
       const d = { category: 'dsar', confidential: false, caseId: null };
-      expect(isAuthorisedFor(d, alice, new Map())).toBe(true);
+      expect(isAuthorisedFor(d, alice, new Map())).toBe(false);
+    });
+
+    it('an hr_director still can — the capability moved, it was not removed', () => {
+      const d = { category: 'dsar', confidential: false, caseId: null };
+      expect(isAuthorisedFor(d, dana, new Map())).toBe(true);
+    });
+
+    it('wellbeing and redundancy are UNCHANGED for an hr_manager', () => {
+      // The regression signal that the narrowing did not spill into the two
+      // categories that share the same map.
+      expect(isAuthorisedFor({ category: 'wellbeing', confidential: false, caseId: null }, alice, new Map())).toBe(true);
+      expect(isAuthorisedFor({ category: 'redundancy', confidential: false, caseId: null }, alice, new Map())).toBe(true);
     });
 
     it('a line_manager cannot — dsar_requests RLS is is_hr_role only', () => {

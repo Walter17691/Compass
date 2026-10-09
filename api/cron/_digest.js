@@ -4,6 +4,7 @@ import { postWebhook } from './_notify.js';
 import { computeDueSoon } from '../../src/lib/deadlines.js';
 import { mapCaseRow } from '../../src/lib/caseMapping.js';
 import { isHrRole } from '../../src/lib/roles.js';
+import { mayAdministerDsar } from '../../src/lib/dsarAuthority.js';
 import { escapeHtml as esc } from '../_html.js';
 import { APP_URL } from '../_appUrl.js';
 
@@ -90,9 +91,22 @@ async function sendDigestEmail(email, items) {
 // date every morning — directly disclosing who has filed a subject
 // access request, often the precursor to a tribunal claim against those
 // same managers.
+//
+// DSAR NARROWED AGAIN, to hr_director only. The reasoning above still holds and
+// goes one step further: a DSAR deadline email names an employee and the fact
+// they have filed a subject access request. Under the DSAR authority decision
+// only an HR Director administers those requests, so only an HR Director should
+// be told they exist. The RLS policy already stops an hr_manager READING the
+// row (supabase/dsar_director_only_authority_2026-10-09.sql) — but this cron
+// runs with the SERVICE-ROLE key and bypasses RLS entirely, which is exactly
+// why its own recipient gate has to be narrowed in step rather than inherited.
+//
+// Deliberately only the `dsar` line. `wellbeing` and `redundancy` stay
+// is_hr_role — their authority decision has not changed, and narrowing them
+// here would be an unrequested product change.
 const CASELESS_CATEGORY_AUTH = {
   wellbeing: member => isHrRole(member.role),
-  dsar: member => isHrRole(member.role),
+  dsar: member => mayAdministerDsar({ role: member.role }),
   redundancy: member => isHrRole(member.role),
   leaver: () => true,
 };

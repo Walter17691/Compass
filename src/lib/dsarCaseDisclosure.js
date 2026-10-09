@@ -225,9 +225,39 @@ export function disclosableCase(caseObj) {
   CASE_DISCLOSE.forEach(k => { if (caseObj[k] !== undefined) out[k] = caseObj[k]; });
   CASE_DISCLOSE_ROLE_NAMES.forEach(k => { if (isPlainText(caseObj[k])) out[k] = caseObj[k]; });
 
-  // Evidence keeps its existing treatment: metadata only, never the file bytes.
+  // ── EVIDENCE: metadata, never the file bytes — and no longer the TEXT ────
+  //
+  // SECURITY FIX. This previously stripped only `dataUrl`, so `record`
+  // survived. `record` on an evidence item is not a filename: it is the full
+  // text of a witness statement (src/App.jsx writes `record: reviewOutput`
+  // under a `Witness: <name>` item) or of a pasted email including its headers
+  // (src/lib/emailIngestion.js). That is the single most likely place another
+  // person's own account of events is held, and it was auto-disclosed verbatim,
+  // never scanned for third-party mentions, and absent from
+  // evidenceRequiringReview — which carries only name/type/date/size.
+  //
+  // It is NOT dropped. The subject's own case evidence is their data, and a
+  // witness statement about them may be the most important thing in the pack.
+  // It is REVIEW-FLAGGED, so a human releases, redacts or withholds it — which
+  // is exactly the treatment investigationReport already gets one field above.
+  // Built by ALLOW-LIST rather than by omission. Destructuring the two unwanted
+  // keys away works but leaves an unused binding, and more importantly it fails
+  // OPEN: a future evidence field arrives disclosed by default. Naming what may
+  // leave is the same discipline CASE_DISCLOSE applies above.
   out.evidence = (Array.isArray(caseObj.evidence) ? caseObj.evidence : [])
-    .map(({ dataUrl, ...meta }) => meta);
+    .map(ev => ({
+      id: ev.id,
+      name: ev.name,
+      type: ev.type,
+      date: ev.date,
+      size: ev.size,
+      addedBy: ev.addedBy,
+      source: ev.source,
+      signStatus: ev.signStatus,
+      allegationIds: ev.allegationIds,
+      stance: ev.stance,
+      recordRequiresReview: isPlainText(ev.record),
+    }));
 
   const meetings = (Array.isArray(caseObj.meetings) ? caseObj.meetings : [])
     .map(disclosableMeeting)
@@ -243,6 +273,17 @@ export function disclosableCase(caseObj) {
   });
 
   const reviewRequired = [];
+  (Array.isArray(caseObj.evidence) ? caseObj.evidence : []).forEach(ev => {
+    if (ev && isPlainText(ev.record)) {
+      reviewRequired.push({
+        field: 'evidence.record',
+        evidenceId: ev.id ?? null,
+        evidenceName: isPlainText(ev.name) ? ev.name : null,
+        reason: 'The full text of an evidence item held on this case — typically a witness statement or a pasted email. '
+          + 'It is about the requester, and it is likely to contain another person\'s own account. Decide whether to release, redact or withhold it.',
+      });
+    }
+  });
   CASE_REVIEW_REQUIRED.forEach(k => {
     if (isPlainText(caseObj[k])) {
       reviewRequired.push({

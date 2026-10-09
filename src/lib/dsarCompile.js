@@ -4,6 +4,11 @@ import { splitMeetingRecord } from './meetingRecordSections.js';
 import { disclosableCase, summariseCaseDisclosure, MEETING_WITHHELD_INTERNAL } from './dsarCaseDisclosure.js';
 import { disclosableAllegation, summariseAllegationDisclosure } from './dsarAllegationDisclosure.js';
 import { disclosableSigningRequest, summariseSigningDisclosure } from './dsarSigningDisclosure.js';
+import {
+  disclosableStaffRoleCase, disclosableStaffRoleWellbeingNote, disclosableStaffRoleHrReview,
+  disclosableOwnHrReview, disclosableRedundancyCase, disclosableStaffRoleEmployeeRecord,
+  summariseThirdPartyContainment,
+} from './dsarThirdPartyContainment.js';
 
 // Every free-text allegation field that can mention a person. Used by BOTH
 // third-party scans — the subject's own allegations, and the subject appearing
@@ -399,7 +404,15 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
   // hr_review_requests isn't remapped to camelCase at load time
   // (App.jsx's loadHrReviews keeps the raw DB row shape) — case_id here,
   // not caseId, matching every other consumer of this state.
-  const subjectHrReviewRequests = hrReviewRequests.filter(r => subjectCaseIds.has(r.case_id));
+  // SECURITY FIX. record_snapshot is a copy of the generated meeting record and
+  // carries the `## HR Advisor Notes` section. This path emitted it raw, which
+  // re-leaked precisely what splitMeetingRecord exists to remove on the meeting
+  // path. Now split: the employee-facing half is disclosed (it is about them),
+  // the internal half is withheld and reported.
+  const subjectHrReviewRequests = hrReviewRequests
+    .filter(r => subjectCaseIds.has(r.case_id))
+    .map(disclosableOwnHrReview)
+    .filter(Boolean);
   // Phase 6.5 hardening (Prompt 14, Section 6 — closes independent audit
   // finding 4.4) — case-linked audit rows were the only ones ever
   // included, but many audit() calls concerning this exact subject carry
@@ -442,7 +455,14 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
   // table at all) — atRiskEmployees is a jsonb array, not a queryable
   // column, so this is matched client-side the same way actedAsStaff
   // matches free-text manager columns above.
-  const subjectRedundancyCases = redundancyCases.filter(r => (r.atRiskEmployees||[]).some(e => e.name === employeeName));
+  // SECURITY FIX. A single name match inside atRiskEmployees previously emitted
+  // the whole row: every pooled employee's name and selection scores, plus
+  // aiAdvice. The subject's OWN entry is derived personal data about them and is
+  // disclosed in full; the rest of the pool is not theirs.
+  const subjectRedundancyCases = redundancyCases
+    .filter(r => (r.atRiskEmployees||[]).some(e => e.name === employeeName))
+    .map(r => disclosableRedundancyCase(r, { employeeName }))
+    .filter(Boolean);
 
   // Records that name the subject as staff (manager / investigating
   // manager / disciplinary officer / HR reviewer) on someone ELSE's
@@ -450,15 +470,62 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
   // "misses the subject whenever they aren't the case subject."
   // Excludes the subject's own cases (already covered by subjectCases)
   // so a case never appears twice.
+  // ── THE SUBJECT AS STAFF ON SOMEONE ELSE'S RECORD ────────────────────────
+  //
+  // SECURITY FIX. This previously emitted the matched rows almost verbatim —
+  // `.map(({ evidence, ...meta }) => meta)` stripped only the file bytes, so
+  // `meetings` survived with every unsplit record, transcript and advisor-notes
+  // section, alongside the other employee's name, outcome, outcomeNotes and
+  // investigationReport. It bypassed disclosableCase entirely, and a manager's
+  // own DSAR returned the complete case files of everyone they had managed.
+  //
+  // The filter that FINDS these rows is correct and unchanged — being named as
+  // the investigating manager on a case IS the subject's personal data, and
+  // omitting it would be the opposite error. What changed is that finding a row
+  // is no longer treated as a decision to disclose its contents. Each row is
+  // projected by src/lib/dsarThirdPartyContainment.js: the subject's own
+  // involvement is disclosed, the other person's record is withheld, and the
+  // arguable fields are review-flagged rather than dropped.
+  const staffRoleMatches = cases
+    .filter(c => c.employeeName !== employeeName
+      && (c.manager === employeeName || c.investigatingManager === employeeName || c.disciplinaryOfficer === employeeName))
+    .map(c => ({
+      row: c,
+      rolesHeld: [
+        c.manager === employeeName ? 'manager' : null,
+        c.investigatingManager === employeeName ? 'investigatingManager' : null,
+        c.disciplinaryOfficer === employeeName ? 'disciplinaryOfficer' : null,
+      ].filter(Boolean),
+    }));
+  const staffRoleCases = staffRoleMatches
+    .map(({ row, rolesHeld }) => disclosableStaffRoleCase(row, { rolesHeld }))
+    .filter(Boolean);
+  const staffRoleWellbeingNotes = wellbeingNotes
+    .filter(n => n.employeeName !== employeeName && n.manager === employeeName)
+    .map(disclosableStaffRoleWellbeingNote)
+    .filter(Boolean);
+  // hr_review_requests isn't remapped to camelCase — see the comment
+  // on subjectHrReviewRequests above.
+  const staffRoleHrReviews = hrReviewRequests
+    .filter(r => !subjectCaseIds.has(r.case_id)
+      && (r.requested_by_name === employeeName || r.reviewed_by_name === employeeName))
+    .map(r => disclosableStaffRoleHrReview(r, { asReviewer: r.reviewed_by_name === employeeName }))
+    .filter(Boolean);
+
+  // Projected too. The first cut of this fix left these raw, reasoning that
+  // employee_records.manager is "a single name field with no narrative
+  // content" — but the ROW is the other employee's HRIS record. The module's
+  // own adversarial test caught it.
+  const staffRoleEmployeeRecords = employeeRecords
+    .filter(r => r.name !== employeeName && r.manager === employeeName)
+    .map(disclosableStaffRoleEmployeeRecord)
+    .filter(Boolean);
+
   const actedAsStaff = {
-    cases: cases
-      .filter(c => c.employeeName !== employeeName && (c.manager === employeeName || c.investigatingManager === employeeName || c.disciplinaryOfficer === employeeName))
-      .map(({ evidence, ...meta }) => meta),
-    employeeRecords: employeeRecords.filter(r => r.name !== employeeName && r.manager === employeeName),
-    wellbeingNotes: wellbeingNotes.filter(n => n.employeeName !== employeeName && n.manager === employeeName),
-    // hr_review_requests isn't remapped to camelCase — see the comment
-    // on subjectHrReviewRequests above.
-    hrReviewRequests: hrReviewRequests.filter(r => !subjectCaseIds.has(r.case_id) && (r.requested_by_name === employeeName || r.reviewed_by_name === employeeName)),
+    cases: staffRoleCases,
+    employeeRecords: staffRoleEmployeeRecords,
+    wellbeingNotes: staffRoleWellbeingNotes,
+    hrReviewRequests: staffRoleHrReviews,
   };
 
   // Phase 6.5 hardening (data-lifecycle review) — a name is not a stable
@@ -554,6 +621,20 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
   subjectAllegations.forEach(a => {
     ALLEGATION_FREE_TEXT_FIELDS.forEach(field => {
       scanText(a[field], { field: `allegation.${field}`, caseId: a.caseId, allegationId: a.id });
+    });
+  });
+  // EVIDENCE TEXT is scanned, which it previously was not. A witness statement
+  // or pasted email held on the subject's own case is the most likely place a
+  // third party's own account appears, and it was disclosed verbatim with no
+  // scan at all. Scanning reads the raw input, so flagging costs nothing now
+  // that the text itself is review-gated rather than auto-released.
+  subjectCases.forEach(c => {
+    (Array.isArray(c.evidence) ? c.evidence : []).forEach(ev => {
+      if (!ev) return;
+      scanText(ev.record, {
+        field: 'evidence.record', caseId: c.id,
+        evidenceId: ev.id ?? null, evidenceName: ev.name ?? null,
+      });
     });
   });
   // signingRequests/portalAccounts are already scoped to this employeeName
@@ -841,6 +922,14 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
     caseAccessGrants: subjectCaseAccess,
     redundancyCases: subjectRedundancyCases,
     actedAsStaff,
+    // Every containment decision the four projected sources made, in the shape
+    // summariseCaseDisclosure already produces, so DsarScreen can merge it into
+    // the one banner reviewers read.
+    thirdPartyContainment: summariseThirdPartyContainment({
+      staffRoleCases, staffRoleWellbeingNotes, staffRoleHrReviews, staffRoleEmployeeRecords,
+      ownHrReviews: subjectHrReviewRequests,
+      redundancyCases: subjectRedundancyCases,
+    }),
     flaggedThirdPartyMentions: flagged,
     subjectMentionsInOrgNarratives,
     subjectMentionsAsThirdParty,

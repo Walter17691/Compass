@@ -128,9 +128,39 @@ describe('compileSubjectData — additional data sources (Phase 6.5, Batch 5)', 
     expect(result.caseSignals).toEqual([extendedData.caseSignals[0]]);
   });
 
-  it('includes only HR review requests on the subject\'s own cases, matching the raw case_id shape', () => {
+  it('includes only HR review requests on the subject\'s own cases, keyed on the raw case_id shape', () => {
+    // SECURITY FIX (containment slice). This asserted toEqual(raw row), which
+    // pinned the over-disclosure: record_snapshot is a copy of the generated
+    // meeting record and carries the `## HR Advisor Notes` section, so this
+    // path re-leaked exactly what splitMeetingRecord removes on the meeting
+    // path. The row is still FOUND — that was and is correct, it is the
+    // subject's own case — but it is now projected.
     const result = compileSubjectData('Ada Lovelace', extendedData);
-    expect(result.hrReviewRequests).toEqual([extendedData.hrReviewRequests[0]]);
+    expect(result.hrReviewRequests).toHaveLength(1);
+    expect(result.hrReviewRequests[0].case_id).toBe(extendedData.hrReviewRequests[0].case_id);
+    expect(result.hrReviewRequests[0].id).toBe(extendedData.hrReviewRequests[0].id);
+  });
+
+  it('splits the advisor notes out of an HR review snapshot instead of disclosing them', () => {
+    const data = {
+      ...extendedData,
+      hrReviewRequests: [{
+        ...extendedData.hrReviewRequests[0],
+        record_snapshot: 'Attendees: Ada\n\nAda explained the delay.\n\n## HR Advisor Notes\nRisk of tribunal is high; settle.',
+        comments: 'Reviewer thought the record was thin.',
+      }],
+    };
+    const r = compileSubjectData('Ada Lovelace', data);
+    const row = r.hrReviewRequests[0];
+    // the employee-facing half IS disclosed — it is a record about them
+    expect(row.recordSnapshot).toContain('Ada explained the delay.');
+    // the internal half is not, and the omission is reported
+    expect(row.recordSnapshot).not.toContain('Risk of tribunal');
+    expect(row.recordSnapshot).not.toContain('HR Advisor Notes');
+    expect(row.withheldAsInternalAnalysis).toContain('record_snapshot.internalSection');
+    // HR's own commentary is a judgement call, flagged not dropped
+    expect(row.reviewRequired.map(x => x.field)).toContain('comments');
+    expect(JSON.stringify(row)).not.toContain('Reviewer thought the record was thin.');
   });
 
   // Phase 6.5 hardening (Prompt 14, Section 6 — closes independent audit
@@ -366,7 +396,15 @@ describe('compileSubjectData — internal-user tables and staff-role columns (Ph
       ],
     };
     const result = compileSubjectData('Ada Lovelace', data);
-    expect(result.actedAsStaff.employeeRecords).toEqual([data.employeeRecords[1]]);
+    // SECURITY FIX (containment slice). The management relationship is still
+    // FOUND and reported — it is the subject's own data. toEqual(raw record)
+    // additionally disclosed the other employee's HRIS row, which in production
+    // carries their job title, department, employee number, start date,
+    // working pattern and employment status.
+    expect(result.actedAsStaff.employeeRecords).toHaveLength(1);
+    expect(result.actedAsStaff.employeeRecords[0].recordedAs).toBe('manager');
+    expect(JSON.stringify(result.actedAsStaff.employeeRecords)).not.toContain('Priya Shah');
+    expect(result.actedAsStaff.employeeRecords[0].reviewRequired.map(x => x.field)).toContain('name');
   });
 
   it('lists wellbeing notes where the subject is named as the manager, for someone else\'s note', () => {
@@ -378,7 +416,20 @@ describe('compileSubjectData — internal-user tables and staff-role columns (Ph
       ],
     };
     const result = compileSubjectData('Ada Lovelace', data);
-    expect(result.actedAsStaff.wellbeingNotes).toEqual([data.wellbeingNotes[0]]);
+    // SECURITY FIX (containment slice). The note is still FOUND — being named
+    // as someone's manager is the subject's own data — but this asserted
+    // toEqual(raw note), which disclosed another employee's confidential
+    // wellbeing content to whoever managed them.
+    expect(result.actedAsStaff.wellbeingNotes).toHaveLength(1);
+    expect(result.actedAsStaff.wellbeingNotes[0].id).toBe('w1');
+    expect(result.actedAsStaff.wellbeingNotes[0].recordedAs).toBe('manager');
+    // the other employee's content and identity do not travel
+    const asText = JSON.stringify(result.actedAsStaff.wellbeingNotes);
+    expect(asText).not.toContain('Priya Shah');
+    expect(asText).not.toContain('"x"');
+    const noteWithheld = result.actedAsStaff.wellbeingNotes[0].withheldAsThirdPartyData.map(w => w.field);
+    expect(noteWithheld).toContain('content');
+    expect(noteWithheld).toContain('employeeName');
   });
 
   it('lists hr_review_requests where the subject requested or reviewed, excluding requests already covered via the subject\'s own cases', () => {
@@ -549,7 +600,18 @@ describe('compileSubjectData — case_access grants, third-party witness mention
       ],
     };
     const result = compileSubjectData('Ada Lovelace', data);
-    expect(result.redundancyCases).toEqual([data.redundancyCases[0]]);
+    // SECURITY FIX (containment slice). The pool membership is still FOUND and
+    // the subject's own scoring still disclosed in full — that is derived
+    // personal data about them. What toEqual(raw row) also disclosed was every
+    // OTHER pooled employee's name and score.
+    expect(result.redundancyCases).toHaveLength(1);
+    expect(result.redundancyCases[0].id).toBe('rc1');
+    expect(result.redundancyCases[0].ownAtRiskEntry).toEqual({ id: 'e1', name: 'Ada Lovelace', score: 42 });
+    // "you were one of 2" is answerable without naming the other one
+    expect(result.redundancyCases[0].poolSize).toBe(2);
+    expect(JSON.stringify(result.redundancyCases)).not.toContain('Grace Hopper');
+    expect(result.redundancyCases[0].withheldAsThirdPartyData.map(w => w.field))
+      .toContain('atRiskEmployees.otherEmployees');
   });
 
   it('defaults redundancyCases to an empty array when omitted', () => {

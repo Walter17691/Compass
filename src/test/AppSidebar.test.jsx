@@ -252,8 +252,11 @@ describe('AppSidebar — second Ask Compass icon removal (Sidebar footer redesig
 // simply never gets built for a non-HR user ("groups with zero
 // accessible destinations should not appear").
 describe('AppSidebar — DSAR nav gating (Phase 6.5)', () => {
-  it('shows the DSAR nav item for HR once HR Processes is expanded', () => {
-    render(<AppSidebar {...baseProps} isHR={true} />);
+  it('shows the DSAR nav item for an HR DIRECTOR once HR Processes is expanded', () => {
+    // CHANGED by the DSAR authority decision: the nav ITEM is now gated on
+    // canAdministerDsar, while the GROUP stays isHR so Redundancy and Wellbeing
+    // are unaffected (asserted below).
+    render(<AppSidebar {...baseProps} isHR={true} canAdministerDsar={true} />);
     fireEvent.click(screen.getByRole('button', { name: 'HR Processes' }));
     expect(screen.getByRole('button', { name: 'DSAR' })).toBeInTheDocument();
   });
@@ -263,7 +266,9 @@ describe('AppSidebar — DSAR nav gating (Phase 6.5)', () => {
   // not just move a chevron visually, and must not be styled as if it
   // were itself a selectable destination (Part 1's explicit requirement).
   it('exposes HR Processes as an accessible disclosure control that never looks like an active destination itself', () => {
-    render(<AppSidebar {...baseProps} isHR={true} />);
+    // canAdministerDsar passed because this test incidentally asserts the DSAR
+    // child is revealed; its subject is the disclosure control's a11y.
+    render(<AppSidebar {...baseProps} isHR={true} canAdministerDsar={true} />);
     const toggle = screen.getByRole('button', { name: 'HR Processes' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(toggle).toHaveAttribute('aria-controls');
@@ -275,6 +280,23 @@ describe('AppSidebar — DSAR nav gating (Phase 6.5)', () => {
     // heading is never itself a destination, expanded or not.
     expect(toggle.style.background).toBe('none');
     expect(screen.getByRole('button', { name: 'DSAR' })).toBeInTheDocument();
+  });
+
+  it('shows the HR Processes group to an HR MANAGER but WITHOUT the DSAR item', () => {
+    // The precise shape of the narrowing: the group and its two other
+    // destinations are untouched; only DSAR requires an HR Director.
+    render(<AppSidebar {...baseProps} isHR={true} canAdministerDsar={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'HR Processes' }));
+    expect(screen.queryByRole('button', { name: 'DSAR' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Redundancy' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Wellbeing' })).toBeInTheDocument();
+  });
+
+  it('defaults to hiding DSAR when the capability prop is absent', () => {
+    // Default-deny: a caller that forgets the prop must not reveal it.
+    render(<AppSidebar {...baseProps} isHR={true} />);
+    fireEvent.click(screen.getByRole('button', { name: 'HR Processes' }));
+    expect(screen.queryByRole('button', { name: 'DSAR' })).not.toBeInTheDocument();
   });
 
   it('does not render an HR Processes section at all for a non-HR user (not just its items hidden)', () => {

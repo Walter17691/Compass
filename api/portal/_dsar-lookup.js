@@ -1,6 +1,6 @@
 import { requireOrgRole } from '../_auth.js';
 import { fetchAllPagesServer } from '../_paginatedFetch.js';
-import { isHrRole } from '../../src/lib/roles.js';
+import { mayAdministerDsar } from '../../src/lib/dsarAuthority.js';
 
 // Phase 6.5 hardening (data-lifecycle review) — the DSAR compiler
 // (src/lib/dsarCompile.js) covers every table the client can query
@@ -45,7 +45,25 @@ export async function dsarLookup(req, res) {
   const { orgId, employeeName } = req.query;
   if (!orgId) return res.status(400).json({ error: 'orgId is required' });
 
-  const auth = await requireOrgRole(req, res, orgId, isHrRole);
+  // DSAR ADMINISTRATION IS HR-DIRECTOR ONLY.
+  //
+  // This was `requireOrgRole(req, res, orgId, isHrRole)`, which admitted
+  // hr_manager as well. The route reads six tables with the SERVICE ROLE — it
+  // exists precisely because the browser cannot reach another subject's
+  // signing_requests, portal accounts, invites, profiles or case_views — so it
+  // is the one place in the DSAR path where a too-wide role check hands out
+  // service-role reach.
+  //
+  // Narrowing it is safe for every caller because every caller is now
+  // hr_director-only too: the DSAR compile (src/screens/DsarScreen.jsx) and
+  // exportAllData (src/App.jsx, src/lib/exportAuthority.js). Earlier review
+  // flagged that narrowing this shared endpoint could break a legitimate
+  // hr_manager DSAR compile — that tension is resolved by the product decision,
+  // not ignored: an hr_manager no longer compiles DSARs at all.
+  //
+  // Same predicate as the UI gate and the RLS policy, imported rather than
+  // restated, so the three layers cannot drift.
+  const auth = await requireOrgRole(req, res, orgId, role => mayAdministerDsar({ role }));
   if (!auth) return;
 
   const nameFilter = employeeName ? `&employee_name=eq.${encodeURIComponent(employeeName)}` : '';

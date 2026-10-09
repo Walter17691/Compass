@@ -116,6 +116,7 @@ import { mergeSuggestions, suggestionKey } from './lib/suggestionIdentity';
 import { appealLinkCandidates } from './lib/appealLink';
 import { reconcileCaseEmployeeWrite, describeReconcileOutcome, shouldReloadAfter, correctCaseEmployeeWrite, describeCorrectionOutcome, CORRECT_RESULT } from './lib/reconciliationWrites';
 import { mayExportOrganisationData, ORG_EXPORT_REFUSAL } from './lib/exportAuthority.js';
+import { mayAdministerDsar, DSAR_ADMIN_REFUSAL } from './lib/dsarAuthority.js';
 import { isHrRole, CASE_ACCESS_LEVEL_LABELS, canCorrectEmployeeIdentity } from './lib/roles';
 import { computeSelectionScore } from './lib/redundancyScoring';
 import { parseCsv, toCsv, csvRowsToObjects } from './lib/csv';
@@ -3193,6 +3194,11 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   };
 
   const isHR = isHrRole(member?.role);
+  // DSAR administration is hr_director only — narrower than isHR by product
+  // decision. One value for the nav entry, the render gate, the data loader and
+  // every write function, so the UI cannot disagree with the API route or the
+  // RLS policy. See src/lib/dsarAuthority.js.
+  const canAdministerDsar = mayAdministerDsar({ role: member?.role });
 
   // Phase 6.5 hardening (production regression suite) — real, DB-confirmed
   // duplicate-signal bug (see syncGuardrailSignals): tracks whether this
@@ -4676,6 +4682,12 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // ── DSAR (Data Subject Access Request) tracking ──
   const loadDsarRequests = async () => {
     if(!org?.id) return;
+    // Its own guard, not the shared `if(isHR)` block at loadOrgData — that block
+    // loads portal accounts, wellbeing notes, capability insights, integration
+    // events and redundancy cases, none of which is DSAR. Matching the
+    // documented precedent there: do not issue a query the caller is not
+    // entitled to make.
+    if(!canAdministerDsar) return;
     try {
       const {data, error} = await fetchAllPages((from, to) => supabase.from('dsar_requests').select('*').eq('org_id', org.id).order('id', {ascending:true}).range(from, to));
       if(error) { console.error('loadDsarRequests', error); markLoadIssue('DSAR requests'); return; }
@@ -4690,6 +4702,8 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   };
 
   const createDsarRequest = async ({employeeId, employeeName, requestedBy, receivedDate}) => {
+    // Enforced in the FUNCTION, not only by whether a control renders.
+    if(!canAdministerDsar) { audit("DSAR action refused", "attempt to register a subject access request"); showToast(DSAR_ADMIN_REFUSAL, "error"); return; }
     if(!org?.id || !employeeName?.trim() || !receivedDate) return;
     const dueDate = addCalendarMonth(receivedDate);
     if(!dueDate) { showToast("Invalid received date", "error"); return; }
@@ -4719,6 +4733,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   };
 
   const updateDsarRequest = async (id, fields) => {
+    if(!canAdministerDsar) { audit("DSAR action refused", "attempt to change a subject access request"); showToast(DSAR_ADMIN_REFUSAL, "error"); return false; }
     const payload = {};
     if('status' in fields) payload.status = fields.status;
     if('notes' in fields) payload.notes = fields.notes;
@@ -4742,6 +4757,7 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
   // extension (not an arbitrary date) to stay within the statutory limit;
   // the reason is kept for the audit trail.
   const extendDsarRequest = async (req, reason) => {
+    if(!canAdministerDsar) { audit("DSAR action refused", "attempt to extend a subject access request deadline"); showToast(DSAR_ADMIN_REFUSAL, "error"); return; }
     if(!req || req.extended) return;
     const extended = addCalendarMonth(addCalendarMonth(req.dueDate));
     if(!extended) { showToast("Invalid due date", "error"); return; }
@@ -12570,6 +12586,7 @@ Please produce:
 
       {/* ── SIDEBAR ── */}
       <AppSidebar
+        canAdministerDsar={canAdministerDsar}
         screen={screen}
         setScreen={setScreen}
         cases={cases}
@@ -13164,8 +13181,8 @@ Please produce:
       )}
 
       {/* ══ DSAR ══ */}
-      {screen===SCREENS.DSAR&&(
-        <DsarScreen employeeActivities={employeeActivities} employeeActivityRecords={employeeActivityRecords} employmentEvents={employmentEvents}
+      {screen===SCREENS.DSAR&&canAdministerDsar&&(
+        <DsarScreen canAdministerDsar={canAdministerDsar} employeeActivities={employeeActivities} employeeActivityRecords={employeeActivityRecords} employmentEvents={employmentEvents}
           dsarRequests={dsarRequests}
           createDsarRequest={createDsarRequest}
           updateDsarRequest={updateDsarRequest}
