@@ -62,7 +62,15 @@ describe('DsarScreen — DSAR administration is HR-Director only', () => {
     // gate. The real boundary is the render condition in src/App.jsx (which
     // also closes the ?screen=dsar deep link) plus the RLS policy; this is the
     // screen refusing on its own if a future call site forgets.
+    // Naming the capability and asserting it is what makes the rest-sibling a
+    // real use rather than an unused binding, and it is worth asserting on its
+    // own terms: the fixture must genuinely CARRY the capability for its
+    // removal to mean anything. If the prop were ever renamed, the destructure
+    // would quietly remove nothing and the refusal below would pass for the
+    // wrong reason — these two lines are what stop that.
     const { canAdministerDsar, ...withoutCapability } = baseProps;
+    expect(canAdministerDsar).toBe(true);
+    expect(withoutCapability).not.toHaveProperty('canAdministerDsar');
     render(<DsarScreen {...withoutCapability} />);
     expect(screen.getByText(/Only an HR Director can work on subject access requests/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Compile data' })).not.toBeInTheDocument();
