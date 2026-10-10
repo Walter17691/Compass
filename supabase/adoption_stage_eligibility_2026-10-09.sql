@@ -67,6 +67,17 @@ language sql
 immutable
 set search_path to 'public'
 as $pf$
+  -- p_meetings is read through a local guard rather than used directly.
+  -- jsonb_array_elements RAISES 22023 ("cannot extract elements from an
+  -- object") on any jsonb value that is not an array, and coalesce only
+  -- defends against SQL NULL. cases.meetings is jsonb with no CHECK
+  -- constraint behind it — all 2963 production rows are arrays today, but
+  -- nothing enforces that, and a function whose job is to decide eligibility
+  -- must not be able to abort the adoption with an opaque type error instead
+  -- of answering. Found by probing the matrix, not by reading the code.
+  with m as (
+    select case when jsonb_typeof(p_meetings) = 'array' then p_meetings else '[]'::jsonb end as arr
+  )
   select case
     -- Ordered to mirror getCaseStage + inferDisciplinaryStage precedence:
     -- closed, then the explicit later stages, then appeal > outcome >
@@ -80,8 +91,8 @@ as $pf$
     -- disciplinary hearing — the exact collision src/lib/meetingTypeMatch.js
     -- was created to stop, after it once fabricated a statutory deadline.
     when exists (
-      select 1 from jsonb_array_elements(coalesce(p_meetings, '[]'::jsonb)) m
-       where lower(coalesce(m.value->>'type', '')) like '%appeal%')
+      select 1 from m, jsonb_array_elements(m.arr) e
+       where lower(coalesce(e.value->>'type', '')) like '%appeal%')
       then 'an appeal meeting has already been held on this case'
     when p_outcome is not null
       then 'an outcome has already been recorded on this case'
@@ -89,15 +100,15 @@ as $pf$
     -- coalesce default mirrors the JS, which treats a letter with output but
     -- no recorded type as matching.
     when exists (
-      select 1 from jsonb_array_elements(coalesce(p_meetings, '[]'::jsonb)) m
-       where coalesce(m.value->>'letterOutput', '') <> ''
-         and coalesce(m.value->>'letterType', 'outcome') = 'outcome')
+      select 1 from m, jsonb_array_elements(m.arr) e
+       where coalesce(e.value->>'letterOutput', '') <> ''
+         and coalesce(e.value->>'letterType', 'outcome') = 'outcome')
       then 'an outcome letter has already been issued on this case'
     -- isDisciplinaryMeeting: contains 'disciplinary' AND NOT 'appeal'.
     when exists (
-      select 1 from jsonb_array_elements(coalesce(p_meetings, '[]'::jsonb)) m
-       where lower(coalesce(m.value->>'type', '')) like '%disciplinary%'
-         and lower(coalesce(m.value->>'type', '')) not like '%appeal%')
+      select 1 from m, jsonb_array_elements(m.arr) e
+       where lower(coalesce(e.value->>'type', '')) like '%disciplinary%'
+         and lower(coalesce(e.value->>'type', '')) not like '%appeal%')
       then 'a disciplinary hearing has already been held on this case'
     else null
   end;
