@@ -33,15 +33,23 @@ const tableMeeting = (over = {}) => ({
   ...over,
 });
 
-const fakeClient = (result) => ({
-  from: () => ({
-    select: () => ({
-      eq: () => ({
-        order: () => Promise.resolve(result),
-      }),
-    }),
-  }),
-});
+// Models the real query builder, which the gateway now drives with a
+// tiebreaker order and a terminal .range(): `.order()` is CHAINABLE and
+// `.range()` resolves. A double that resolved on the first `.order()` would
+// keep passing against a gateway that had quietly stopped paginating, which
+// is precisely the regression these gateways were hardened against.
+// The first page serves `result`; later pages are empty so paging terminates.
+const pagedBuilder = (result) => {
+  const b = {
+    select: () => b,
+    eq: () => b,
+    order: () => b,
+    range: (from) => Promise.resolve(from === 0 ? result : { data: [], error: null }),
+  };
+  return b;
+};
+
+const fakeClient = (result) => ({ from: () => pagedBuilder(result) });
 
 // ═══════════════════════════════════════════════════════════════════════════
 describe('9–13. the information hierarchy', () => {
@@ -470,11 +478,10 @@ describe('the discovery surface', () => {
     // loading rather than briefly showing the previous organisation's meetings.
     // This is the behaviour the set-state-in-effect fix was built to preserve, so
     // it gets an assertion rather than a claim.
-    const clientFor = orgId => ({
-      from: () => ({ select: () => ({ eq: () => ({ order: () => Promise.resolve({
-        data: [{ id: `m_${orgId}`, org_id: orgId, case_id: null, meeting_type_id: 'informal',
-                 status: 'completed', employee_name: `Employee of ${orgId}`, created_by: 'u' }],
-        error: null }) }) }) }),
+    const clientFor = orgId => fakeClient({
+      data: [{ id: `m_${orgId}`, org_id: orgId, case_id: null, meeting_type_id: 'informal',
+               status: 'completed', employee_name: `Employee of ${orgId}`, created_by: 'u' }],
+      error: null,
     });
     const { rerender } = render(<MeetingsScreen orgId="org-a" client={clientFor('org-a')} />);
     await waitFor(() => expect(screen.getByText(/Employee of org-a/)).toBeTruthy());

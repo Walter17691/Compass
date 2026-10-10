@@ -3,6 +3,20 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('../lib/authedFetch', () => ({ authedFetch: vi.fn() }));
+// COLLECTION GATEWAYS MOCKED AS HEALTHY. Without this they run for real
+// against a client with no backend, every category reports a failed read, and
+// the package correctly reports itself INCOMPLETE — which relabels the
+// download button and is not what these tests are about. Previously a failed
+// read was invisible here, which is exactly the defect the completeness work
+// removed: these tests were relying on it without saying so.
+vi.mock('../lib/meetingTableGateway', async () => {
+  const actual = await vi.importActual('../lib/meetingTableGateway');
+  return { ...actual, fetchDsarMeetings: vi.fn(async () => ({ ok: true, meetings: [] })) };
+});
+vi.mock('../lib/reportVersionGateway', async () => {
+  const actual = await vi.importActual('../lib/reportVersionGateway');
+  return { ...actual, fetchDsarReportVersions: vi.fn(async () => ({ ok: true, versions: [] })) };
+});
 vi.mock('../lib/findingRevisionGateway', () => ({
   fetchDsarFindingRevisions: vi.fn(),
   REVISION_GATEWAY_FAILURE: {
@@ -99,10 +113,14 @@ async function compileAndDownload(props = {}) {
     render(<DsarScreen {...baseProps} orgId="org-1" {...props} />);
     await user.click(screen.getByRole('button', { name: 'Compile data' }));
     await waitFor(
-      () => expect(screen.getByRole('button', { name: 'Download response package' })).toBeInTheDocument(),
+      // The label depends on the package's state. A deliberately failed
+      // collection now yields "Download partial package (collection
+      // incomplete)", which is the point of the completeness work — so the
+      // helper matches any download control rather than pinning one label.
+      () => expect(screen.getByRole('button', { name: /^Download (response package|draft for review|partial package)/ })).toBeInTheDocument(),
       { timeout: 5000 },
     );
-    await user.click(screen.getByRole('button', { name: 'Download response package' }));
+    await user.click(screen.getByRole('button', { name: /^Download (response package|draft for review|partial package)/ }));
     expect(blobs).toHaveLength(1);
     return JSON.parse(await blobs[0].text());
   } finally {
@@ -113,7 +131,7 @@ async function compileAndDownload(props = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  authedFetch.mockResolvedValue({ ok: true, json: async () => ({ signingRequests: [], portalAccounts: [] }) });
+  authedFetch.mockResolvedValue({ ok: true, json: async () => ({ signingRequests: [], portalAccounts: [], portalInvites: [], profiles: [], caseViews: [] }) });
   fetchDsarFindingRevisions.mockResolvedValue({ ok: true, revisions: [] });
 });
 
@@ -270,7 +288,11 @@ describe('B2 integration — the human reviewer is actually told', () => {
     render(<DsarScreen {...baseProps} orgId="org-1" />);
     await user.click(screen.getByRole('button', { name: 'Compile data' }));
     await waitFor(
-      () => expect(screen.getByRole('button', { name: 'Download response package' })).toBeInTheDocument(),
+      // The label depends on the package's state. A deliberately failed
+      // collection now yields "Download partial package (collection
+      // incomplete)", which is the point of the completeness work — so the
+      // helper matches any download control rather than pinning one label.
+      () => expect(screen.getByRole('button', { name: /^Download (response package|draft for review|partial package)/ })).toBeInTheDocument(),
       { timeout: 5000 },
     );
     expect(screen.queryByText(/has been rewritten/i)).not.toBeInTheDocument();

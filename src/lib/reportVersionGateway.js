@@ -75,6 +75,11 @@ const UNDEFINED_TABLE = '42P01';
 
 function versionRowToObject(row) {
   if (!row || typeof row !== 'object') return null;
+  // A row with no primary key is not a row — see the identical guard in
+  // findingRevisionGateway.js. fetchAllPages concatenates pages, so an
+  // object-shaped malformed payload would otherwise be mapped into a version
+  // made entirely of undefineds and counted in the disposition.
+  if (!row.id) return null;
   return {
     id: row.id,
     orgId: row.org_id,
@@ -143,10 +148,15 @@ export async function fetchDsarReportVersions(client, { orgId } = {}) {
       console.error('Could not load investigation report versions for the subject access request:', error.message);
       return { ok: false, reason: REPORT_VERSION_GATEWAY_FAILURE.QUERY_FAILED };
     }
-    return {
-      ok: true,
-      versions: (Array.isArray(data) ? data : []).map(versionRowToObject).filter(Boolean),
-    };
+    const rawVersions = Array.isArray(data) ? data : [];
+    const versions = rawVersions.map(versionRowToObject).filter(Boolean);
+      // DROPPED ROWS ARE REPORTED, NOT JUST DROPPED. The guard above rejects
+      // a row with no primary key, which is right — garbage must not become
+      // data in a disclosure package. But silently discarding it and still
+      // answering ok:true would make a SHORT collection look complete, which
+      // is the same defect pagination was added to close, arriving by another
+      // door. The caller marks the package incomplete when this is non-zero.
+    return { ok: true, versions, droppedRows: rawVersions.length - versions.length };
   } catch (e) {
     console.error('Could not load investigation report versions for the subject access request:', e?.message || e);
     return { ok: false, reason: REPORT_VERSION_GATEWAY_FAILURE.QUERY_FAILED };

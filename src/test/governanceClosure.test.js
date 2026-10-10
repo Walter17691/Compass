@@ -46,6 +46,12 @@ describe('NEW-44 — the DSAR invariant', () => {
     // misfiled as a disposition flag would vanish from the manifest invariant
     // entirely, which is the one thing this list could be abused to do.
     'reportVersionFetchFailed',
+    // Not a data source either: the NAMES of the collections the portal
+    // lookup could not return. The five it carries (signingRequests,
+    // portalAccounts, portalInvites, profiles, caseViews) each have their own
+    // manifest entry and their own parameter; this one only says which of
+    // them failed.
+    'failedPortalCollections',
   ];
   const compilerSignatureParams = () => {
     const src = readFileSync('src/lib/dsarCompile.js', 'utf8');

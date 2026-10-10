@@ -4,6 +4,24 @@ import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'fs';
 
 vi.mock('../lib/authedFetch', () => ({ authedFetch: vi.fn() }));
+// COLLECTION GATEWAYS MOCKED AS HEALTHY. Without this they run for real
+// against a client with no backend, every category reports a failed read, and
+// the package correctly reports itself INCOMPLETE — which relabels the
+// download button and is not what these tests are about. Previously a failed
+// read was invisible here, which is exactly the defect the completeness work
+// removed: these tests were relying on it without saying so.
+vi.mock('../lib/meetingTableGateway', async () => {
+  const actual = await vi.importActual('../lib/meetingTableGateway');
+  return { ...actual, fetchDsarMeetings: vi.fn(async () => ({ ok: true, meetings: [] })) };
+});
+vi.mock('../lib/findingRevisionGateway', async () => {
+  const actual = await vi.importActual('../lib/findingRevisionGateway');
+  return { ...actual, fetchDsarFindingRevisions: vi.fn(async () => ({ ok: true, revisions: [] })) };
+});
+vi.mock('../lib/reportVersionGateway', async () => {
+  const actual = await vi.importActual('../lib/reportVersionGateway');
+  return { ...actual, fetchDsarReportVersions: vi.fn(async () => ({ ok: true, versions: [] })) };
+});
 
 const { DsarScreen } = await import('../screens/DsarScreen.jsx');
 const { authedFetch } = await import('../lib/authedFetch');
@@ -111,7 +129,7 @@ async function compileAndCapture(req, propsFor = baseProps) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  authedFetch.mockResolvedValue({ ok: true, json: async () => ({ signingRequests: [], portalAccounts: [] }) });
+  authedFetch.mockResolvedValue({ ok: true, json: async () => ({ signingRequests: [], portalAccounts: [], portalInvites: [], profiles: [], caseViews: [] }) });
 });
 
 describe('the artefact does not present itself as approved while review is outstanding', () => {

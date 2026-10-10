@@ -26,6 +26,8 @@
 
 import { meetingRowToObject } from './standaloneMeetings.js';
 
+import { fetchAllPages } from './paginatedFetch.js';
+
 export const MEETINGS_TABLE = "meetings";
 
 export const DISCOVERY_COLUMNS = [
@@ -86,15 +88,43 @@ export async function fetchDsarMeetings(client, { orgId } = {}) {
     return { ok: false, reason: GATEWAY_FAILURE.NO_ORG };
   }
   try {
-    const { data, error } = await client
+    // PAGINATED. A plain .select() is capped by the server's own per-request
+    // row limit, and PostgREST hands the capped page back as an ORDINARY
+    // SUCCESS — no error, no signal. For a subject access request that is the
+    // worst available failure shape: a package that is short and looks
+    // complete. src/lib/paginatedFetch.js exists for this and says so in its
+    // own header; App.jsx already uses it for cases, audit_log and
+    // hr_review_requests.
+    //
+    // This query had NO ordering at all, which paging cannot tolerate: a range
+    // window over an unordered result can repeat or skip rows between pages.
+    // Ordering by the primary key gives a total order, and it is the key
+    // rather than a timestamp because created_at is not unique.
+    //
+    // A page failure returns the rows gathered so far ALONGSIDE the error.
+    // They are discarded below — a partial read is reported as a failed read,
+    // never as a short success, which is the rule this module already states
+    // for fetchDiscoverableMeetings ("you have no meetings" and "we could not
+    // check" are different facts).
+    const { data, error } = await fetchAllPages((from, to) => client
       .from(MEETINGS_TABLE)
       .select(DSAR_COLUMNS)
-      .eq("org_id", orgId);
+      .eq("org_id", orgId)
+      .order("id", { ascending: true })
+      .range(from, to));
     if (error) {
       console.error("Could not load meetings for the subject access request:", error.message);
       return { ok: false, reason: GATEWAY_FAILURE.QUERY_FAILED };
     }
-    return { ok: true, meetings: (Array.isArray(data) ? data : []).map(meetingRowToObject).filter(Boolean) };
+    const rawMeetings = Array.isArray(data) ? data : [];
+    const meetings = rawMeetings.filter(r => r && typeof r === 'object' && r.id).map(meetingRowToObject).filter(Boolean);
+      // DROPPED ROWS ARE REPORTED, NOT JUST DROPPED. The guard above rejects
+      // a row with no primary key, which is right — garbage must not become
+      // data in a disclosure package. But silently discarding it and still
+      // answering ok:true would make a SHORT collection look complete, which
+      // is the same defect pagination was added to close, arriving by another
+      // door. The caller marks the package incomplete when this is non-zero.
+    return { ok: true, meetings, droppedRows: rawMeetings.length - meetings.length };
   } catch (e) {
     console.error("Could not load meetings for the subject access request:", e?.message || e);
     return { ok: false, reason: GATEWAY_FAILURE.QUERY_FAILED };
@@ -115,18 +145,26 @@ export async function fetchDiscoverableMeetings(client, { orgId } = {}) {
     return { ok: false, reason: GATEWAY_FAILURE.NO_ORG };
   }
   try {
-    const { data, error } = await client
+    // Paginated on the same terms. This one is not a DSAR path — it feeds
+    // meeting discovery in the product — but it is the same defect in the same
+    // file, and a meeting silently missing from a list is still a meeting
+    // silently missing. The id tiebreaker makes created_at's ordering total,
+    // since two meetings can share a created_at and a range window over a
+    // non-total order can repeat or skip rows.
+    const { data, error } = await fetchAllPages((from, to) => client
       .from(MEETINGS_TABLE)
       .select(DISCOVERY_COLUMNS)
       .eq("org_id", orgId)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, to));
     if (error) {
       // The message is logged for an operator, never surfaced verbatim — a
       // database error string can name tables, columns and constraints.
       console.error("Could not load standalone meetings:", error.message);
       return { ok: false, reason: GATEWAY_FAILURE.QUERY_FAILED };
     }
-    return { ok: true, meetings: (Array.isArray(data) ? data : []).map(meetingRowToObject).filter(Boolean) };
+    return { ok: true, meetings: (Array.isArray(data) ? data : []).filter(r => r && typeof r === 'object' && r.id).map(meetingRowToObject).filter(Boolean) };
   } catch (e) {
     console.error("Could not load standalone meetings:", e?.message || e);
     return { ok: false, reason: GATEWAY_FAILURE.QUERY_FAILED };

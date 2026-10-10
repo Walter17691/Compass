@@ -50,10 +50,63 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
     let portalInvites = [];
     let profiles = [];
     let caseViews = [];
+    // ── THE PORTAL LOOKUP, AND WHAT ITS FAILURE MEANS ───────────────────────
+    //
+    // This endpoint carries five collections the browser cannot read for
+    // another person: signing requests, portal accounts, portal invitations,
+    // profiles and case views. Until now a failure here was swallowed — the
+    // five stayed [] and the package compiled as though none existed. That is
+    // a silent TOTAL loss, not a truncation, and it was invisible in the
+    // artefact.
+    //
+    // Six outcomes are now distinguished, because they are genuinely
+    // different facts:
+    //   200 with empty arrays      -> a real absence
+    //   200 with rows              -> a real presence
+    //   HTTP non-OK                -> failure
+    //   network/abort exception    -> failure
+    //   unparseable or non-object  -> failure
+    //   200 but a collection short -> failure, named by the server
+    //
+    // The last one only became detectable when the endpoint started reporting
+    // `failedCollections`: fetchAllPagesServer hands back partial rows with an
+    // error, and the handler used to discard the error, so a half-read
+    // collection arrived as a short list under 200.
+    const PORTAL_COLLECTIONS = ['signingRequests', 'portalAccounts', 'portalInvites', 'profiles', 'caseViews'];
+    let failedPortalCollections = [];
     try {
       const r = await authedFetch(`/api/portal/dsar-lookup?orgId=${encodeURIComponent(orgId)}&employeeName=${encodeURIComponent(req.employeeName)}`);
-      if (r.ok) { const d = await r.json(); signingRequests = d.signingRequests || []; portalAccounts = d.portalAccounts || []; portalInvites = d.portalInvites || []; profiles = d.profiles || []; caseViews = d.caseViews || []; }
-    } catch (e) { console.error('dsar-lookup failed:', e.message); }
+      if (!r.ok) {
+        console.error('dsar-lookup returned', r.status);
+        failedPortalCollections = [...PORTAL_COLLECTIONS];
+      } else {
+        const d = await r.json();
+        if (!d || typeof d !== 'object' || Array.isArray(d)) {
+          // A 200 carrying something that is not the expected object is a
+          // malformed response, not an empty one.
+          console.error('dsar-lookup returned a malformed payload');
+          failedPortalCollections = [...PORTAL_COLLECTIONS];
+        } else {
+          // Every collection must be present AND an array. The endpoint always
+          // sends all five on success (profiles/caseViews default to []), so a
+          // missing or non-array key means the response is not what it claims.
+          const malformed = PORTAL_COLLECTIONS.filter(k => !Array.isArray(d[k]));
+          const serverReported = Array.isArray(d.failedCollections) ? d.failedCollections : [];
+          failedPortalCollections = [...new Set([...malformed, ...serverReported])];
+          // Whatever DID arrive intact is still used. A reviewer may need it,
+          // and the package is marked incomplete rather than emptied.
+          signingRequests = Array.isArray(d.signingRequests) ? d.signingRequests : [];
+          portalAccounts = Array.isArray(d.portalAccounts) ? d.portalAccounts : [];
+          portalInvites = Array.isArray(d.portalInvites) ? d.portalInvites : [];
+          profiles = Array.isArray(d.profiles) ? d.profiles : [];
+          caseViews = Array.isArray(d.caseViews) ? d.caseViews : [];
+        }
+      }
+    } catch (e) {
+      // Network error, abort, or a body that would not parse as JSON.
+      console.error('dsar-lookup failed:', e.message);
+      failedPortalCollections = [...PORTAL_COLLECTIONS];
+    }
 
     // ── Phase E2A — meetings held outside a case now reach the package ───────
     //
@@ -72,7 +125,11 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
     let standaloneMeetings = [];
     let meetingFetchFailed = false;
     const meetingResult = await fetchDsarMeetings(supabase, { orgId });
-    if (meetingResult.ok) standaloneMeetings = meetingResult.meetings;
+    // A read that succeeded but DROPPED malformed rows is not a complete
+    // read. Folding it into the same flag keeps one mechanism rather than
+    // two, and the disposition's existing wording — "completeness cannot be
+    // confirmed" — is exactly true of it.
+    if (meetingResult.ok) { standaloneMeetings = meetingResult.meetings; meetingFetchFailed = (meetingResult.droppedRows || 0) > 0; }
     else meetingFetchFailed = true;
 
     // ── IR-REPORT-01b/B2 — superseded investigator narratives ───────────────
@@ -92,7 +149,7 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
     let findingRevisions = [];
     let findingRevisionFetchFailed = false;
     const revisionResult = await fetchDsarFindingRevisions(supabase, { orgId });
-    if (revisionResult.ok) findingRevisions = revisionResult.revisions;
+    if (revisionResult.ok) { findingRevisions = revisionResult.revisions; findingRevisionFetchFailed = (revisionResult.droppedRows || 0) > 0; }
     else findingRevisionFetchFailed = true;
 
     // ── B3.4 — saved investigation report versions ──────────────────────────
@@ -111,7 +168,7 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
     let reportVersions = [];
     let reportVersionFetchFailed = false;
     const versionResult = await fetchDsarReportVersions(supabase, { orgId });
-    if (versionResult.ok) reportVersions = versionResult.versions;
+    if (versionResult.ok) { reportVersions = versionResult.versions; reportVersionFetchFailed = (versionResult.droppedRows || 0) > 0; }
     else reportVersionFetchFailed = true;
     setCompiled(compileSubjectData(req.employeeName, {
       // Phase E0.6 — the canonical subject, where the request recorded one. With
@@ -138,6 +195,7 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
       findingRevisionFetchFailed,
       reportVersions,
       reportVersionFetchFailed,
+      failedPortalCollections,
       // ── the ORIGINAL position, for the record ───────────────────────────
       //
       // The audit finding: this parameter has existed since Phase 4C.1 but no
@@ -250,28 +308,58 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
         {compiled&&!compiled.identityRequiresReconciliation&&(()=>{
           const attested     = !!req.reviewedFlaggedSections;
           const attributable = attested && !!req.reviewedBy;
-          const state = !attested ? "draft" : attributable ? "approved" : "unattributed";
+          // A FOURTH STATE, AND IT WINS. The three below describe the REVIEW:
+          // whether the flagged sections were attested, and whether that
+          // attestation can be attributed to a named person. None of them says
+          // anything about whether collection succeeded, so a package compiled
+          // while a whole category failed to load could still export as
+          // `approved_for_release`. The attestation was never a claim about
+          // completeness and must not be read as one.
+          //
+          // Incompleteness therefore takes precedence over all three for the
+          // status, the filename and the label. The review facts are still
+          // emitted alongside, unchanged — reviewRecorded and
+          // reviewAttributable keep their exact meanings, so nothing about the
+          // historical-provenance model is weakened or restated.
+          //
+          // The download is NOT blocked. A reviewer may legitimately need the
+          // partial package to act on, and this module's existing rule is that
+          // a failed read does not block the artefact — only
+          // identityRequiresReconciliation does that. What changes is that the
+          // artefact can no longer describe itself as complete or approved.
+          const incomplete = compiled?.collectionComplete === false;
+          const state = incomplete ? "incomplete" : !attested ? "draft" : attributable ? "approved" : "unattributed";
           const safeName = req.employeeName.replace(/\s+/g,"_");
-          const SUFFIX = { draft: "_DRAFT_NOT_APPROVED", unattributed: "_REVIEWER_NOT_RECORDED", approved: "" };
+          const SUFFIX = {
+            draft: "_DRAFT_NOT_APPROVED",
+            unattributed: "_REVIEWER_NOT_RECORDED",
+            approved: "",
+            incomplete: "_INCOMPLETE_COLLECTION",
+          };
           const filename = `DSAR_${safeName}_${req.receivedDate}${SUFFIX[state]}.json`;
           const STATUS = {
             draft:        "draft_review_outstanding",
             unattributed: "approved_reviewer_not_recorded",
             approved:     "approved_for_release",
+            incomplete:   "incomplete_collection_not_approved",
           };
+          const missing = (compiled?.incompleteCollections || []).join(", ");
           const WARNING = {
             draft: "DRAFT. The flagged sections have not been reviewed, so this is not an approved subject access response and must not be sent.",
             unattributed: "The flagged sections were recorded as reviewed, but this request predates Compass recording WHO performed that review and WHEN. The review is not withdrawn and the record is unaltered — but no reviewer can be evidenced for it, so do not represent this package as a review attributable to a named person.",
+            incomplete: `INCOMPLETE. Compass could not read one or more categories while compiling this package (${missing}), so it is not a complete record of the personal data held about this person and must not be sent or described as an approved response. Any review already recorded still stands and is reported unchanged below — it was a review of the flagged sections, not a confirmation that collection succeeded. Compile the package again before responding.`,
           };
           const LABEL = {
             draft: "Download draft for review",
             unattributed: "Download response package (reviewer not recorded)",
             approved: "Download response package",
+            incomplete: "Download partial package (collection incomplete)",
           };
           const AUDIT = {
             draft: "DSAR draft downloaded (review outstanding)",
             unattributed: "DSAR response downloaded (reviewer not recorded)",
             approved: "DSAR response downloaded",
+            incomplete: "DSAR partial package downloaded (collection incomplete)",
           };
           return (
             <Btn variant="secondary" onClick={()=>{
@@ -460,6 +548,18 @@ function RequestDetail({ req, cases, caseDecisions = [], employeeRecords, employ
                     ))}
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+          {compiled.collectionComplete===false&&(
+            <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#FEF0EB",border:"1px solid #F3D4C9",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
+              <WarningIcon size={14} color="#C84B2F" style={{flexShrink:0,marginTop:1}}/>
+              <div style={{fontSize:12,color:"#8A3418",lineHeight:1.6}}>
+                <strong>This package is incomplete.</strong> Compass could not read{" "}
+                {(compiled.incompleteCollections||[]).length} of the categories it collects
+                ({(compiled.incompleteCollections||[]).join(", ")}). It is not a complete record of
+                the personal data held about this person, it cannot be approved for release, and it
+                must not be sent. Compile it again before responding.
               </div>
             </div>
           )}

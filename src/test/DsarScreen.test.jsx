@@ -9,6 +9,24 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('../lib/authedFetch', () => ({ authedFetch: vi.fn() }));
+// COLLECTION GATEWAYS MOCKED AS HEALTHY. Without this they run for real
+// against a client with no backend, every category reports a failed read, and
+// the package correctly reports itself INCOMPLETE — which relabels the
+// download button and is not what these tests are about. Previously a failed
+// read was invisible here, which is exactly the defect the completeness work
+// removed: these tests were relying on it without saying so.
+vi.mock('../lib/meetingTableGateway', async () => {
+  const actual = await vi.importActual('../lib/meetingTableGateway');
+  return { ...actual, fetchDsarMeetings: vi.fn(async () => ({ ok: true, meetings: [] })) };
+});
+vi.mock('../lib/findingRevisionGateway', async () => {
+  const actual = await vi.importActual('../lib/findingRevisionGateway');
+  return { ...actual, fetchDsarFindingRevisions: vi.fn(async () => ({ ok: true, revisions: [] })) };
+});
+vi.mock('../lib/reportVersionGateway', async () => {
+  const actual = await vi.importActual('../lib/reportVersionGateway');
+  return { ...actual, fetchDsarReportVersions: vi.fn(async () => ({ ok: true, versions: [] })) };
+});
 
 const { DsarScreen } = await import('../screens/DsarScreen.jsx');
 const { authedFetch } = await import('../lib/authedFetch');
@@ -141,7 +159,7 @@ describe('DsarScreen — compile fetches signing requests/portal access, and sur
     // warning could be read after the package had already been taken. Ambiguous
     // identity now blocks the download: a DSAR must prefer "identity requires
     // reconciliation" over disclosing the wrong person's history.
-    authedFetch.mockResolvedValue({ ok: true, json: async () => ({ signingRequests: [], portalAccounts: [] }) });
+    authedFetch.mockResolvedValue({ ok: true, json: async () => ({ signingRequests: [], portalAccounts: [], portalInvites: [], profiles: [], caseViews: [] }) });
     const user = userEvent.setup();
     const cases = [
       { id: 'c1', employeeName: 'Sam Employee', employeeEmail: 'sam.london@acme.com', meetings: [] },
@@ -157,7 +175,7 @@ describe('DsarScreen — compile fetches signing requests/portal access, and sur
   });
 
   it('does not show a collision warning for an ordinary, unambiguous subject', async () => {
-    authedFetch.mockResolvedValue({ ok: true, json: async () => ({ signingRequests: [], portalAccounts: [] }) });
+    authedFetch.mockResolvedValue({ ok: true, json: async () => ({ signingRequests: [], portalAccounts: [], portalInvites: [], profiles: [], caseViews: [] }) });
     const user = userEvent.setup();
     render(<DsarScreen {...baseProps} orgId="org-1" />);
     await user.click(screen.getByRole('button', { name: 'Compile data' }));
@@ -175,7 +193,7 @@ describe('DsarScreen — compile fetches signing requests/portal access, and sur
 // auditable.
 describe('DsarScreen — audits DSAR compile and download (Phase 6.5)', () => {
   it('audits a DSAR compile with the subject\'s name, no record content', async () => {
-    authedFetch.mockResolvedValue({ ok: true, json: async () => ({ signingRequests: [], portalAccounts: [] }) });
+    authedFetch.mockResolvedValue({ ok: true, json: async () => ({ signingRequests: [], portalAccounts: [], portalInvites: [], profiles: [], caseViews: [] }) });
     const audit = vi.fn();
     const user = userEvent.setup();
     render(<DsarScreen {...baseProps} orgId="org-1" audit={audit} />);
@@ -184,7 +202,7 @@ describe('DsarScreen — audits DSAR compile and download (Phase 6.5)', () => {
   });
 
   it('audits a DSAR response download separately from the compile', async () => {
-    authedFetch.mockResolvedValue({ ok: true, json: async () => ({ signingRequests: [], portalAccounts: [] }) });
+    authedFetch.mockResolvedValue({ ok: true, json: async () => ({ signingRequests: [], portalAccounts: [], portalInvites: [], profiles: [], caseViews: [] }) });
     const audit = vi.fn();
     const user = userEvent.setup();
     render(<DsarScreen {...baseProps} orgId="org-1" audit={audit} />);
@@ -196,7 +214,7 @@ describe('DsarScreen — audits DSAR compile and download (Phase 6.5)', () => {
   });
 
   it('does not crash when audit is not supplied', async () => {
-    authedFetch.mockResolvedValue({ ok: true, json: async () => ({ signingRequests: [], portalAccounts: [] }) });
+    authedFetch.mockResolvedValue({ ok: true, json: async () => ({ signingRequests: [], portalAccounts: [], portalInvites: [], profiles: [], caseViews: [] }) });
     const user = userEvent.setup();
     render(<DsarScreen {...baseProps} orgId="org-1" />);
     await user.click(screen.getByRole('button', { name: 'Compile data' }));
@@ -229,7 +247,7 @@ describe('DsarScreen — carries the authoritative decision into the package (D4
   };
 
   it('includes the decision, and still withholds the actor and the reasoning', async () => {
-    authedFetch.mockResolvedValue({ ok: true, json: async () => ({ signingRequests: [], portalAccounts: [] }) });
+    authedFetch.mockResolvedValue({ ok: true, json: async () => ({ signingRequests: [], portalAccounts: [], portalInvites: [], profiles: [], caseViews: [] }) });
     const blobs = [];
     const origCreate = URL.createObjectURL;
     const origRevoke = URL.revokeObjectURL;

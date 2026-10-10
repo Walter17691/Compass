@@ -89,22 +89,22 @@ export async function dsarLookup(req, res) {
     // very table (signing_requests). employeeName omitted is exactly the
     // org-wide exportAllData call shape this endpoint exists to serve, so
     // silent truncation here meant a "complete" GDPR export wasn't.
-    const { data: signingRequests } = await fetchAllPagesServer(
+    const { data: signingRequests, error: signingErr } = await fetchAllPagesServer(
       `signing_requests?org_id=eq.${encodeURIComponent(orgId)}${signingNameFilter}&select=sign_id,document,employee_name,employee_email,manager_name,manager_email,meeting_type,meeting_date,document_type,status,signature,signed_at,created_at,opened_at,expires_at,declined_at,decline_reason,participant_comment,participant_comment_at,proceeded_at,proceed_reason,proceeded_from_status`
     );
 
-    const { data: portalAccounts } = await fetchAllPagesServer(
+    const { data: portalAccounts, error: accountsErr } = await fetchAllPagesServer(
       `employee_portal_accounts?org_id=eq.${encodeURIComponent(orgId)}${nameFilter}&select=id,employee_name,employee_email,created_at`
     );
 
-    const { data: portalInvites } = await fetchAllPagesServer(
+    const { data: portalInvites, error: invitesErr } = await fetchAllPagesServer(
       `employee_portal_invites?org_id=eq.${encodeURIComponent(orgId)}${nameFilter}&select=id,employee_name,email,created_by,expires_at,accepted_at,created_at`
     );
 
     // name here matches org_members' own column (a per-membership display
     // name), not employee_name — org_members doesn't use that convention.
     const memberNameFilter = employeeName ? `&name=eq.${encodeURIComponent(employeeName)}` : '';
-    const { data: matchedMembers } = await fetchAllPagesServer(
+    const { data: matchedMembers, error: membersErr } = await fetchAllPagesServer(
       `org_members?org_id=eq.${encodeURIComponent(orgId)}${memberNameFilter}&select=user_id`
     );
     const userIds = matchedMembers.map(m => m.user_id).filter(Boolean);
@@ -115,22 +115,54 @@ export async function dsarLookup(req, res) {
     // past the org boundary — profiles has no org_id column at all.
     let profiles = [];
     let caseViews = [];
+    let profilesErr = null;
+    let viewsErr = null;
+    let scopeErr = membersErr || null;
     if (!employeeName || userIds.length > 0) {
       let scopeUserIds = userIds;
       if (!employeeName) {
-        const { data: allMembers } = await fetchAllPagesServer(`org_members?org_id=eq.${encodeURIComponent(orgId)}&select=user_id`);
+        const { data: allMembers, error: allMembersErr } = await fetchAllPagesServer(`org_members?org_id=eq.${encodeURIComponent(orgId)}&select=user_id`);
+        if (allMembersErr) scopeErr = allMembersErr;
         scopeUserIds = allMembers.map(m => m.user_id).filter(Boolean);
       }
       if (scopeUserIds.length > 0) {
         const idList = scopeUserIds.map(id => encodeURIComponent(id)).join(',');
         const profilesRes = await fetchAllPagesServer(`profiles?id=in.(${idList})&select=id,name,role,company,created_at`);
         profiles = profilesRes.data;
+        profilesErr = profilesRes.error;
         const viewsRes = await fetchAllPagesServer(`case_views?org_id=eq.${encodeURIComponent(orgId)}&user_id=in.(${idList})&select=case_id,user_id,last_viewed_at`);
         caseViews = viewsRes.data;
+        viewsErr = viewsRes.error;
       }
     }
 
-    res.status(200).json({ signingRequests, portalAccounts, portalInvites, profiles, caseViews });
+    // ── WHICH COLLECTIONS DID NOT COME BACK WHOLE ───────────────────────
+    //
+    // fetchAllPagesServer returns the rows gathered so far ALONGSIDE the
+    // error when a page fails. Every call above previously destructured only
+    // `data`, so a mid-pagination failure was returned to the browser as a
+    // short list under HTTP 200 — indistinguishable from "there are only this
+    // many". A DSAR assembled from that is incomplete and says it is complete,
+    // which is the one failure shape a subject access response must not have.
+    //
+    // The partial rows are still sent: a reviewer may legitimately need them,
+    // and the client marks the package incomplete rather than discarding
+    // useful data. What is no longer possible is not knowing.
+    //
+    // A failure scoping org_members poisons profiles AND case_views, because
+    // both are selected by the user ids it resolves — so it names both rather
+    // than claiming the two collections are sound.
+    const failedCollections = [
+      ...(signingErr ? ['signingRequests'] : []),
+      ...(accountsErr ? ['portalAccounts'] : []),
+      ...(invitesErr ? ['portalInvites'] : []),
+      ...(profilesErr || scopeErr ? ['profiles'] : []),
+      ...(viewsErr || scopeErr ? ['caseViews'] : []),
+    ];
+    if (failedCollections.length) {
+      console.error('dsar-lookup: incomplete collections', failedCollections.join(', '));
+    }
+    res.status(200).json({ signingRequests, portalAccounts, portalInvites, profiles, caseViews, failedCollections });
   } catch (e) {
     console.error('dsar-lookup error:', e.message);
     res.status(500).json({ error: e.message });

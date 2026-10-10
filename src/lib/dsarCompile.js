@@ -164,6 +164,7 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
     caseDecisions = [],
     findingRevisions = [], findingRevisionFetchFailed = false,
     reportVersions = [], reportVersionFetchFailed = false,
+    failedPortalCollections = [],
   } = {}) {
   // ── Phase E0.5B — CANONICAL IDENTITY TAKES PRECEDENCE OVER THE NAME ───────
   //
@@ -1057,6 +1058,37 @@ export function compileSubjectData(employeeName, { canonicalEmployeeId = null, c
         ? "No investigator finding, outstanding uncertainty or witness evidence summary on this subject's cases has been rewritten since revision recording began, so there is no superseded wording to consider."
         : "Superseded investigator wording exists for this subject and is listed with the field, the issue, the order of the change and whether a person or a system made it. The wording ITSELF is not reproduced here: each entry is flagged for a disclosure decision, so a reviewer releases, redacts or withholds it deliberately. Earlier drafts were scanned for third-party mentions on the same terms as the live text.",
     },
+    // ── COLLECTION COMPLETENESS, AS ONE ANSWERABLE FACT ──────────────────
+    //
+    // Each gateway already reports its own read failure, and each disposition
+    // says so in prose. What did not exist was a single field a reader — or
+    // the download button — could consult to answer "was everything actually
+    // collected?". Three separate dispositions buried in a large JSON file is
+    // not an answer anybody checks.
+    //
+    // It matters because of what sits downstream: responseStatus could read
+    // `approved_for_release` on a package assembled while an entire category
+    // failed to load. The attestation was about the FLAGGED SECTIONS a human
+    // reviewed; it was never a statement that collection succeeded, and
+    // nothing stopped the two being conflated at the point of export.
+    //
+    // Derived, not stored: it is computed from the same flags the dispositions
+    // use, so the two cannot drift apart.
+    collectionComplete: !meetingFetchFailed && !findingRevisionFetchFailed
+      && !reportVersionFetchFailed
+      && (Array.isArray(failedPortalCollections) ? failedPortalCollections.length === 0 : true),
+    incompleteCollections: [
+      ...(meetingFetchFailed ? ['meetings'] : []),
+      ...(findingRevisionFetchFailed ? ['investigationFindingRevisions'] : []),
+      ...(reportVersionFetchFailed ? ['investigationReportVersions'] : []),
+      // The five collections only /api/portal/dsar-lookup can reach. Named
+      // individually rather than as one "portal lookup" entry, because a
+      // reviewer needs to know WHICH of the subject's records are missing —
+      // "signing requests could not be read" and "case views could not be
+      // read" are different facts with different weight, and the endpoint
+      // can now fail for one while succeeding for the rest.
+      ...(Array.isArray(failedPortalCollections) ? failedPortalCollections : []),
+    ],
     reportVersions: subjectReportVersions,
     // B3.4 — the same honesty the meeting and revision dispositions apply, with
     // one addition they do not need: a COUNT PER STATE. "Three saved versions"

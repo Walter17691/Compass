@@ -44,6 +44,8 @@
 // or a system made the change — is selected, because that IS disclosed.
 // ─────────────────────────────────────────────────────────────────────────
 
+import { fetchAllPages } from './paginatedFetch.js';
+
 export const REVISION_GATEWAY_FAILURE = Object.freeze({
   NO_CLIENT: 'no_client',
   NO_ORG: 'no_org',
@@ -64,6 +66,13 @@ const UNDEFINED_TABLE = '42P01';
 
 function revisionRowToObject(row) {
   if (!row || typeof row !== 'object') return null;
+  // A row with no primary key is not a row. This mattered the moment the
+  // gateway started paginating: fetchAllPages concatenates each page, so a
+  // malformed payload that is an OBJECT rather than an array (which the
+  // previous single-shot code turned into []) would otherwise be concatenated
+  // as one junk element and mapped into a revision made entirely of
+  // undefineds. Garbage must not become data in a disclosure package.
+  if (!row.id) return null;
   return {
     id: row.id,
     orgId: row.org_id,
@@ -99,11 +108,30 @@ export async function fetchDsarFindingRevisions(client, { orgId } = {}) {
     return { ok: false, reason: REVISION_GATEWAY_FAILURE.NO_ORG };
   }
   try {
-    const { data, error } = await client
+    // PAGINATED. A plain .select() is capped by the server's own per-request
+    // row limit and PostgREST returns the capped page as an ORDINARY SUCCESS —
+    // no error, nothing to notice. For a subject access request that is the
+    // worst available failure shape: a package that is short and looks
+    // complete. src/lib/paginatedFetch.js exists for exactly this, says so in
+    // its own header, and is what App.jsx already uses for cases, audit_log
+    // and hr_review_requests.
+    //
+    // The `id` tiebreaker is not decoration. Paging applies a range window to
+    // an ORDERED result, so the order has to be a TOTAL one or rows can repeat
+    // or be skipped between pages. seq is unique in practice but nothing in
+    // the schema enforces that — there is no unique index on it — so the
+    // primary key settles it rather than an assumption about a sequence.
+    //
+    // A page failure returns the rows gathered so far ALONGSIDE the error;
+    // those partial rows are discarded below, never returned as a short
+    // success.
+    const { data, error } = await fetchAllPages((from, to) => client
       .from(REVISIONS_TABLE)
       .select(DSAR_COLUMNS)
       .eq('org_id', orgId)
-      .order('seq', { ascending: true });
+      .order('seq', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to));
     if (error) {
       if (error.code === UNDEFINED_TABLE) {
         return { ok: false, reason: REVISION_GATEWAY_FAILURE.TABLE_ABSENT };
@@ -111,10 +139,15 @@ export async function fetchDsarFindingRevisions(client, { orgId } = {}) {
       console.error('Could not load investigation revision history for the subject access request:', error.message);
       return { ok: false, reason: REVISION_GATEWAY_FAILURE.QUERY_FAILED };
     }
-    return {
-      ok: true,
-      revisions: (Array.isArray(data) ? data : []).map(revisionRowToObject).filter(Boolean),
-    };
+    const rawRevisions = Array.isArray(data) ? data : [];
+    const revisions = rawRevisions.map(revisionRowToObject).filter(Boolean);
+      // DROPPED ROWS ARE REPORTED, NOT JUST DROPPED. The guard above rejects
+      // a row with no primary key, which is right — garbage must not become
+      // data in a disclosure package. But silently discarding it and still
+      // answering ok:true would make a SHORT collection look complete, which
+      // is the same defect pagination was added to close, arriving by another
+      // door. The caller marks the package incomplete when this is non-zero.
+    return { ok: true, revisions, droppedRows: rawRevisions.length - revisions.length };
   } catch (e) {
     console.error('Could not load investigation revision history for the subject access request:', e?.message || e);
     return { ok: false, reason: REVISION_GATEWAY_FAILURE.QUERY_FAILED };

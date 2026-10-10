@@ -10,13 +10,29 @@ import { fetchDsarFindingRevisions, REVISION_GATEWAY_FAILURE } from '../lib/find
 // pre-migration "table does not exist" state is treated as a fault.
 // ─────────────────────────────────────────────────────────────────────────
 
-/** A minimal stand-in for the supabase query builder, capturing what was asked for. */
+/**
+ * A stand-in for the supabase query builder, capturing what was asked for.
+ *
+ * It now models TWO things the previous double did not, because the gateway
+ * paginates: `.order()` is chainable (there is a tiebreaker), and `.range()`
+ * is the terminal call. A double that resolves on the first `.order()` would
+ * make every test here pass against a gateway that had silently stopped
+ * paginating, which is the opposite of what these tests are for.
+ *
+ * `result` may be a fixed {data,error} — served once, then an empty page so
+ * paging terminates — or a function (from,to) => ({data,error}) for the
+ * multi-page cases.
+ */
 function stubClient(result) {
-  const calls = { table: null, columns: null, eq: null, order: null };
+  const calls = { table: null, columns: null, eq: null, order: null, orders: [], ranges: [] };
+  const serve = typeof result === 'function'
+    ? result
+    : (from) => (from === 0 ? result : { data: [], error: null });
   const builder = {
     select(columns) { calls.columns = columns; return builder; },
     eq(col, val) { calls.eq = [col, val]; return builder; },
-    order(col, opts) { calls.order = [col, opts]; return Promise.resolve(result); },
+    order(col, opts) { calls.order = calls.order || [col, opts]; calls.orders.push([col, opts]); return builder; },
+    range(from, to) { calls.ranges.push([from, to]); return Promise.resolve(serve(from, to)); },
   };
   return {
     calls,
@@ -128,7 +144,7 @@ describe('fetchDsarFindingRevisions — mapping into what the compiler reads', (
 
   it('returns an empty list, successfully, when nothing has been rewritten', async () => {
     const r = await fetchDsarFindingRevisions(stubClient({ data: [], error: null }), { orgId: 'org-1' });
-    expect(r).toEqual({ ok: true, revisions: [] });
+    expect(r).toEqual({ ok: true, revisions: [], droppedRows: 0 });
   });
 
   it('tolerates a null row or a non-array payload', async () => {
@@ -139,7 +155,12 @@ describe('fetchDsarFindingRevisions — mapping into what the compiler reads', (
     const notAnArray = await fetchDsarFindingRevisions(
       stubClient({ data: { nope: true }, error: null }), { orgId: 'org-1' },
     );
-    expect(notAnArray).toEqual({ ok: true, revisions: [] });
+    // A non-array payload yields no usable rows, and droppedRows says ONE was
+    // rejected rather than reporting a clean empty read. That distinction is
+    // the point: fetchAllPages concatenates each page, so the malformed object
+    // arrives as a single junk element — discarding it quietly would make a
+    // broken response indistinguishable from "nothing was ever rewritten".
+    expect(notAnArray).toEqual({ ok: true, revisions: [], droppedRows: 1 });
   });
 });
 
