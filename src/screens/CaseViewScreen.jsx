@@ -24,6 +24,10 @@ import { computeCaseRisk } from '../lib/caseRisk';
 import { evaluateAutomationRules } from '../lib/automationRules';
 import { CaseInformationPanel } from '../components/caseTabs/CaseInformationPanel';
 import { TribunalExposurePanel } from '../components/caseTabs/TribunalExposurePanel';
+import { InvestigationReportTab } from '../components/caseTabs/InvestigationReportTab';
+import { buildReportWorkspace } from '../lib/investigationReportWorkspace';
+import { fetchCaseReportVersions } from '../lib/reportVersionGateway';
+import { supabase } from '../supabase';
 import { CompassAnalysisPanel } from '../components/caseTabs/CompassAnalysisPanel';
 import { ApprovalsPanel } from '../components/ApprovalsPanel';
 import { HrReviewGatePanel } from '../components/HrReviewGatePanel';
@@ -191,6 +195,34 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   // Deep links speak the OLD section vocabulary and must still land.
   // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- one-time, prop-driven sync on a genuine value change, same shape as this file's own changesBannerDismissed effect and the mailParam/calendarParam effects in App.jsx that this rule doesn't flag consistently.
   useEffect(() => { if(initialTab) { setActiveTab(destinationForLegacyTab(initialTab) || DEFAULT_DESTINATION); clearInitialTab?.(); } }, [initialTab]);
+
+  // ── B3.2-0 — the case's saved report versions, READ ONLY ────────────────
+  //
+  // Declared up here with the other hooks because of the early return below.
+  // The fetch is case-scoped rather than the DSAR gateway's org-wide read:
+  // a workspace must not pull every report in the organisation to render one
+  // case. Nothing here writes, adopts or submits.
+  //
+  // A failed read is held separately from an empty one. "No versions exist"
+  // and "Compass could not look" are different facts and the panel says which.
+  // The result carries the case it belongs to. That is what lets the panel
+  // tell "not loaded yet" from "loaded, and there are none" when the user
+  // switches cases — without it the previous case's history would show
+  // briefly, or an empty list would claim an absence it had not checked.
+  // Nothing is set synchronously here, so no cascading render is triggered.
+  const [reportVersionState, setReportVersionState] = useState({ caseId: null, versions: [], unreadable: false });
+  useEffect(() => {
+    let live = true;
+    if (!activeCaseId) return undefined;
+    fetchCaseReportVersions(supabase, { caseId: activeCaseId }).then(r => {
+      if (!live) return;
+      setReportVersionState(r.ok
+        // A read that silently dropped malformed rows is not a complete read.
+        ? { caseId: activeCaseId, versions: r.versions, unreadable: (r.droppedRows || 0) > 0 }
+        : { caseId: activeCaseId, versions: [], unreadable: true });
+    });
+    return () => { live = false; };
+  }, [activeCaseId]);
   if(!cs) {
     // Phase 7.5B (P0 polish) — casesLoading distinguishes "the org's
     // cases genuinely haven't loaded yet" (a direct nav/reload/bookmark
@@ -465,6 +497,16 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   // thing IS: a stage, the meetings across stages, what was issued, the record,
   // the analysis — then administration, organisational classification and the
   // specialist estimator behind an overflow.
+  // A plain call, not useMemo: this sits below an early return, and it is a
+  // pure derivation over data already in memory plus the fetched versions.
+  const reportVersionsLoaded = reportVersionState.caseId === cs.id;
+  const reportWorkspace = buildReportWorkspace({
+    cs, allegations, caseSignals,
+    versions: reportVersionsLoaded ? reportVersionState.versions : [],
+    versionsUnreadable: reportVersionsLoaded ? reportVersionState.unreadable : false,
+    versionsLoading: !reportVersionsLoaded,
+  });
+
   const workspaceDestinations = caseWorkspaceDestinations({
     cs,
     allegations: caseAllegations,
@@ -481,6 +523,13 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
     canSeeThemes: isHR,
     showExposure: showRiskExposure,
     hasCaseInformation: hasCaseInformation(cs, { repeatCount }) || hasKeyDates || !!processTemplate,
+    // B3.2-0 — the investigation-report destination appears only where the
+    // case is actually investigating. caseAccess carries the investigator
+    // assignment; the version flag covers a case whose only signal is a saved
+    // report version. None exist in production yet, so today that term changes
+    // nothing — but the rule has to be right before the first one does.
+    caseAccess,
+    hasReportVersion: reportVersionsLoaded && reportVersionState.versions.length > 0,
   });
   // activeTab still carries the value every existing deep link sets, translated
   // into the destination vocabulary so no saved link breaks.
@@ -1640,6 +1689,9 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
             ),
                       themes: (
             <ThemesTab cs={cs} organisationThemes={themesTab.organisationThemes} caseThemes={themesTab.caseThemes} suggestions={themesTab.themeSuggestions?.[cs.id]} suggesting={!!themesTab.themeSuggestionLoading?.[cs.id]} isHR={isHR} onSuggest={themesTab.onSuggestThemes} onConfirmSuggestion={themesTab.onConfirmThemeSuggestion} onDismissSuggestion={themesTab.onDismissThemeSuggestion} onAssignExisting={themesTab.onAssignExistingTheme} onRemove={themesTab.onRemoveTheme}/>
+            ),
+                      inv_report: (
+            <InvestigationReportTab model={reportWorkspace} fmtDate={fmtDate}/>
             ),
                       exposure: (
             <TribunalExposurePanel cs={cs} cases={cases} saveCases={saveCases}

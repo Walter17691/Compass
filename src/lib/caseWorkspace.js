@@ -1,3 +1,4 @@
+import { isInvestigationMeeting } from './meetingTypeMatch.js';
 import { isGenuineMeeting } from './meetingLifecycle.js';
 import { getStageDefinitions } from './processStages.js';
 
@@ -53,12 +54,82 @@ export const WORKSPACE_MORE_LABEL = "More";
 // `primary` destinations are the case's real working surfaces. `secondary` ones
 // are genuinely supporting and live behind the overflow — not because they are
 // unimportant, but because they are not what running the process consists of.
+
+// ── B3.2-0 — WHEN THE INVESTIGATION REPORT DESTINATION APPEARS ────────────
+//
+// The first cut showed this on every case. That was the honest reading of
+// "do not gate on case_type", but it was the wrong product answer: 2,963
+// cases, including probation, absence and flexible-working ones that will
+// never hold an investigation report, each gaining a tab for a document that
+// does not and will not exist.
+//
+// THE PREDICATE IS "IS THIS CASE ACTUALLY INVESTIGATING?", answered from
+// investigation SIGNALS rather than from a label. Five of them, any one
+// sufficient, measured against production before being chosen:
+//
+//   report already exists      50 cases   the document is the proof
+//   report version exists       0 cases   none yet; must still qualify
+//   structured findings        55 cases   a human has recorded a position,
+//                                         an assessment, an uncertainty or
+//                                         witness evidence on a matter
+//   investigator assigned     175 cases   somebody was given the job
+//   investigative stage        49 cases   the case says where it is
+//   investigation meeting     403 cases   sufficient, never required
+//
+// Union: 632 of 2,963 (21%). Case type is read NOWHERE in this decision, and
+// yet capability, grievance, probation, long-term sickness, absence,
+// flexible working and informal cases contribute ZERO between them — they
+// simply have no investigation signals. That is the result worth having:
+// unrelated cases are excluded by what is true of them, not by their label.
+//
+// WHAT IS DELIBERATELY NOT A SIGNAL. Allegations alone (843 cases): raising
+// an issue is not investigating it, and using it would re-admit a third of
+// the estate. cs.investigatingManager: the column is populated on ZERO
+// production cases, so relying on it would be relying on nothing.
+//
+// A meeting is sufficient but NOT required, so a desk-based investigation
+// conducted entirely on documents still qualifies through its investigator,
+// its stage or its findings. Nothing here reads employeeName, so an
+// investigation into an incident with nobody named qualifies on the same
+// terms as any other.
+export function hasInvestigationSignal({
+  cs = {}, allegations = [], caseAccess = [], hasReportVersion = false,
+} = {}) {
+  // A default parameter only fires on undefined, and `cs: null` is a real
+  // shape a caller can pass while a case is still loading. Normalising rather
+  // than defaulting: a predicate that decides whether a destination appears
+  // must answer, not throw.
+  const c = (cs && typeof cs === 'object') ? cs : {};
+  const txt = v => typeof v === 'string' && v.trim() !== '';
+  if (txt(c.investigationReport)) return true;
+  if (hasReportVersion) return true;
+
+  const list = Array.isArray(allegations) ? allegations : [];
+  const hasFindings = list.some(a => a && (
+    a.investigationConclusion
+    || txt(a.investigatorFinding)
+    || txt(a.outstandingUncertainty)
+    || txt(a.witnessEvidence)
+  ));
+  if (hasFindings) return true;
+
+  const grants = Array.isArray(caseAccess) ? caseAccess : [];
+  if (grants.some(g => g && g.role === 'investigator' && (!c.id || !g.caseId || g.caseId === c.id))) return true;
+
+  if (c.stage === 'investigation' || c.stage === 'inv_report') return true;
+
+  const meetings = Array.isArray(c.meetings) ? c.meetings : [];
+  return meetings.some(m => m && isInvestigationMeeting(m.type));
+}
+
 export function caseWorkspaceDestinations({
   cs = {}, allegations = [], evidence = [], meetings = [], tasks = [],
   documents = [], communications = [], participants = [],
   hasOutcome = false, outcomeReachable = false, canSeeThemes = false, showExposure = false,
   hasCaseInformation = false,
+  caseAccess = [], hasReportVersion = false,
 } = {}) {
+  const investigating = hasInvestigationSignal({ cs, allegations, caseAccess, hasReportVersion });
   const openTasks = (tasks || []).filter(t => t && !t.done);
   const genuineMeetings = (meetings || []).filter(isGenuineMeeting);
 
@@ -97,6 +168,10 @@ export function caseWorkspaceDestinations({
   ].filter(d => d.always);
 
   const secondary = [
+    // B3.2-0 — shown only where the case is actually investigating. See
+    // hasInvestigationSignal above for the five signals and why case_type is
+    // not one of them.
+    { id: "inv_report", label: "Investigation report", count: null, always: investigating },
     { id: "tasks", label: "Tasks", count: openTasks.length || null, always: true },
     { id: "people", label: "Participants & roles", count: participants.length || null, always: true },
     { id: "information", label: "Case information", count: null, always: hasCaseInformation },
@@ -164,6 +239,9 @@ const LEGACY_DESTINATION = Object.freeze({
   information: "information",
   themes: "themes",
   exposure: "exposure",
+  // B3.2-0 — so a deep link to ?tab=inv_report resolves rather than falling
+  // back to the default destination.
+  inv_report: "inv_report",
 });
 
 export function destinationForLegacyTab(id) {

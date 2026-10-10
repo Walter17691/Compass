@@ -56,6 +56,7 @@ export const REPORT_VERSION_GATEWAY_FAILURE = Object.freeze({
   NO_ORG: 'no_org',
   QUERY_FAILED: 'query_failed',
   TABLE_ABSENT: 'table_absent',
+  NO_CASE: 'no_case',
 });
 
 const VERSIONS_TABLE = 'investigation_report_versions';
@@ -159,6 +160,83 @@ export async function fetchDsarReportVersions(client, { orgId } = {}) {
     return { ok: true, versions, droppedRows: rawVersions.length - versions.length };
   } catch (e) {
     console.error('Could not load investigation report versions for the subject access request:', e?.message || e);
+    return { ok: false, reason: REPORT_VERSION_GATEWAY_FAILURE.QUERY_FAILED };
+  }
+}
+
+// ── B3.2-0 — THE CASE-SCOPED READ ─────────────────────────────────────────
+//
+// The DSAR read above is org-wide by necessity: a subject access request
+// spans every case. A case workspace is not, and must not inherit that
+// scope — pulling every saved report body in the organisation into a
+// browser to render one case's history is exactly the standing exposure
+// this module's header argues against.
+//
+// So this is a SECOND read on the same choke point rather than a reuse of
+// the first: same module, same ordinary authenticated client, same RLS,
+// same ok/reason shape, same rule that a failed read is reported rather
+// than mistaken for an empty one.
+//
+// THE BODY IS NOT SELECTED. B3.2-0 shows which versions exist and which is
+// adopted; it does not render their text. Not fetching what is not shown is
+// a smaller exposure than fetching it and choosing not to render — the same
+// argument meetingTableGateway's DISCOVERY_COLUMNS makes — and it means a
+// future rendering mistake cannot leak wording that never left the database.
+// created_by and adopted_by stay unselected for the same reason as above.
+const CASE_COLUMNS = [
+  'id', 'case_id', 'version_no', 'source', 'created_at', 'author_kind',
+  'adopted_at', 'adoption_basis', 'is_current', 'superseded_at',
+].join(', ');
+
+function caseVersionRowToObject(row) {
+  if (!row || typeof row !== 'object') return null;
+  if (!row.id) return null;
+  return {
+    id: row.id,
+    caseId: row.case_id,
+    versionNo: row.version_no ?? null,
+    source: row.source || null,
+    createdAt: row.created_at || null,
+    authorKind: row.author_kind || null,
+    adoptedAt: row.adopted_at || null,
+    adoptionBasis: row.adoption_basis || null,
+    isCurrent: !!row.is_current,
+    supersededAt: row.superseded_at || null,
+  };
+}
+
+/**
+ * Every saved report version for ONE case that the caller may read.
+ *
+ * Returns `{ ok: true, versions, droppedRows }` or `{ ok: false, reason }`.
+ * Paginated for the same reason every other read here is: a capped page comes
+ * back as an ordinary success, and a short history that looks complete is the
+ * failure mode worth engineering against.
+ */
+export async function fetchCaseReportVersions(client, { caseId } = {}) {
+  if (!client) return { ok: false, reason: REPORT_VERSION_GATEWAY_FAILURE.NO_CLIENT };
+  if (typeof caseId !== 'string' || caseId.trim() === '') {
+    return { ok: false, reason: REPORT_VERSION_GATEWAY_FAILURE.NO_CASE };
+  }
+  try {
+    const { data, error } = await fetchAllPages((from, to) => client
+      .from(VERSIONS_TABLE)
+      .select(CASE_COLUMNS)
+      .eq('case_id', caseId)
+      .order('version_no', { ascending: true })
+      .range(from, to));
+    if (error) {
+      if (error.code === UNDEFINED_TABLE) {
+        return { ok: false, reason: REPORT_VERSION_GATEWAY_FAILURE.TABLE_ABSENT };
+      }
+      console.error('Could not load the investigation report history for this case:', error.message);
+      return { ok: false, reason: REPORT_VERSION_GATEWAY_FAILURE.QUERY_FAILED };
+    }
+    const raw = Array.isArray(data) ? data : [];
+    const versions = raw.map(caseVersionRowToObject).filter(Boolean);
+    return { ok: true, versions, droppedRows: raw.length - versions.length };
+  } catch (e) {
+    console.error('Could not load the investigation report history for this case:', e?.message || e);
     return { ok: false, reason: REPORT_VERSION_GATEWAY_FAILURE.QUERY_FAILED };
   }
 }
