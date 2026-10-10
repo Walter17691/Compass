@@ -214,13 +214,15 @@ describe('B3.4 release safety — this candidate reads, and only reads', () => {
     const mod = await vi.importActual('../lib/reportVersionGateway');
     const exported = Object.keys(mod).sort();
     // B3.2-0 added fetchCaseReportVersions — a second READ on the same choke
-    // point, case-scoped rather than org-scoped, selecting neither the report
-    // body nor the internal actors. Listing the exports exactly is the point:
-    // a new export here has to be a conscious act, and this assertion is what
-    // makes it one.
+    // point, case-scoped rather than org-scoped. B3.2-1 added
+    // fetchReportVersionBody, a third read for the text of ONE chosen
+    // version, and put its WRITE in src/lib/reportDraftGateway.js rather than
+    // here. Listing the exports exactly is the point: a new export here has
+    // to be a conscious act, and this assertion is what makes it one.
     expect(exported).toEqual([
       'REPORT_VERSION_GATEWAY_FAILURE', 'REPORT_VERSION_STATE',
       'classifyReportVersion', 'fetchCaseReportVersions', 'fetchDsarReportVersions',
+      'fetchReportVersionBody',
     ]);
     expect(exported.some(n => /insert|save|create|adopt|update|delete/i.test(n))).toBe(false);
   });

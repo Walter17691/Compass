@@ -78,7 +78,13 @@ function Lifecycle({ steps, activeId }) {
   );
 }
 
-export function InvestigationReportTab({ model, fmtDate = (d) => d || "" }) {
+/**
+ * `showHistory` is false when the B3.2-1 editor is rendered above this panel
+ * and carries its own "Saved versions" list with author and timestamp on each
+ * row. Suppressing it here rather than deleting it keeps this panel complete
+ * on its own for every viewer who gets no editor.
+ */
+export function InvestigationReportTab({ model, fmtDate = (d) => d || "", showHistory = true }) {
   if (!model) {
     return (
       <div style={card}>
@@ -238,6 +244,7 @@ export function InvestigationReportTab({ model, fmtDate = (d) => d || "" }) {
       )}
 
       {/* ── Report history ───────────────────────────────────────────── */}
+      {showHistory && (
       <div style={card}>
         <h3 style={heading}>Report history</h3>
         {model.versionsLoading ? (
@@ -273,6 +280,7 @@ export function InvestigationReportTab({ model, fmtDate = (d) => d || "" }) {
           ))
         )}
       </div>
+      )}
     </div>
   );
 }

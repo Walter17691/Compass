@@ -12890,6 +12890,10 @@ Please produce:
             createCaseTask, caseSignals, changeSignalStatus, toggleCaseTaskDone, setShowHandoffModal,
             setShowAppealOfficerModal,
             generateInvestigationPlan, investigationPlanLoading, promptDialog, audit,
+            // B3.2-1 — passed solely so the case workspace can ask the
+            // draft-save allow-list whether this organisation is activated.
+            // It is not an authority input; the database decides who may write.
+            orgId: org?.id || null,
           }}
           header={{
             showAppealInput, setShowAppealInput, appealText, setAppealText, recordAppealReceived, setShowReassignModal,

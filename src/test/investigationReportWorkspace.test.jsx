@@ -477,14 +477,24 @@ describe('B3.2-0 gateway — the case-scoped read is read-only and complete', ()
     expect(captured.some(([c]) => c === 'org_id')).toBe(false);
   });
 
-  it('never selects the report body or the internal actors', async () => {
+  it('never selects the report body, and still withholds adopted_by', async () => {
     const cols = [];
     const b = { select: c => { cols.push(c); return b; }, eq: () => b, order: () => b,
                 range: () => Promise.resolve({ data: [], error: null }) };
     await fetchCaseReportVersions({ from: () => b }, { caseId: 'c1' });
+    // The body is never pulled into a LIST read. B3.2-1 needs the text of one
+    // chosen version and fetches exactly that, via fetchReportVersionBody.
     expect(cols[0]).not.toMatch(/\bbody\b/);
-    expect(cols[0]).not.toMatch(/created_by/);
+    // Nothing in B3.2-1 adopts anything, so no screen needs the adopter.
     expect(cols[0]).not.toMatch(/adopted_by/);
+    // created_by IS now selected, and that is a deliberate reversal of the
+    // B3.2-0 decision. B3.2-0 withheld it because nothing displayed it;
+    // B3.2-1 displays it, because an immutable version history whose rows do
+    // not say who wrote them is not an audit trail — and "version 3, 14:02"
+    // with no author is exactly the ambiguity two investigators working the
+    // same case need resolved. The DSAR read is unchanged and still withholds
+    // internal actors; that is asserted separately in reportVersionsDsar.
+    expect(cols[0]).toMatch(/created_by/);
     // CONTROL: it does select what it needs, so the assertions above are not
     // passing against an empty column list.
     expect(cols[0]).toMatch(/version_no/);
@@ -516,9 +526,20 @@ describe('B3.2-0 gateway — the case-scoped read is read-only and complete', ()
 
   it('exposes NO write of any kind', async () => {
     const mod = await import('../lib/reportVersionGateway.js');
+    // B3.2-1 added fetchReportVersionBody — a THIRD read on the same choke
+    // point, for the text of one chosen version. The write that B3.2-1 needed
+    // went into src/lib/reportDraftGateway.js instead of here, precisely so
+    // this assertion keeps meaning what it says rather than being relaxed the
+    // first time it fired.
     expect(Object.keys(mod).sort()).toEqual([
       'REPORT_VERSION_GATEWAY_FAILURE', 'REPORT_VERSION_STATE',
       'classifyReportVersion', 'fetchCaseReportVersions', 'fetchDsarReportVersions',
+      'fetchReportVersionBody',
     ]);
+    // And the property behind the list, asserted directly so that adding an
+    // export cannot smuggle in a verb: every export is a read or a constant.
+    for (const name of Object.keys(mod)) {
+      expect(name, `${name} looks like a write`).not.toMatch(/save|insert|update|delete|upsert|write|adopt|submit/i);
+    }
   });
 });

@@ -25,8 +25,16 @@ import { evaluateAutomationRules } from '../lib/automationRules';
 import { CaseInformationPanel } from '../components/caseTabs/CaseInformationPanel';
 import { TribunalExposurePanel } from '../components/caseTabs/TribunalExposurePanel';
 import { InvestigationReportTab } from '../components/caseTabs/InvestigationReportTab';
+import { InvestigationReportEditor } from '../components/caseTabs/InvestigationReportEditor';
 import { buildReportWorkspace } from '../lib/investigationReportWorkspace';
-import { fetchCaseReportVersions } from '../lib/reportVersionGateway';
+import { fetchCaseReportVersions, fetchReportVersionBody } from '../lib/reportVersionGateway';
+import { isReportDraftSaveEnabled } from '../lib/reportDraftActivation';
+import { saveReportDraft, DRAFT_SAVE_RESULT } from '../lib/reportDraftGateway';
+import {
+  createDraftSession, commitLive, beginSave, applySaveResult, confirmRebase,
+  conflictLatestLoaded, conflictUnavailable, conflictBodyLoading, conflictBodyLoaded,
+  conflictBodyUnavailable, hasUnsavedChanges, READ_ONLY_REASON, DRAFT_STATE,
+} from '../lib/reportDraftSession';
 import { supabase } from '../supabase';
 import { CompassAnalysisPanel } from '../components/caseTabs/CompassAnalysisPanel';
 import { ApprovalsPanel } from '../components/ApprovalsPanel';
@@ -108,7 +116,14 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
     createCaseTask, caseSignals, changeSignalStatus, toggleCaseTaskDone, setShowHandoffModal,
     setShowAppealOfficerModal,
     generateInvestigationPlan, investigationPlanLoading, promptDialog, audit,
+    orgId,
   } = shell;
+  // orgId (above) is read for ONE purpose: asking the B3.2-1 draft-save
+  // allow-list whether this tenant is activated. It is not an authority
+  // input — the database decides who may write a report version. The comment
+  // sits outside the destructuring block on purpose: meetingRowOpensReview's
+  // prop-group guard extracts shell keys with a regex over that block's raw
+  // text, so prose containing a comma inside it registers a word as a key.
   const {
     showAppealInput, setShowAppealInput, appealText, setAppealText, recordAppealReceived, setShowReassignModal,
     setShowAssignInvestigatorModal, setShowOutcomeModal, letterOutput,
@@ -223,6 +238,25 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
     });
     return () => { live = false; };
   }, [activeCaseId]);
+
+  // ── B3.2-1 — THE DRAFT SESSION ─────────────────────────────────────────
+  //
+  // Kept as a MAP keyed by case, so an unsaved draft survives switching
+  // destinations and coming back. That is not a convenience: a draft that
+  // evaporated because the investigator looked at the evidence tab would be
+  // exactly the silent loss this slice exists to prevent.
+  //
+  // THE SESSION IS DERIVED, NOT SYNCHRONISED. An earlier shape created it in
+  // an effect and tripped react-hooks/set-state-in-effect — correctly, and
+  // the rule was pointing at a real design problem rather than a style
+  // preference. createDraftSession is pure, so a case with no stored session
+  // simply gets a fresh one computed during render, and the map is written
+  // only when the investigator actually edits or saves. No effect, no
+  // cascading render, and no window in which the session disagrees with the
+  // history it was built from.
+  const [draftSessions, setDraftSessions] = useState({});
+  const [draftBusyVersionId, setDraftBusyVersionId] = useState(null);
+
   if(!cs) {
     // Phase 7.5B (P0 polish) — casesLoading distinguishes "the org's
     // cases genuinely haven't loaded yet" (a direct nav/reload/bookmark
@@ -507,6 +541,190 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
     versionsLoading: !reportVersionsLoaded,
   });
 
+  // The session for THIS case: the stored one if the investigator has touched
+  // it, otherwise a fresh one built from the history that has just loaded.
+  // Null while the history is still in flight, because the base version IS
+  // the concurrency token and a session that does not know its base cannot
+  // safely save — defaulting it to 0 would be a claim that the case has no
+  // versions, made before looking.
+  const draftInvestigatorAccess = (caseAccess || []).find(a => a && a.caseId === cs.id
+    && a.userId === currentUser?.user_id && a.role === 'investigator');
+  const draftSaveActivated = isReportDraftSaveEnabled(orgId);
+  const draftHistoryUnreadable = reportVersionsLoaded && !!reportVersionState.unreadable;
+  const draftLatestVersion = reportVersionsLoaded
+    ? reportVersionState.versions.reduce((m, v) => Math.max(m, v.versionNo ?? 0), 0)
+    : 0;
+  const draftSession = !reportVersionsLoaded ? null : (draftSessions[cs.id] || createDraftSession({
+    caseId: cs.id,
+    baseVersion: draftLatestVersion,
+    // Three independent conditions. Activation is listed first because it is
+    // the one that is false for every organisation in production today.
+    canSave: draftSaveActivated && (!!draftInvestigatorAccess || !!isHR) && !draftHistoryUnreadable,
+    readOnlyReason: !draftSaveActivated
+      ? READ_ONLY_REASON.NOT_ACTIVATED
+      : draftHistoryUnreadable
+        ? READ_ONLY_REASON.HISTORY_UNREADABLE
+        : READ_ONLY_REASON.NO_AUTHORITY,
+    // HR who is not this case's investigator must say why. The database
+    // enforces it regardless; this only makes the field appear.
+    requiresHrReason: !draftInvestigatorAccess && !!isHR,
+  }));
+
+  // ── B3.2-1 — THE EDITOR'S HANDLERS ─────────────────────────────────────
+  //
+  // Plain functions rather than useCallback: they sit below an early return,
+  // and every one is an event handler whose identity does not gate a render.
+  //
+  // Each state transition goes through reportDraftSession.js, which is where
+  // the rules about losing text and reusing request ids live. Nothing here
+  // decides any of that; this only plumbs the client and the toast.
+  //
+  // EVERY WRITE IS KEYED BY AN EXPLICIT caseId, never by `cs.id` read at the
+  // time a promise settles. A save or a commit that lands after the user has
+  // moved to another case must write into the session it belongs to, and the
+  // only way to guarantee that is to carry the identity through.
+  const reloadReportVersions = () => {
+    fetchCaseReportVersions(supabase, { caseId: cs.id }).then(r => {
+      setReportVersionState(r.ok
+        ? { caseId: cs.id, versions: r.versions, unreadable: (r.droppedRows || 0) > 0 }
+        : { caseId: cs.id, versions: [], unreadable: true });
+    });
+  };
+
+  const patchDraft = (caseId, fn) => setDraftSessions(prev => {
+    const current = prev[caseId] || (caseId === cs.id ? draftSession : null);
+    if (!current) return prev;
+    const next = fn(current);
+    return next === current ? prev : { ...prev, [caseId]: next };
+  });
+
+  /** Take the editor's live text. Called on blur and on unmount. */
+  const commitDraftLive = (caseId, live) => patchDraft(caseId, cur => commitLive(cur, live));
+
+  // A real uuid or nothing. The column is a uuid and the identifier is the
+  // only thing standing between a retry and a duplicate version, so a
+  // home-made fallback would be worse than refusing to save.
+  const newDraftRequestId = () => {
+    try { return globalThis.crypto?.randomUUID?.() || null; } catch { return null; }
+  };
+
+  /**
+   * On a stale save, find out WHAT was saved before offering any choice.
+   *
+   * Through the same authorised, case-scoped, RLS-bound gateway the history
+   * uses — not a widened read and not the service role. A failed or
+   * partially-dropped read FAILS CLOSED: the conflict is marked unavailable,
+   * no confirmation is offered, and the local draft is untouched.
+   */
+  const resolveDraftConflict = (caseId) => {
+    fetchCaseReportVersions(supabase, { caseId }).then(r => {
+      const dropped = (r.droppedRows || 0) > 0;
+      if (!r.ok || dropped || !Array.isArray(r.versions) || r.versions.length === 0) {
+        patchDraft(caseId, conflictUnavailable);
+        if (caseId === cs.id) {
+          setReportVersionState({ caseId, versions: r.ok && !dropped ? r.versions : [], unreadable: !r.ok || dropped });
+        }
+        return;
+      }
+      const latest = r.versions.reduce((a, v) => ((v.versionNo ?? -1) > (a?.versionNo ?? -1) ? v : a), null);
+      patchDraft(caseId, cur => conflictLatestLoaded(cur, latest));
+      if (caseId === cs.id) setReportVersionState({ caseId, versions: r.versions, unreadable: false });
+    });
+  };
+
+  /** Send one save. Shared by the ordinary path and the conflict confirmation. */
+  const startDraftSave = (caseId, sessionToSave) => {
+    const requestId = newDraftRequestId();
+    const started = beginSave(sessionToSave, { newRequestId: requestId });
+    setDraftSessions(prev => ({ ...prev, [caseId]: started.session }));
+    if (!started.request) {
+      // Either HR has not given a reason yet — the session now says so — or
+      // this browser cannot mint an identifier.
+      if (requestId === null) {
+        showToast?.('Compass cannot save a draft in this browser because it cannot generate a request identifier. Your text is still here.');
+      }
+      return;
+    }
+    saveReportDraft({ supabase, ...started.request }).then(outcome => {
+      setDraftSessions(prev => {
+        const cur = prev[caseId];
+        return cur ? { ...prev, [caseId]: applySaveResult(cur, outcome) } : prev;
+      });
+      if (outcome.result === DRAFT_SAVE_RESULT.OK) {
+        reloadReportVersions();
+        showToast?.(`Report version ${outcome.version?.versionNo ?? ''} saved`.trim());
+        return;
+      }
+      // The base was out of date. Open the review rather than offering a
+      // button; the database is the thing that revalidated it.
+      if (outcome.result === DRAFT_SAVE_RESULT.STALE) resolveDraftConflict(caseId);
+    });
+  };
+
+  /**
+   * Save what is on screen.
+   *
+   * `live` is handed over by the editor, so the bytes sent are the bytes the
+   * investigator could see when they pressed the button. Committed first, in
+   * the same synchronous step, with no dependence on a blur having fired.
+   */
+  const onDraftSave = (caseId, live) => {
+    const base = draftSessions[caseId] || (caseId === cs.id ? draftSession : null);
+    if (!base) return;
+    startDraftSave(caseId, commitLive(base, live));
+  };
+
+  /** The explicit confirmation at the end of a conflict review. */
+  const onDraftConfirmAndSave = (caseId, live) => {
+    const base = draftSessions[caseId] || (caseId === cs.id ? draftSession : null);
+    if (!base) return;
+    const rebased = confirmRebase(commitLive(base, live));
+    // confirmRebase returns the session unchanged when the latest version is
+    // not known, which is the fail-closed path. Nothing is sent.
+    if (!Number.isInteger(rebased.baseVersion) || rebased.state === DRAFT_STATE.STALE) return;
+    startDraftSave(caseId, rebased);
+  };
+
+  /** Let the investigator read the version that got in first. */
+  const onDraftReviewLatestBody = () => {
+    const caseId = cs.id;
+    const cur = draftSessions[caseId] || draftSession;
+    const versionId = cur?.conflict?.latest?.id;
+    if (!versionId) return;
+    patchDraft(caseId, conflictBodyLoading);
+    fetchReportVersionBody(supabase, { versionId, caseId }).then(r => {
+      patchDraft(caseId, prev => (r.ok ? conflictBodyLoaded(prev, r.body) : conflictBodyUnavailable(prev)));
+    });
+  };
+
+  const onDraftContinueFrom = (v) => {
+    if (!v?.id || hasUnsavedChanges(draftSession)) return;
+    const caseId = cs.id;
+    setDraftBusyVersionId(v.id);
+    fetchReportVersionBody(supabase, { versionId: v.id, caseId }).then(r => {
+      setDraftBusyVersionId(null);
+      if (!r.ok) {
+        showToast?.('Compass could not open that version. Nothing in your editor has changed.');
+        return;
+      }
+      patchDraft(caseId, prev => createDraftSession({
+        caseId,
+        // The base stays the LATEST version, not the one being opened.
+        // Saving appends after whatever exists; the base is a statement about
+        // what the editor knows is there, not about which text was loaded.
+        baseVersion: prev.baseVersion,
+        body: r.body,
+        canSave: prev.canSave,
+        readOnlyReason: prev.readOnlyReason,
+        requiresHrReason: prev.requiresHrReason,
+      }));
+    });
+  };
+
+  const authorNameForVersion = (userId) => (userId
+    ? ((orgMembers || []).find(m => m && m.user_id === userId)?.name || null)
+    : null);
+
   const workspaceDestinations = caseWorkspaceDestinations({
     cs,
     allegations: caseAllegations,
@@ -526,10 +744,34 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
     // B3.2-0 — the investigation-report destination appears only where the
     // case is actually investigating. caseAccess carries the investigator
     // assignment; the version flag covers a case whose only signal is a saved
-    // report version. None exist in production yet, so today that term changes
-    // nothing — but the rule has to be right before the first one does.
+    // report version.
     caseAccess,
-    hasReportVersion: reportVersionsLoaded && reportVersionState.versions.length > 0,
+    // ── B3.2-1 — THE ASYNCHRONOUS VERSION-ONLY VISIBILITY, RESOLVED ───────
+    //
+    // The hazard: a case whose ONLY investigation signal is a saved version
+    // cannot be known to have one until an async read lands, so the nav chip
+    // would appear late. Three things close it, and the first is the one that
+    // matters most.
+    //
+    // (1) IT CANNOT ARISE THROUGH THIS UI. Saving requires the editor, the
+    //     editor requires the destination, and the destination requires a
+    //     SYNCHRONOUS signal — overwhelmingly the investigator's own
+    //     case_access grant. So every version this product can create is
+    //     created on a case that already showed the destination without
+    //     needing the read. The version term is a backstop, not the path.
+    //
+    // (2) IT CANNOT REGRESS WITHIN A SESSION. `savedThisSession` is a fact
+    //     the authoritative RPC returned, not a guess, so a save keeps the
+    //     destination present even before the history reload lands.
+    //
+    // (3) AN UNRESOLVED READ IS NEVER READ AS "NONE". While the read is in
+    //     flight this term is false, which is indistinguishable from absent —
+    //     so the PANEL carries versionsLoading and says it is still checking
+    //     rather than claiming an empty history. And the panel is rendered
+    //     from activeDestination, not from this list, so a deep link to
+    //     ?tab=inv_report resolves whether or not the chip is present yet.
+    hasReportVersion: (reportVersionsLoaded && reportVersionState.versions.length > 0)
+      || !!draftSession?.savedThisSession,
   });
   // activeTab still carries the value every existing deep link sets, translated
   // into the destination vocabulary so no saved link breaks.
@@ -1691,7 +1933,33 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
             <ThemesTab cs={cs} organisationThemes={themesTab.organisationThemes} caseThemes={themesTab.caseThemes} suggestions={themesTab.themeSuggestions?.[cs.id]} suggesting={!!themesTab.themeSuggestionLoading?.[cs.id]} isHR={isHR} onSuggest={themesTab.onSuggestThemes} onConfirmSuggestion={themesTab.onConfirmThemeSuggestion} onDismissSuggestion={themesTab.onDismissThemeSuggestion} onAssignExisting={themesTab.onAssignExistingTheme} onRemove={themesTab.onRemoveTheme}/>
             ),
                       inv_report: (
-            <InvestigationReportTab model={reportWorkspace} fmtDate={fmtDate}/>
+            // B3.2-1 — the editor leads, because the seven sections ARE the
+            // structure the investigator works through. The read-only
+            // workspace follows as the record they are writing about, with its
+            // own history suppressed when the editor shows one with authors.
+            <>
+              <InvestigationReportEditor
+                // Keyed by case, so the editor's live local text is created
+                // fresh per case and can never carry across to another.
+                key={cs.id}
+                session={draftSession}
+                versions={reportVersionsLoaded ? reportVersionState.versions : []}
+                versionsLoading={!reportVersionsLoaded}
+                versionsUnreadable={reportVersionsLoaded && reportVersionState.unreadable}
+                authorNameFor={authorNameForVersion}
+                fmtDate={fmtDate}
+                busyVersionId={draftBusyVersionId}
+                onCommitLive={commitDraftLive}
+                onSave={onDraftSave}
+                onReviewLatestBody={onDraftReviewLatestBody}
+                onConfirmAndSave={onDraftConfirmAndSave}
+                onContinueFrom={onDraftContinueFrom}
+              />
+              <InvestigationReportTab
+                model={reportWorkspace} fmtDate={fmtDate}
+                showHistory={!draftSession || draftSession.state === DRAFT_STATE.READ_ONLY}
+              />
+            </>
             ),
                       exposure: (
             <TribunalExposurePanel cs={cs} cases={cases} saveCases={saveCases}

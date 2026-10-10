@@ -57,6 +57,9 @@ export const REPORT_VERSION_GATEWAY_FAILURE = Object.freeze({
   QUERY_FAILED: 'query_failed',
   TABLE_ABSENT: 'table_absent',
   NO_CASE: 'no_case',
+  // B3.2-1 — fetchReportVersionBody only.
+  NO_VERSION: 'no_version',
+  NOT_FOUND: 'not_found',
 });
 
 const VERSIONS_TABLE = 'investigation_report_versions';
@@ -177,14 +180,28 @@ export async function fetchDsarReportVersions(client, { orgId } = {}) {
 // same ok/reason shape, same rule that a failed read is reported rather
 // than mistaken for an empty one.
 //
-// THE BODY IS NOT SELECTED. B3.2-0 shows which versions exist and which is
-// adopted; it does not render their text. Not fetching what is not shown is
-// a smaller exposure than fetching it and choosing not to render — the same
-// argument meetingTableGateway's DISCOVERY_COLUMNS makes — and it means a
-// future rendering mistake cannot leak wording that never left the database.
-// created_by and adopted_by stay unselected for the same reason as above.
+// THE BODY IS STILL NOT SELECTED HERE. B3.2-0 shows which versions exist and
+// which is adopted; B3.2-1 adds an editor, and an editor needs the text of ONE
+// version — the one the investigator chose to continue from — not the text of
+// all of them. Not fetching what is not shown is a smaller exposure than
+// fetching it and choosing not to render, the same argument
+// meetingTableGateway's DISCOVERY_COLUMNS makes, so the body is fetched on
+// demand by fetchReportVersionBody below rather than added to this list.
+//
+// created_by IS NOW SELECTED, and that is a reversal of the B3.2-0 decision
+// made on purpose. B3.2-0 withheld it because nothing displayed it, and
+// pulling an identifier into the browser purely to discard it is worse than
+// not asking. B3.2-1 displays it: an immutable version history whose entries
+// do not say who wrote them is not an audit trail, and "version 3, 14:02" with
+// no author is exactly the ambiguity two investigators working the same case
+// need resolved. It is the case's own assigned personnel, visible to a reader
+// the SELECT policy already admits, and the DSAR read above is unchanged —
+// the compiler still withholds internal actors.
+//
+// adopted_by stays unselected. Nothing in this slice adopts anything, so there
+// is no screen that needs it.
 const CASE_COLUMNS = [
-  'id', 'case_id', 'version_no', 'source', 'created_at', 'author_kind',
+  'id', 'case_id', 'version_no', 'source', 'created_at', 'created_by', 'author_kind',
   'adopted_at', 'adoption_basis', 'is_current', 'superseded_at',
 ].join(', ');
 
@@ -197,6 +214,7 @@ function caseVersionRowToObject(row) {
     versionNo: row.version_no ?? null,
     source: row.source || null,
     createdAt: row.created_at || null,
+    createdBy: row.created_by ?? null,
     authorKind: row.author_kind || null,
     adoptedAt: row.adopted_at || null,
     adoptionBasis: row.adoption_basis || null,
@@ -237,6 +255,58 @@ export async function fetchCaseReportVersions(client, { caseId } = {}) {
     return { ok: true, versions, droppedRows: raw.length - versions.length };
   } catch (e) {
     console.error('Could not load the investigation report history for this case:', e?.message || e);
+    return { ok: false, reason: REPORT_VERSION_GATEWAY_FAILURE.QUERY_FAILED };
+  }
+}
+
+// ── B3.2-1 — ONE VERSION'S TEXT, ON DEMAND ────────────────────────────────
+//
+// The history list above deliberately carries no bodies. The editor offers
+// "continue from this version", and that needs the text of exactly the one
+// version the investigator picked — so it is fetched at that moment and for
+// that row only, rather than widening the list read for a feature used once
+// per draft.
+//
+// SCOPED BY CASE AS WELL AS BY ID. RLS already confines this to versions the
+// caller may read, and the case scope adds nothing against a determined
+// caller. It is here against a different failure: a UI holding a stale version
+// id from a previously viewed case would otherwise load that case's report
+// text into this case's editor, and the investigator would save it as a
+// version of the wrong investigation. The filter makes that return nothing
+// instead.
+export async function fetchReportVersionBody(client, { versionId, caseId } = {}) {
+  if (!client) return { ok: false, reason: REPORT_VERSION_GATEWAY_FAILURE.NO_CLIENT };
+  if (typeof versionId !== 'string' || versionId.trim() === '') {
+    return { ok: false, reason: REPORT_VERSION_GATEWAY_FAILURE.NO_VERSION };
+  }
+  if (typeof caseId !== 'string' || caseId.trim() === '') {
+    return { ok: false, reason: REPORT_VERSION_GATEWAY_FAILURE.NO_CASE };
+  }
+  try {
+    const { data, error } = await client
+      .from(VERSIONS_TABLE)
+      .select('id, case_id, version_no, body')
+      .eq('id', versionId)
+      .eq('case_id', caseId)
+      .limit(1);
+    if (error) {
+      if (error.code === UNDEFINED_TABLE) {
+        return { ok: false, reason: REPORT_VERSION_GATEWAY_FAILURE.TABLE_ABSENT };
+      }
+      console.error('Could not load the text of that investigation report version:', error.message);
+      return { ok: false, reason: REPORT_VERSION_GATEWAY_FAILURE.QUERY_FAILED };
+    }
+    const row = Array.isArray(data) ? data[0] : data;
+    // Nothing came back. Either it does not exist, or RLS hid it, or the id
+    // belongs to another case. The caller is told "not found" and NOT handed
+    // an empty body, because an empty body would read as a version whose text
+    // is blank — and the editor would then offer to continue from nothing.
+    if (!row || !row.id || typeof row.body !== 'string') {
+      return { ok: false, reason: REPORT_VERSION_GATEWAY_FAILURE.NOT_FOUND };
+    }
+    return { ok: true, body: row.body, versionNo: row.version_no ?? null };
+  } catch (e) {
+    console.error('Could not load the text of that investigation report version:', e?.message || e);
     return { ok: false, reason: REPORT_VERSION_GATEWAY_FAILURE.QUERY_FAILED };
   }
 }
