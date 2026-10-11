@@ -24,8 +24,7 @@ import { computeCaseRisk } from '../lib/caseRisk';
 import { evaluateAutomationRules } from '../lib/automationRules';
 import { CaseInformationPanel } from '../components/caseTabs/CaseInformationPanel';
 import { TribunalExposurePanel } from '../components/caseTabs/TribunalExposurePanel';
-import { InvestigationReportTab } from '../components/caseTabs/InvestigationReportTab';
-import { InvestigationReportEditor } from '../components/caseTabs/InvestigationReportEditor';
+import { InvestigationReportWorkspacePanel } from '../components/caseTabs/InvestigationReportWorkspacePanel';
 import { buildReportWorkspace } from '../lib/investigationReportWorkspace';
 import { fetchCaseReportVersions, fetchReportVersionBody } from '../lib/reportVersionGateway';
 import { isReportDraftSaveEnabled } from '../lib/reportDraftActivation';
@@ -69,6 +68,7 @@ import { investigationChecklistTasks, INVESTIGATION_CHECKLIST_STEPS } from '../l
 import { investigationPlanTasks } from '../lib/investigationPlan';
 import { WhySourcesModal } from '../components/WhySourcesModal';
 import { InvestigatorChecklistView } from '../components/InvestigatorChecklistView';
+import { InvestigatorReportView } from '../components/InvestigatorReportView';
 import { NotetakerView } from '../components/NotetakerView';
 import { ActionMenu } from '../components/design/ActionMenu';
 import { FONT, COLOR, TYPE, RADIUS, BUTTON, CONTENT_MAX_WIDTH } from '../styles/tokens';
@@ -747,6 +747,36 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
     ? ((orgMembers || []).find(m => m && m.user_id === userId)?.name || null)
     : null);
 
+  // ── B3.2 — THE REPORT PANEL'S PROPS, ASSEMBLED ONCE ────────────────────
+  //
+  // Built HERE, above the assigned-investigator early return, because both
+  // routes to the report need the identical set: HR's `inv_report`
+  // destination further down, and InvestigatorReportView which returns
+  // before the destination map is ever built. Assembling it twice would be
+  // two chances to pass a stale session or forget the case key.
+  //
+  // Nothing new is computed. Every value already existed above this line —
+  // including reportVersionState, whose fetch effect is keyed on
+  // activeCaseId with no HR gate, so it has always run for the investigator
+  // too; the data was there before anything rendered it.
+  const reportPanelProps = {
+    caseId: cs.id,
+    session: draftSession,
+    versions: reportVersionsLoaded ? reportVersionState.versions : [],
+    versionsLoading: !reportVersionsLoaded,
+    versionsUnreadable: reportVersionsLoaded && reportVersionState.unreadable,
+    authorNameFor: authorNameForVersion,
+    fmtDate,
+    busyVersionId: draftBusyVersionId,
+    onCommitLive: commitDraftLive,
+    onSave: onDraftSave,
+    onReviewLatestBody: onDraftReviewLatestBody,
+    onConfirmAndSave: onDraftConfirmAndSave,
+    onContinueFrom: onDraftContinueFrom,
+    onSwitchMode: onDraftSwitchMode,
+    reportWorkspace,
+  };
+
   const workspaceDestinations = caseWorkspaceDestinations({
     cs,
     allegations: caseAllegations,
@@ -1198,10 +1228,41 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   const conclusionAuthors = (orgMembers||[]).filter(m =>
     caseAllegations.some(a => a.investigationConclusionBy === m.user_id));
 
+  // ── B3.2 — THE ASSIGNED INVESTIGATOR'S TWO VIEWS ───────────────────────
+  //
+  // The checklist stays their main guided experience; the report is one
+  // destination they step into and back out of. Not the HR tabbed
+  // workspace — that is a different product surface and stays HR's.
+  //
+  // `activeTab` is read, not re-derived: it is already initialised from the
+  // URL at the top of this component (destinationForLegacyTab(urlTab)),
+  // above this early return, so ?tab=inv_report ALREADY resolves into state
+  // for an investigator today — this branch simply never read it. That is
+  // the whole of the deep-link fix.
+  //
+  // Read rather than activeDestination, which validates against
+  // workspaceDestinations — the HR vocabulary an investigator never builds.
+  // Authority is not weakened by that: isAssignedInvestigator gates this
+  // entire branch, and it means this user holds the investigator grant on
+  // THIS case, which is exactly who may read its report.
+  if(isAssignedInvestigator && activeTab === 'inv_report') {
+    return (
+      <InvestigatorReportView
+        cs={cs}
+        setScreen={setScreen}
+        screens={screens}
+        onBackToChecklist={() => goToDestination(DEFAULT_DESTINATION)}
+        reportPanelProps={reportPanelProps}
+      />
+    );
+  }
+
   if(isAssignedInvestigator) {
     return (
       <InvestigatorChecklistView
         cs={cs}
+        onOpenReport={() => goToDestination('inv_report')}
+        reportVersionCount={reportVersionsLoaded ? reportVersionState.versions.length : 0}
         caseAllegations={caseAllegations}
         checklistTasks={checklistTasks}
         toggleCaseTaskDone={toggleCaseTaskDone}
@@ -1975,34 +2036,11 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
             <ThemesTab cs={cs} organisationThemes={themesTab.organisationThemes} caseThemes={themesTab.caseThemes} suggestions={themesTab.themeSuggestions?.[cs.id]} suggesting={!!themesTab.themeSuggestionLoading?.[cs.id]} isHR={isHR} onSuggest={themesTab.onSuggestThemes} onConfirmSuggestion={themesTab.onConfirmThemeSuggestion} onDismissSuggestion={themesTab.onDismissThemeSuggestion} onAssignExisting={themesTab.onAssignExistingTheme} onRemove={themesTab.onRemoveTheme}/>
             ),
                       inv_report: (
-            // B3.2-1 — the editor leads, because the seven sections ARE the
-            // structure the investigator works through. The read-only
-            // workspace follows as the record they are writing about, with its
-            // own history suppressed when the editor shows one with authors.
-            <>
-              <InvestigationReportEditor
-                // Keyed by case, so the editor's live local text is created
-                // fresh per case and can never carry across to another.
-                key={cs.id}
-                session={draftSession}
-                versions={reportVersionsLoaded ? reportVersionState.versions : []}
-                versionsLoading={!reportVersionsLoaded}
-                versionsUnreadable={reportVersionsLoaded && reportVersionState.unreadable}
-                authorNameFor={authorNameForVersion}
-                fmtDate={fmtDate}
-                busyVersionId={draftBusyVersionId}
-                onCommitLive={commitDraftLive}
-                onSave={onDraftSave}
-                onReviewLatestBody={onDraftReviewLatestBody}
-                onConfirmAndSave={onDraftConfirmAndSave}
-                onContinueFrom={onDraftContinueFrom}
-                onSwitchMode={onDraftSwitchMode}
-              />
-              <InvestigationReportTab
-                model={reportWorkspace} fmtDate={fmtDate}
-                showHistory={!draftSession || draftSession.state === DRAFT_STATE.READ_ONLY}
-              />
-            </>
+            // B3.2 — the same panel the assigned investigator reaches from
+            // their checklist. Composed once in
+            // InvestigationReportWorkspacePanel so HR and the investigator
+            // can never be shown different renderings of one report.
+            <InvestigationReportWorkspacePanel {...reportPanelProps} />
             ),
                       exposure: (
             <TribunalExposurePanel cs={cs} cases={cases} saveCases={saveCases}

@@ -226,9 +226,26 @@ describe('B3.2 — opening a saved version preserves the editing mode', () => {
 
   it('the screen offers a mode switch that goes through the session machine', () => {
     const v = view();
-    expect(v).toMatch(/onSwitchMode=\{onDraftSwitchMode\}/);
+    // B3.2 investigator navigation — this used to assert the JSX attribute
+    // `onSwitchMode={onDraftSwitchMode}` on an editor composed inline here.
+    // The editor now lives in InvestigationReportWorkspacePanel, shared by
+    // HR's destination and the assigned investigator's own view, so the
+    // handler is wired once into reportPanelProps instead. Same handler,
+    // same session machine, one less place to forget it — the assertion
+    // follows the wiring rather than the old syntax.
+    expect(v).toMatch(/onSwitchMode: onDraftSwitchMode/);
+    expect(v).toMatch(/const reportPanelProps = \{/);
+    expect(v).toMatch(/<InvestigationReportWorkspacePanel \{\.\.\.reportPanelProps\} \/>/);
     expect(v).toMatch(/switchMode\(commitLive\(cur, live\), nextMode\)/);
     // The live text is committed first, so a switch cannot drop keystrokes.
     expect(v).toMatch(/const onDraftSwitchMode = \(caseId, nextMode, live\)/);
+  });
+
+  it('the shared panel passes the mode switch through to the editor', () => {
+    // The half the screen can no longer show on its own: the panel is where
+    // the handler reaches the editor now, so that hop is asserted too.
+    const panel = readFileSync('src/components/caseTabs/InvestigationReportWorkspacePanel.jsx', 'utf8');
+    expect(panel).toMatch(/onSwitchMode=\{onSwitchMode\}/);
+    expect(panel).toMatch(/key=\{caseId\}/);
   });
 });

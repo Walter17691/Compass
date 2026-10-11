@@ -86,8 +86,19 @@ describe('B3.2-1 — the allow-list is actually consulted, and is the ONLY gate'
 
   it('the case workspace renders the editor', () => {
     const s = screenSrc();
-    expect(s).toMatch(/import \{ InvestigationReportEditor \}/);
-    expect(s).toMatch(/<InvestigationReportEditor/);
+    // B3.2 investigator navigation — the editor is no longer composed inline
+    // here. It moved into InvestigationReportWorkspacePanel so that HR's
+    // destination and the assigned investigator's own view (which returns
+    // from an early return, long before the destination map exists) cannot
+    // show different renderings of the same report. The workspace still
+    // renders the editor; it just does so through one shared component.
+    expect(s).toMatch(/import \{ InvestigationReportWorkspacePanel \}/);
+    expect(s).toMatch(/<InvestigationReportWorkspacePanel \{\.\.\.reportPanelProps\} \/>/);
+    const panel = readFileSync('src/components/caseTabs/InvestigationReportWorkspacePanel.jsx', 'utf8');
+    expect(panel).toMatch(/import \{ InvestigationReportEditor \}/);
+    expect(panel).toMatch(/<InvestigationReportEditor/);
+    // And the session the editor receives is still the one this screen owns.
+    expect(s).toMatch(/session: draftSession/);
   });
 
   it('and gates its save capability on this allow-list, not on anything local', () => {
@@ -112,10 +123,15 @@ describe('B3.2-1 — the allow-list is actually consulted, and is the ONLY gate'
     // The read-only workspace — matters, evidence, investigation meetings,
     // disputed notes, unresolved questions — still renders with the editor.
     // It is reference material, and nothing converts any of it into a finding.
-    expect(s).toMatch(/<InvestigationReportTab/);
-    expect(s).toMatch(/model=\{reportWorkspace\}/);
+    // B3.2 — composed in the shared panel now (see the editor test above).
+    // The screen still supplies the model; the panel still renders the tab
+    // beside the editor and still applies the same suppression rule.
+    expect(s).toMatch(/reportWorkspace,/);
+    const panel = readFileSync('src/components/caseTabs/InvestigationReportWorkspacePanel.jsx', 'utf8');
+    expect(panel).toMatch(/<InvestigationReportTab/);
+    expect(panel).toMatch(/model=\{reportWorkspace\}/);
     // Its history is suppressed only because the editor shows one with authors.
-    expect(s).toMatch(/showHistory=\{!draftSession \|\| draftSession\.state === DRAFT_STATE\.READ_ONLY\}/);
+    expect(panel).toMatch(/showHistory=\{!session \|\| session\.state === DRAFT_STATE\.READ_ONLY\}/);
   });
 
   it('the asynchronous version-only visibility is resolved before activation', () => {

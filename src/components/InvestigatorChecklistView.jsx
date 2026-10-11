@@ -68,7 +68,11 @@ export function InvestigatorChecklistView({ cs, caseAllegations, checklistTasks,
   // named by a conclusion on this case — not the org directory.
   canRecordNarrative = false, canRecordConclusion = false,
   onPatchIssue, onRecordConclusion, onSetEvidenceStance, onCreateIssue,
-  conclusionAuthors = [] }) {
+  conclusionAuthors = [],
+  // B3.2 — the report destination. Absent (the default) renders no card at
+  // all, so every existing caller and test keeps the exact seven-step view
+  // it had before.
+  onOpenReport = null, reportVersionCount = 0 }) {
   const evidence = cs.evidence || [];
   const stepFor = (label) => checklistTasks.find(t => t.name === label);
   const doneCount = checklistTasks.filter(t => t.status === "done").length;
@@ -203,11 +207,63 @@ export function InvestigatorChecklistView({ cs, caseAllegations, checklistTasks,
           />
         </StepCard>
 
+        {/* ── B3.2 — THE INVESTIGATION REPORT ──────────────────────────
+            Live UAT found the investigator could not reach the report
+            workspace at all: CaseViewScreen returns this view from an early
+            return, so the case workspace's "Investigation report"
+            destination — and ?tab=inv_report — resolved only for HR.
+
+            NOT AN EIGHTH STEP, DELIBERATELY. INVESTIGATION_CHECKLIST_STEPS
+            is a frozen seven-item constant whose `label`s are persisted
+            case_task names (see its own header comment). An eighth entry
+            would change .length — which drives "x of 7 steps complete" here
+            and checklistTotal in hrDelegatedWork.js — and would need a task
+            row seeded on every live investigation, moving HR's progress
+            denominator on cases that have not changed. A card costs none of
+            that, and follows the Investigation plan card below, which is
+            already a non-step section in this same view.
+
+            Between steps 6 and 7 because that is where it belongs in the
+            narrative: findings recorded, report written, then submitted.
+            It says nothing about whether saving is available — the editor
+            owns that sentence, and can tell "not activated" from "no
+            authority" from "history unreadable", which this card cannot. */}
+        {onOpenReport && (
+          <div style={{ background: COLOR.surface, border: `1px solid ${COLOR.border}`,
+                        borderRadius: RADIUS.card, padding: "18px 20px", marginTop: 8 }}>
+            <div style={{ ...TYPE.micro, color: COLOR.inkQuiet, letterSpacing: "0.5px",
+                          textTransform: "uppercase", marginBottom: 2 }}>Investigation report</div>
+            <div style={{ ...TYPE.metadata, color: COLOR.inkSoft, marginBottom: 10 }}>
+              Write up what you found, in your own words.
+            </div>
+            <div style={{ ...TYPE.metadata, color: COLOR.inkQuiet, marginBottom: 10 }}>
+              {reportVersionCount > 0
+                ? `${reportVersionCount} version${reportVersionCount === 1 ? "" : "s"} saved`
+                : "No version saved yet."}
+            </div>
+            <button onClick={onOpenReport} style={{ ...secondaryButton }}>
+              Open the investigation report
+            </button>
+          </div>
+        )}
+
         {/* Manager Enablement (Phase 4, MP10, §16) — this used to be an
             inert checkbox; onSubmitInvestigation runs the same
             attemptSubmitInvestigation gate (App.jsx) HR's own two
             trigger points use, so a not-yet-thorough investigation gets
-            the same Investigation Quality Check either side. */}
+            the same Investigation Quality Check either side.
+
+            B3.2 LIFECYCLE NOTE — UNCHANGED IN THIS RELEASE, AND THAT IS
+            DELIBERATE. This still runs the legacy route, which GENERATES a
+            report into cases.investigation_report and asks HR to review
+            that. It does not consult the saved-version store at all, so
+            once saving is activated an investigator could author version N
+            here and then have it silently bypassed by a generated one.
+            Harmless today (zero versions exist) and intentionally not fixed
+            here; see reportDraftActivation.js, where a regression test now
+            refuses activation while this remains true. The intended
+            lifecycle is save draft → adopt → submit the adopted version →
+            independent HR decision, and nothing may short-circuit it. */}
         <StepCard index={6} step={INVESTIGATION_CHECKLIST_STEPS[6]} task={stepFor(INVESTIGATION_CHECKLIST_STEPS[6].label)} onToggle={toggleCaseTaskDone}>
           {stepFor(INVESTIGATION_CHECKLIST_STEPS[6].label)?.status === "done"
             ? <div style={{ ...TYPE.metadata, color: COLOR.green }}>Submitted to HR.</div>

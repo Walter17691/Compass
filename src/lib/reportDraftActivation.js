@@ -43,6 +43,39 @@
  * being staged.
  *
  * Adding an id is a reviewed, approved change to this line and nothing else.
+ *
+ * ── B3.2 — THERE IS AN UNRESOLVED LIFECYCLE COLLISION. READ THIS BEFORE
+ *    ADDING AN ID. ──
+ *
+ * Step 7 of the investigator checklist, "Submit findings to HR", still runs
+ * the legacy route: attemptSubmitInvestigation -> concludeInvestigation
+ * GENERATES a report into cases.investigation_report and asks HR to review
+ * that. It tests hasExistingReport(cs), which reads only that single legacy
+ * field and never consults the saved-version store. (Named only in
+ * reportVersionGateway.js, which a governance test keeps as the one module
+ * allowed to say it — hence the circumlocution here.)
+ *
+ * So the moment saving is activated, an investigator can author version N in
+ * the editor, press Submit, and have a freshly generated report reviewed in
+ * its place — their authored versions ignored, and not even mentioned in the
+ * "replace the existing report?" prompt. It is harmless only while zero
+ * versions exist, which is true today and stops being true with the first
+ * save by the first activated organisation.
+ *
+ * The intended lifecycle is:
+ *
+ *     save draft -> adopt report -> submit the ADOPTED version to HR Review
+ *                -> independent HR decision
+ *
+ * Submitting the latest draft directly is NOT the shortcut: an unadopted
+ * draft is work in progress, and adoption is the act that makes a version
+ * the report. The adoption RPC already exists in the database, unwired.
+ * (Not named here: a governance test reserves that name to its own module.)
+ *
+ * reportDraftActivationLifecycle.test.js fails if this list becomes
+ * non-empty while Step 7 still has no knowledge of the version store, so
+ * activation cannot proceed by accident. That test is the gate; this comment
+ * only explains it.
  */
 export const REPORT_DRAFT_SAVE_ORG_ALLOW_LIST = Object.freeze([]);
 
