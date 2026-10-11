@@ -179,6 +179,12 @@ describe('NEW-44 — the derived schema matches production', () => {
   const VERIFIED_LIVE_PUBLIC_TABLES_2026_10_02 = [
     'investigation_finding_revisions',
     'investigation_report_versions',
+    // B3 A3a, applied 2026-10-11. Measured, not proposed: pg_class was re-read
+    // after application (RLS enabled, exactly one SELECT policy, 0 rows), so it
+    // belongs in the VERIFIED reading rather than in PENDING_PRODUCTION_SCHEMA,
+    // which stays empty. Same route investigation_report_versions took after
+    // B3.1 was applied on 2026-10-09.
+    'organisation_report_settings',
     'allegations', 'api_rate_limits', 'audit_log', 'calendar_connections',
     'calendar_synced_events', 'case_access', 'case_signals', 'case_tasks', 'case_themes',
     'case_decisions',
@@ -225,7 +231,8 @@ describe('NEW-44 — the derived schema matches production', () => {
       + 'A name belongs there only after it has been applied to production and read back '
       + 'out of pg_class.',
     ).toEqual([]);
-    expect(VERIFIED_LIVE_PUBLIC_TABLES_2026_10_02).toHaveLength(46);
+    // 47 since B3 A3a added organisation_report_settings on 2026-10-11.
+    expect(VERIFIED_LIVE_PUBLIC_TABLES_2026_10_02).toHaveLength(47);
   });
 
   it('proves no live table was created outside the migration corpus', () => {

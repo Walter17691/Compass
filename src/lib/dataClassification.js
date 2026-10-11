@@ -179,6 +179,17 @@ export const RECORDED_RLS_2026_10_03 = Object.freeze({
   org_events: { rls: true, policies: 4 },
   org_members: { rls: true, policies: 3 },
   org_roles: { rls: true, policies: 4 },
+  // B3 A3a — applied to production 2026-10-11 and pg_class/pg_policy re-read
+  // afterwards, so this is a measured production fact and not a branch
+  // reading. One PERMISSIVE SELECT policy
+  // (organisation_report_settings_select_member, `org_id in (select
+  // my_org_ids())`). There is deliberately no INSERT, UPDATE or DELETE policy
+  // AND no table-level write grant for anon or authenticated: activation is
+  // written only by activate_versioned_report_authoring(), which is SECURITY
+  // DEFINER. The absent write grant is the load-bearing half — table
+  // privileges are checked before RLS and before any trigger, which is what
+  // defeated the forgeable-GUC design this table replaced.
+  organisation_report_settings: { rls: true, policies: 1 },
   organisation_themes: { rls: true, policies: 3 },
   organisations: { rls: true, policies: 3 },
   platform_admins: { rls: true, policies: 0 },
@@ -376,6 +387,9 @@ export const TABLE_CLASSIFICATION = {
     { exclusionReason: 'Keyed to auth.users, not to an org. Erasing it would strip the acting HR Director\'s own identity while they remain an org_member.' }),
   platform_admins: t('Compass operator grants (granted/revoked by, when).', P, {}, D.NOT_APPLICABLE,
     { exclusionReason: 'A tenant-triggered write here would be a privilege-boundary change, which platform-admin isolation forbids.' }),
+  organisation_report_settings: t('Records that Compass switched an organisation to versioned report authoring.', P, { org: 1 }, D.NOT_APPLICABLE,
+    { exclusionReason: 'Deleting it would silently revert the organisation to the legacy report regime — a configuration change only a Compass operator can make, via the SECURITY DEFINER activation RPC. CASCADEs from organisations, so it goes when the organisation genuinely goes. Not cascade-covered: that cascade runs from `cases`, which this handler deletes, whereas `organisations` survives it.',
+      dsarNote: 'Holds org_id, two timestamps, and activated_by — a COMPASS OPERATOR\'s auth.users id, on the same footing as platform_admins. No employee or case content: verified live 2026-10-11 to carry neither employee_id nor case_id.' }),
 
   // ── infrastructure ──
   api_rate_limits: t('Rate-limit counters, reachable only via check_rate_limit.', I, {}, D.INTERNAL_WITHHELD,

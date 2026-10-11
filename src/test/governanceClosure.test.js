@@ -241,7 +241,7 @@ describe('NEW-44 — customer-data tables cannot silently lose RLS', () => {
     expect(missing, `Classified but absent from the RLS reading: ${missing.join(', ')}`).toEqual([]);
   });
 
-  it('RLS is enabled on all 44 tables, as measured', () => {
+  it('RLS is enabled on all 47 tables, as measured', () => {
     // 43 before D4.2; case_decisions brings it to 44, with RLS enabled and two
     // policies (select inheriting case access, insert requiring decision authority).
     const enabled = Object.values(RECORDED_RLS_2026_10_03).filter(r => r.rls).length;
@@ -256,12 +256,17 @@ describe('NEW-44 — customer-data tables cannot silently lose RLS', () => {
     //
     // The split is KEPT rather than simplified away: it is what stops the next
     // proposed table being asserted as a production fact, and it should read
-    // 46 only for as long as nothing is pending.
-    expect(Object.keys(RECORDED_RLS_2026_10_03)).toHaveLength(46);
-    expect(enabled).toBe(46);
+    // the live count only for as long as nothing is pending.
+    //
+    // 47 since B3 A3a applied organisation_report_settings on 2026-10-11.
+    // pg_class and pg_policy were re-read after that application, so it enters
+    // as a production-verified reading and PENDING_PRODUCTION_SCHEMA stays
+    // empty — the same route investigation_report_versions took after B3.1.
+    expect(Object.keys(RECORDED_RLS_2026_10_03)).toHaveLength(47);
+    expect(enabled).toBe(47);
     const verified = Object.keys(RECORDED_RLS_2026_10_03)
       .filter(t => !PENDING_PRODUCTION_SCHEMA.includes(t));
-    expect(verified, 'production-verified RLS readings').toHaveLength(46);
+    expect(verified, 'production-verified RLS readings').toHaveLength(47);
     expect(RECORDED_RLS_2026_10_03.case_decisions).toEqual({ rls: true, policies: 2 });
     // IR-REPORT-01b/B2: one SELECT policy and one RESTRICTIVE INSERT
     // `with check (false)`. No UPDATE or DELETE policy exists, deliberately.
@@ -307,10 +312,12 @@ describe('NEW-44D — structural tenancy is derived from the corpus', () => {
     const { tables } = orgScopedShapes(corpus());
     // 37 org_id-bearing base tables measured live on 2026-10-03, plus
     // case_decisions from D4.2 = 38, + investigation_finding_revisions from
-    // IR-REPORT-01b/B2 = 39, + investigation_report_versions from B3.1 = 40.
+    // IR-REPORT-01b/B2 = 39, + investigation_report_versions from B3.1 = 40,
+    // + organisation_report_settings from B3 A3a (applied 2026-10-11) = 41,
+    // where org_id is the PRIMARY KEY rather than a plain column.
     // The parser is checked against production, not against another list in
     // this repository.
-    expect(tables).toHaveLength(40);
+    expect(tables).toHaveLength(41);
     for (const t of tables) expect(t.columns, `${t.name}`).toContain('org_id');
   });
 

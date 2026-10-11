@@ -199,6 +199,31 @@ export const INTENTIONALLY_EXCLUDED_TABLES = [
   // erasure gap, in a different inventory, and it is filed as its own
   // defect — see docs/release-1-defect-register.md.
   'team_invites',
+  // organisation_report_settings (B3 A3a, supabase/reporting_regime_foundation_
+  // 2026-10-11.sql) — one row per organisation recording that Compass switched
+  // it to versioned report authoring: org_id (the PRIMARY KEY),
+  // versioned_authoring_enabled_at, activated_at, and activated_by, which is a
+  // COMPASS OPERATOR's auth.users id, not an employee's. Verified against the
+  // live schema 2026-10-11: no case_id, no employee_id, no employee content of
+  // any kind.
+  //
+  // Excluded on the same contract as customer_contracts: its org_id FK to
+  // organisations is ON DELETE CASCADE, so it goes when the organisation
+  // genuinely goes, and `organisations` is itself deliberately spared.
+  //
+  // It is NOT cascade_covered, and the distinction is the whole point of that
+  // category: cascade_covered means a cascade from `cases`, which this handler
+  // DOES delete. This table cascades from `organisations`, which it does NOT —
+  // `cases.org_id -> organisations` is NO ACTION and the tenant row survives.
+  // Filing it as cascade_covered would claim an erasure that never happens.
+  //
+  // Nor should it be erased. Deleting the activation row would silently revert
+  // the organisation from versioned authoring back to the legacy regime, which
+  // is a deliberate configuration change made by a Compass operator through
+  // activate_versioned_report_authoring() — a privilege boundary a tenant
+  // action must not cross. "Delete all data" erases case and employee content;
+  // it does not reconfigure the product.
+  'organisation_report_settings',
 ];
 
 // ─────────────────────────────────────────────────────────────────────────
