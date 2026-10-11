@@ -40,6 +40,22 @@ import {
 } from './reportDraftComposer.js';
 import { DRAFT_SAVE_RESULT, isUncertainOutcome, describeDraftSaveOutcome } from './reportDraftGateway.js';
 
+/**
+ * How a report version was written. These two strings are the stored
+ * vocabulary: the saved version's authoring_mode column carries exactly these
+ * values and a CHECK constraint refuses anything else, so they are defined
+ * once here and never spelled out again.
+ *
+ * The table itself is deliberately not named here. reportVersionGateway.js is
+ * the only module permitted to name it, so that "who can touch the version
+ * store" stays answerable by reading one import list — a governance test
+ * enforces that, and it counts comments too.
+ */
+export const AUTHORING_MODE = Object.freeze({
+  STRUCTURED: 'structured_sections',
+  SINGLE: 'single_document',
+});
+
 export const DRAFT_STATE = Object.freeze({
   /** Saving is not available to this viewer. The report is still shown. */
   READ_ONLY: 'read_only',
@@ -87,28 +103,28 @@ export function createDraftSession({
   canSave = false,
   readOnlyReason = null,
   requiresHrReason = false,
-  preferRaw = false,
+  mode = AUTHORING_MODE.STRUCTURED,
 } = {}) {
   const startBody = typeof body === 'string' ? body : '';
   // CAN this text be shown as seven boxes without changing a byte? Empty text
   // trivially can; anything else has to survive decompose-then-recompose.
   const canBeStructured = startBody.trim() === '' ? true : bodyRoundTripsExactly(startBody);
-  // ── WHY THE MODE IS NOT INFERRED FROM CONTENT ALONE ────────────────────
+  // ── THE MODE IS STATED, NOT INFERRED ───────────────────────────────────
   //
-  // It used to be, and that was wrong in one direction. An investigator
-  // working on a legacy report is in RAW mode — one document, as they wrote
-  // it. If the text they end up with happens to match the structured shape
-  // (it begins with a Compass heading, uses only our headings, in order), the
-  // next open would decide it was a structured report and split it into
-  // boxes. No character was lost, but the author's single document silently
-  // became seven, which is the "do not silently redistribute" rule broken by
-  // a different route than the parser.
+  // It used to be read off the text every time a session opened, and that was
+  // wrong in one direction: a single document whose words happened to match
+  // the structured shape reopened as seven boxes, and the author's one
+  // document silently became seven. 0a6f359d narrowed that to a refresh by
+  // remembering the mode within a session; this removes the inference.
   //
-  // So the caller may say which mode the investigator is ALREADY in, and raw
-  // stays raw. Structure is still forced where the content cannot be shown
-  // any other way — a legacy report can only be raw — so the hint can keep
-  // someone in raw, never put them into structured against the text.
-  const useRaw = !!preferRaw || !canBeStructured;
+  // The caller states the mode — from the version's own authoring_mode
+  // column, or from the investigator's choice. Content still has a veto in
+  // ONE direction: text that cannot be shown as seven boxes without changing
+  // a byte is forced to single_document, because a legacy report has no
+  // honest structured rendering. Nothing is ever forced the other way.
+  const requested = mode === AUTHORING_MODE.SINGLE ? AUTHORING_MODE.SINGLE : AUTHORING_MODE.STRUCTURED;
+  const useRaw = requested === AUTHORING_MODE.SINGLE || !canBeStructured;
+  const effectiveMode = useRaw ? AUTHORING_MODE.SINGLE : AUTHORING_MODE.STRUCTURED;
   const parsed = useRaw ? null : parseReportBody(startBody);
   return Object.freeze({
     caseId,
@@ -116,6 +132,8 @@ export function createDraftSession({
     sections: useRaw ? emptyReportSections() : (parsed?.sections || emptyReportSections()),
     raw: useRaw ? startBody : '',
     rawMode: useRaw,
+    /** The stored vocabulary value this session would save. */
+    mode: effectiveMode,
     // What the server is known to hold for this base. Used to tell a genuine
     // edit from a reopened editor, so an untouched session is never DIRTY.
     savedBody: startBody,
@@ -285,6 +303,9 @@ export function beginSave(session, { newRequestId } = {}) {
     expectedBaseVersion: session.baseVersion,
     source: 'edited',
     hrReason: reason,
+    // Part of the request, so it is part of what makes a retry exact — the
+    // database digests it for the same reason.
+    authoringMode: session.mode,
   };
 
   // AN EXACT REPEAT REUSES THE ID; ANYTHING ELSE GETS A NEW ONE. Compared
@@ -296,7 +317,8 @@ export function beginSave(session, { newRequestId } = {}) {
     && p.body === candidate.body
     && p.expectedBaseVersion === candidate.expectedBaseVersion
     && p.source === candidate.source
-    && p.hrReason === candidate.hrReason;
+    && p.hrReason === candidate.hrReason
+    && p.authoringMode === candidate.authoringMode;
 
   const requestId = isExactRepeat ? p.requestId : newRequestId;
   if (typeof requestId !== 'string' || requestId.trim() === '') {
@@ -401,6 +423,64 @@ export function applySaveResult(session, outcome) {
     message,
     retryable: uncertain,
   });
+}
+
+// ── CHANGING HOW THE REPORT IS WRITTEN ────────────────────────────────────
+//
+// A deliberate act, never a side effect of typing. The text is carried across
+// byte-for-byte in both directions; what changes is which boxes it appears in.
+
+/**
+ * Could this draft be shown as seven sections without changing a byte?
+ *
+ * The UI needs the answer to decide between offering the switch and saying
+ * why it cannot. Structured sessions are trivially yes — they are already
+ * seven boxes.
+ */
+export function canSwitchToStructured(session) {
+  if (!session || session.state === DRAFT_STATE.READ_ONLY) return false;
+  if (!session.rawMode) return true;
+  const body = session.raw || '';
+  return body.trim() === '' ? true : bodyRoundTripsExactly(body);
+}
+
+/**
+ * What the seven boxes WOULD contain, so the investigator can be shown the
+ * split before agreeing to it. Returns null when the switch is unavailable.
+ */
+export function previewStructuredSplit(session) {
+  if (!canSwitchToStructured(session) || !session.rawMode) return null;
+  const parsed = parseReportBody(session.raw || '');
+  return parsed.exact ? parsed.sections : null;
+}
+
+/**
+ * Change the authoring mode, keeping every character.
+ *
+ *   structured -> single   always available. The document becomes exactly the
+ *                          text that would have been saved, in the same order.
+ *   single -> structured   only when the text round-trips. Refused otherwise
+ *                          by returning the session unchanged, so the caller
+ *                          cannot accidentally force a lossy split.
+ *
+ * The change takes effect on the NEXT save. Versions already stored keep the
+ * mode they recorded; nothing retroactively changes.
+ */
+export function switchMode(session, nextMode) {
+  if (!session || session.state === DRAFT_STATE.READ_ONLY) return session;
+  if (nextMode !== AUTHORING_MODE.STRUCTURED && nextMode !== AUTHORING_MODE.SINGLE) return session;
+  if (nextMode === session.mode) return session;
+
+  if (nextMode === AUTHORING_MODE.SINGLE) {
+    const asOneDocument = composeReportBody(session.sections);
+    const next = { ...session, mode: nextMode, rawMode: true, raw: asOneDocument, sections: emptyReportSections() };
+    return Object.freeze({ ...next, state: currentBody(next) !== (next.savedBody || '') ? DRAFT_STATE.DIRTY : DRAFT_STATE.CLEAN });
+  }
+
+  const sections = previewStructuredSplit(session);
+  if (!sections) return session;
+  const next = { ...session, mode: nextMode, rawMode: false, sections, raw: '' };
+  return Object.freeze({ ...next, state: currentBody(next) !== (next.savedBody || '') ? DRAFT_STATE.DIRTY : DRAFT_STATE.CLEAN });
 }
 
 // ── THE CONFLICT REVIEW ───────────────────────────────────────────────────

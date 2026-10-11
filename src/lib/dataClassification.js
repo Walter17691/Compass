@@ -309,7 +309,17 @@ export const TABLE_CLASSIFICATION = {
   investigation_report_versions: t(
     'Immutable saved versions of the investigation report: the report body, who saved it and '
     + 'when, and for adopted versions who adopted it, on what basis and — for an HR exception — '
-    + 'the written reason.', C,
+    + 'the written reason. Two columns are PRODUCTION METADATA rather than information about '
+    + 'the subject, and are assessed here rather than left undocumented. request_digest is a '
+    + 'SHA-256 over the whole save request, held so a retried save cannot create a second '
+    + 'version; it is derived from the body and is therefore pseudonymised personal data in '
+    + 'the strict sense, but it is one-way, is never rendered, and discloses nothing a subject '
+    + 'could act on — releasing a hash of their own report would inform nobody. authoring_mode '
+    + 'records whether a version was written as seven guided sections or as one document; it '
+    + 'describes the editor, not the person, and NULL means not recorded rather than a default. '
+    + 'NEITHER is selected by the DSAR read, so neither can reach a response package, and '
+    + 'neither is categorically excluded — both are withheld on this assessment, which a '
+    + 'reviewer can disagree with.', C,
     { org: 1, person: 1, case_: 1 }, D.INCLUDED,
     { dsarNote: 'B3.4 WIRED IT — the investigation report is a document ABOUT the subject, so '
         + 'superseded and adopted versions are disclosable personal data on the same footing as '

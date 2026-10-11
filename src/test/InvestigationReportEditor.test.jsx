@@ -1,15 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { InvestigationReportEditor } from '../components/caseTabs/InvestigationReportEditor.jsx';
 import {
   createDraftSession, editSections, beginSave, applySaveResult, DRAFT_STATE, READ_ONLY_REASON,
   conflictLatestLoaded, conflictUnavailable, conflictBodyLoaded, conflictBodyLoading,
-  conflictBodyUnavailable,
+  conflictBodyUnavailable, AUTHORING_MODE,
 } from '../lib/reportDraftSession.js';
 import { DRAFT_SAVE_RESULT } from '../lib/reportDraftGateway.js';
-import { REPORT_SECTIONS } from '../lib/reportDraftComposer.js';
+import { REPORT_SECTIONS, composeReportBody, emptyReportSections } from '../lib/reportDraftComposer.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // B3.2-1 — THE EDITOR SURFACE.
@@ -36,7 +36,7 @@ const fmtDate = (d) => (d ? d.slice(0, 10) : '');
 function renderEditor(props = {}) {
   const handlers = {
     onCommitLive: vi.fn(), onSave: vi.fn(), onReviewLatestBody: vi.fn(),
-    onConfirmAndSave: vi.fn(), onContinueFrom: vi.fn(),
+    onConfirmAndSave: vi.fn(), onContinueFrom: vi.fn(), onSwitchMode: vi.fn(),
   };
   const utils = render(
     <InvestigationReportEditor
@@ -721,5 +721,133 @@ describe('B3.2 — the heading warning is shown, accessible, and never blocking'
       caseId: CASE, baseVersion: 0, canSave: false, readOnlyReason: READ_ONLY_REASON.NOT_ACTIVATED,
     }) });
     expect(screen.queryByText(/MATCHES A COMPASS SECTION/i)).toBeNull();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// B3.2 — THE MODE CHOOSER.
+//
+// An explicit, visible, reversible choice — never a side effect of typing.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('B3.2 — how the report is written is chosen, not inferred', () => {
+  const structured = () => open({ mode: AUTHORING_MODE.STRUCTURED });
+  const single = (body = 'One document.') =>
+    createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body, mode: AUTHORING_MODE.SINGLE });
+
+  it('shows both options, with the current one selected', () => {
+    renderEditor({ session: structured() });
+    expect(screen.getByText('HOW THIS REPORT IS WRITTEN')).toBeTruthy();
+    const seven = screen.getByRole('radio', { name: 'Seven guided sections' });
+    const one = screen.getByRole('radio', { name: 'One document' });
+    expect(seven.checked).toBe(true);
+    expect(one.checked).toBe(false);
+  });
+
+  it('defaults a new draft to guided sections', () => {
+    renderEditor();
+    expect(screen.getByRole('radio', { name: 'Seven guided sections' }).checked).toBe(true);
+    expect(screen.queryAllByRole('textbox')).toHaveLength(REPORT_SECTIONS.length);
+  });
+
+  it('asks before turning seven sections into one document, and says nothing is rewritten', async () => {
+    const user = userEvent.setup();
+    const { onSwitchMode } = renderEditor({ session: editSections(structured(), { matters: 'Two matters.' }) });
+    await user.click(screen.getByRole('radio', { name: 'One document' }));
+    // Not applied yet — it asks first.
+    expect(onSwitchMode).not.toHaveBeenCalled();
+    expect(screen.getByText('Switch to one document?')).toBeTruthy();
+    expect(screen.getByText(/same order, with the same words/i)).toBeTruthy();
+    expect(screen.getByText(/Nothing is rewritten and nothing is removed/i)).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: /Switch to one document/i }));
+    expect(onSwitchMode).toHaveBeenCalledWith(CASE, AUTHORING_MODE.SINGLE, expect.anything());
+  });
+
+  it('can be cancelled, leaving the mode alone', async () => {
+    const user = userEvent.setup();
+    const { onSwitchMode } = renderEditor({ session: structured() });
+    await user.click(screen.getByRole('radio', { name: 'One document' }));
+    await user.click(screen.getByRole('button', { name: /Keep seven sections/i }));
+    expect(onSwitchMode).not.toHaveBeenCalled();
+    expect(screen.queryByText('Switch to one document?')).toBeNull();
+  });
+
+  it('PREVIEWS the split before turning one document into seven sections', async () => {
+    const user = userEvent.setup();
+    const body = composeReportBody({ ...emptyReportSections(), matters: 'Two matters.', summary: 'In short.' });
+    const { onSwitchMode } = renderEditor({ session: single(body) });
+
+    await user.click(screen.getByRole('radio', { name: 'Seven guided sections' }));
+    expect(screen.getByText('Switch to seven guided sections?')).toBeTruthy();
+    expect(screen.getByText(/Every word is kept/i)).toBeTruthy();
+    expect(screen.getByText(/exactly where each part would go/i)).toBeTruthy();
+    // The preview names every section and shows what would land in each.
+    expect(screen.getByText('Two matters.')).toBeTruthy();
+    expect(screen.getByText('In short.')).toBeTruthy();
+    expect(screen.getAllByText('nothing would go here').length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole('button', { name: /Split into seven sections/i }));
+    expect(onSwitchMode).toHaveBeenCalledWith(CASE, AUTHORING_MODE.STRUCTURED, expect.anything());
+  });
+
+  it('DISABLES the structured option, with a reason, when the text cannot be split losslessly', () => {
+    renderEditor({ session: single('INVESTIGATION REPORT\n\nNo headings at all.') });
+    expect(screen.getByRole('radio', { name: 'Seven guided sections' }).disabled).toBe(true);
+    expect(screen.getByText(/cannot split this text into the seven sections without changing where your words sit/i)).toBeTruthy();
+    expect(screen.getByText(/Nothing is lost/i)).toBeTruthy();
+  });
+
+  it('never switches mode because a heading was typed', async () => {
+    const user = userEvent.setup();
+    const { onSwitchMode } = renderEditor({ session: structured() });
+    const box = screen.getByLabelText(REPORT_SECTIONS[0].label);
+    await user.click(box);
+    await user.type(box, '## Overall summary');
+    // The collision warning fires…
+    expect(screen.getByText(/MATCHES A COMPASS SECTION/i)).toBeTruthy();
+    // …and the mode is untouched.
+    expect(onSwitchMode).not.toHaveBeenCalled();
+    expect(screen.getByRole('radio', { name: 'Seven guided sections' }).checked).toBe(true);
+  });
+
+  it('is absent on a read-only editor', () => {
+    renderEditor({ session: createDraftSession({
+      caseId: CASE, baseVersion: 0, canSave: false, readOnlyReason: READ_ONLY_REASON.NOT_ACTIVATED,
+    }) });
+    expect(screen.queryByText('HOW THIS REPORT IS WRITTEN')).toBeNull();
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
+  });
+});
+
+describe('B3.2 — the history says how each version was written', () => {
+  const v = (n, mode) => ({
+    id: `v${n}`, versionNo: n, createdAt: `2026-10-0${n}T09:00:00Z`, createdBy: 'user-1',
+    authorKind: 'user', adoptedAt: null, isCurrent: false, adoptionBasis: null,
+    supersededAt: null, authoringMode: mode,
+  });
+
+  // The chooser and the history legitimately use the same words, so these
+  // assertions are scoped to the Saved versions card rather than loosened.
+  const history = () => screen.getByText('Saved versions').closest('div');
+
+  it('labels each version, and says "not recorded" rather than guessing', () => {
+    renderEditor({ versions: [
+      v(1, null),
+      v(2, AUTHORING_MODE.STRUCTURED),
+      v(3, AUTHORING_MODE.SINGLE),
+    ] });
+    const h = within(history());
+    expect(h.getByText('Mode not recorded')).toBeTruthy();
+    expect(h.getByText('Seven sections')).toBeTruthy();
+    expect(h.getByText('One document')).toBeTruthy();
+  });
+
+  it('shows a mode on every row, so a transition is visible in the list', () => {
+    renderEditor({ versions: [v(1, AUTHORING_MODE.STRUCTURED), v(2, AUTHORING_MODE.SINGLE)] });
+    const h = within(history());
+    expect(h.getByText('Seven sections')).toBeTruthy();
+    expect(h.getByText('One document')).toBeTruthy();
+    expect(h.queryByText('Mode not recorded')).toBeNull();
   });
 });

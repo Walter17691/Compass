@@ -31,6 +31,8 @@ const good = {
   body: '## Overall summary\n\nx',
   requestId: 'bbbbbbbb-0000-0000-0000-000000000001',
   expectedBaseVersion: 0,
+  // B3.2 — every new version states how it was written. There is no default.
+  authoringMode: 'structured_sections',
 };
 
 const row = (over = {}) => ({
@@ -43,6 +45,7 @@ const row = (over = {}) => ({
   created_by: 'fa50f9fe-e666-473e-ae0b-c3b80ec2835e',
   author_kind: 'user',
   request_id: good.requestId,
+  authoring_mode: 'structured_sections',
   adopted_at: null,
   is_current: false,
   ...over,
@@ -60,7 +63,8 @@ describe('B3.2-1 — a successful save', () => {
     const [name, args] = c.rpc.mock.calls[0];
     expect(name).toBe(RPC);
     expect(Object.keys(args).sort()).toEqual([
-      'p_body', 'p_case_id', 'p_expected_base_version', 'p_hr_reason', 'p_request_id', 'p_source',
+      'p_authoring_mode', 'p_body', 'p_case_id', 'p_expected_base_version',
+      'p_hr_reason', 'p_request_id', 'p_source',
     ]);
     // version_no, created_by, created_at, author_kind, org_id and every
     // adoption column are the server's to decide.
@@ -267,5 +271,52 @@ describe('B3.2-1 — no message tells the investigator their work is gone', () =
 
   it('does not claim a stale save overwrote anything', () => {
     expect(describeDraftSaveOutcome(DRAFT_SAVE_RESULT.STALE)).toMatch(/has not been changed/i);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// B3.2 — AUTHORING MODE IS PART OF THE REQUEST.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('B3.2 — the gateway will not send a version that cannot say how it was written', () => {
+  it('sends the mode through untouched', async () => {
+    for (const mode of ['structured_sections', 'single_document']) {
+      const c = client({ data: row({ authoring_mode: mode }), error: null });
+      const out = await saveReportDraft({ supabase: c, ...good, authoringMode: mode });
+      expect(out.result, mode).toBe(DRAFT_SAVE_RESULT.OK);
+      expect(c.rpc.mock.calls[0][1].p_authoring_mode, mode).toBe(mode);
+      expect(out.version.authoringMode, mode).toBe(mode);
+    }
+  });
+
+  it('refuses locally rather than spending a request identifier on a client defect', async () => {
+    for (const bad of [undefined, null, '', '   ', 'freeform', 'STRUCTURED_SECTIONS', 7, {}]) {
+      const c = client({ data: row(), error: null });
+      const out = await saveReportDraft({ supabase: c, ...good, authoringMode: bad });
+      expect(out.result, JSON.stringify(bad)).toBe(DRAFT_SAVE_RESULT.INVALID);
+      expect(out.reason, JSON.stringify(bad)).toBe('no_authoring_mode');
+      expect(c.rpc, JSON.stringify(bad)).not.toHaveBeenCalled();
+    }
+  });
+
+  it('classifies the database refusals the RPC raises for a bad mode', async () => {
+    const missing = { code: '22023', message: 'A save request must state how the report was written — as seven guided sections, or as one document. Compass does not infer it.' };
+    const unknown = { code: '22023', message: 'Unknown authoring mode freeform' };
+    for (const e of [missing, unknown]) {
+      const out = await saveReportDraft({ supabase: client({ data: null, error: e }), ...good });
+      expect(out.result, e.message).toBe(DRAFT_SAVE_RESULT.INVALID);
+    }
+  });
+
+  it('classifies a replay that differs only in mode as a reused identifier, not a bad argument', async () => {
+    const e = { code: '22023', message: 'That save request identifier has already been used for a report written a different way. Start a new save.' };
+    const out = await saveReportDraft({ supabase: client({ data: null, error: e }), ...good });
+    expect(out.result).toBe(DRAFT_SAVE_RESULT.REQUEST_REUSED);
+  });
+
+  it('surfaces a null recorded mode as null rather than guessing', async () => {
+    const out = await saveReportDraft({ supabase: client({ data: row({ authoring_mode: null }), error: null }), ...good });
+    expect(out.result).toBe(DRAFT_SAVE_RESULT.OK);
+    expect(out.version.authoringMode).toBeNull();
   });
 });

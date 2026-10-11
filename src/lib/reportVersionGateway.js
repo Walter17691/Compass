@@ -200,9 +200,16 @@ export async function fetchDsarReportVersions(client, { orgId } = {}) {
 //
 // adopted_by stays unselected. Nothing in this slice adopts anything, so there
 // is no screen that needs it.
+//
+// authoring_mode joins the list for B3.2: the editor must open a version the
+// way it was written rather than guessing from its text, and the history has
+// to be able to say "seven sections" or "one document" — or "not recorded",
+// for any version that predates the column. It is production metadata about
+// presentation, not information about the subject, so it is NOT added to the
+// DSAR list above.
 const CASE_COLUMNS = [
   'id', 'case_id', 'version_no', 'source', 'created_at', 'created_by', 'author_kind',
-  'adopted_at', 'adoption_basis', 'is_current', 'superseded_at',
+  'adopted_at', 'adoption_basis', 'is_current', 'superseded_at', 'authoring_mode',
 ].join(', ');
 
 function caseVersionRowToObject(row) {
@@ -220,6 +227,9 @@ function caseVersionRowToObject(row) {
     adoptionBasis: row.adoption_basis || null,
     isCurrent: !!row.is_current,
     supersededAt: row.superseded_at || null,
+    // null means 'not recorded', which is true of any version written before
+    // 2026-10-11. Never inferred from the body.
+    authoringMode: row.authoring_mode ?? null,
   };
 }
 

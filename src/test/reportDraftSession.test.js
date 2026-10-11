@@ -5,9 +5,10 @@ import {
   describeDraftState, DRAFT_STATE, READ_ONLY_REASON,
   commitLive, confirmRebase, canConfirmRebase, conflictLatestLoaded, conflictUnavailable,
   conflictBodyLoading, conflictBodyLoaded, conflictBodyUnavailable,
+  AUTHORING_MODE, switchMode, canSwitchToStructured, previewStructuredSplit,
 } from '../lib/reportDraftSession.js';
 import { DRAFT_SAVE_RESULT } from '../lib/reportDraftGateway.js';
-import { composeReportBody, emptyReportSections } from '../lib/reportDraftComposer.js';
+import { composeReportBody, emptyReportSections, normaliseSections } from '../lib/reportDraftComposer.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // B3.2-1 — THE TWO QUESTIONS THESE TESTS EXIST TO ANSWER.
@@ -643,7 +644,7 @@ describe('B3.2 — the editing mode is remembered, not re-guessed', () => {
   it('keeps the investigator in RAW mode when they already are', () => {
     const kept = createDraftSession({
       caseId: CASE, baseVersion: 1, canSave: true,
-      body: rawAuthoredButStructuredShaped, preferRaw: true,
+      body: rawAuthoredButStructuredShaped, mode: AUTHORING_MODE.SINGLE,
     });
     expect(kept.rawMode).toBe(true);
     expect(kept.raw).toBe(rawAuthoredButStructuredShaped);
@@ -655,36 +656,37 @@ describe('B3.2 — the editing mode is remembered, not re-guessed', () => {
 
   it('never forces structured ONTO text that cannot take it', () => {
     const legacy = 'INVESTIGATION REPORT\n\nWritten before Compass had sections.';
-    for (const preferRaw of [true, false]) {
-      const s = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body: legacy, preferRaw });
-      expect(s.rawMode, `preferRaw=${preferRaw}`).toBe(true);
-      expect(currentBody(s), `preferRaw=${preferRaw}`).toBe(legacy);
+    for (const mode of [AUTHORING_MODE.SINGLE, AUTHORING_MODE.STRUCTURED]) {
+      const s = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body: legacy, mode });
+      expect(s.rawMode, mode).toBe(true);
+      expect(s.mode, mode).toBe(AUTHORING_MODE.SINGLE);
+      expect(currentBody(s), mode).toBe(legacy);
     }
   });
 
-  it('the hint can only keep someone in raw — it cannot put them into structured', () => {
-    // There is no preferStructured, by design: content decides whether seven
-    // boxes are possible at all, and the hint only ever withholds them.
-    const legacy = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body: 'No headings.', preferRaw: false });
+  it('content has a veto in one direction only — it can force single, never structured', () => {
+    const legacy = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body: 'No headings.', mode: AUTHORING_MODE.STRUCTURED });
     expect(legacy.rawMode).toBe(true);
+    expect(legacy.mode).toBe(AUTHORING_MODE.SINGLE);
   });
 
   it('a structured session opening a structured version stays structured', () => {
     const body = composeReportBody({ ...emptyReportSections(), summary: 'A summary.' });
-    const s = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body, preferRaw: false });
+    const s = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body, mode: AUTHORING_MODE.STRUCTURED });
     expect(s.rawMode).toBe(false);
+    expect(s.mode).toBe(AUTHORING_MODE.STRUCTURED);
     expect(s.sections.summary).toBe('A summary.');
   });
 
-  it('an empty session honours the hint, so a raw author gets one empty box', () => {
-    const s = createDraftSession({ caseId: CASE, baseVersion: 0, canSave: true, preferRaw: true });
+  it('an empty session honours the stated mode, so a single-document author gets one empty box', () => {
+    const s = createDraftSession({ caseId: CASE, baseVersion: 0, canSave: true, mode: AUTHORING_MODE.SINGLE });
     expect(s.rawMode).toBe(true);
     expect(currentBody(s)).toBe('');
     expect(hasUnsavedChanges(s)).toBe(false);
   });
 
   it('raw mode survives a save and keeps surviving edits', () => {
-    let s = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body: 'Legacy body.', preferRaw: false });
+    let s = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body: 'Legacy body.', mode: AUTHORING_MODE.STRUCTURED });
     expect(s.rawMode).toBe(true);
     s = editRaw(s, 'Legacy body, amended.');
     s = applySaveResult(beginSave(s, { newRequestId: ID1 }).session, ok(2));
@@ -696,16 +698,148 @@ describe('B3.2 — the editing mode is remembered, not re-guessed', () => {
 
   it('the mode does not change what is stored — only how it is shown', () => {
     const body = rawAuthoredButStructuredShaped;
-    const asRaw = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body, preferRaw: true });
-    const asStructured = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body, preferRaw: false });
+    const asRaw = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body, mode: AUTHORING_MODE.SINGLE });
+    const asStructured = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body, mode: AUTHORING_MODE.STRUCTURED });
     expect(currentBody(asRaw)).toBe(body);
     expect(currentBody(asStructured)).toBe(body);
     expect(currentBody(asRaw)).toBe(currentBody(asStructured));
   });
 
-  it('is total on a rubbish hint', () => {
-    for (const v of [null, undefined, 0, 1, 'yes', {}]) {
-      expect(() => createDraftSession({ caseId: CASE, baseVersion: 0, canSave: true, preferRaw: v })).not.toThrow();
+  it('is total on a rubbish mode, defaulting to structured rather than throwing', () => {
+    for (const v of [null, undefined, 0, 1, 'yes', {}, 'STRUCTURED_SECTIONS']) {
+      const s = createDraftSession({ caseId: CASE, baseVersion: 0, canSave: true, mode: v });
+      expect(s.mode, JSON.stringify(v)).toBe(AUTHORING_MODE.STRUCTURED);
     }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// B3.2 — CHANGING HOW THE REPORT IS WRITTEN, AND REOPENING IT LATER.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('B3.2 — switching mode keeps every character', () => {
+  const filledSections = { ...emptyReportSections(), matters: 'Two matters.', summary: 'In short.' };
+
+  it('structured → one document produces exactly the text that would have been saved', () => {
+    let s = editSections(open(), filledSections);
+    const before = currentBody(s);
+    s = switchMode(s, AUTHORING_MODE.SINGLE);
+    expect(s.mode).toBe(AUTHORING_MODE.SINGLE);
+    expect(s.rawMode).toBe(true);
+    expect(currentBody(s)).toBe(before);           // not one byte different
+    expect(s.raw).toBe(composeReportBody(filledSections));
+    expect(s.sections).toEqual(emptyReportSections());
+  });
+
+  it('one document → structured splits only when it round-trips, and shows what it would do', () => {
+    const body = composeReportBody(filledSections);
+    let s = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body, mode: AUTHORING_MODE.SINGLE });
+    expect(s.rawMode).toBe(true);
+    expect(canSwitchToStructured(s)).toBe(true);
+
+    const preview = previewStructuredSplit(s);
+    expect(preview.matters).toBe('Two matters.');
+    expect(preview.summary).toBe('In short.');
+
+    const after = switchMode(s, AUTHORING_MODE.STRUCTURED);
+    expect(after.mode).toBe(AUTHORING_MODE.STRUCTURED);
+    expect(currentBody(after)).toBe(body);         // still byte-identical
+    expect(after.sections).toEqual(preview);       // exactly what was previewed
+  });
+
+  it('REFUSES one document → structured when the text cannot be split losslessly', () => {
+    const legacy = 'INVESTIGATION REPORT\n\nNo headings at all.';
+    const s = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body: legacy, mode: AUTHORING_MODE.SINGLE });
+    expect(canSwitchToStructured(s)).toBe(false);
+    expect(previewStructuredSplit(s)).toBeNull();
+    expect(switchMode(s, AUTHORING_MODE.STRUCTURED)).toBe(s);   // unchanged, not forced
+    expect(currentBody(s)).toBe(legacy);
+  });
+
+  it('round-trips a mode switch there and back without touching the text', () => {
+    const s0 = editSections(open(), filledSections);
+    const there = switchMode(s0, AUTHORING_MODE.SINGLE);
+    const back = switchMode(there, AUTHORING_MODE.STRUCTURED);
+    expect(currentBody(back)).toBe(currentBody(s0));
+    expect(back.sections).toEqual(normaliseSections(filledSections));
+    expect(back.mode).toBe(AUTHORING_MODE.STRUCTURED);
+  });
+
+  it('is inert on a no-op, an unknown mode, or a read-only session', () => {
+    const s = editSections(open(), filledSections);
+    expect(switchMode(s, AUTHORING_MODE.STRUCTURED)).toBe(s);
+    for (const bad of [null, undefined, '', 'freeform', 7, {}]) expect(switchMode(s, bad)).toBe(s);
+    const ro = createDraftSession({ caseId: CASE, baseVersion: 0, canSave: false });
+    expect(switchMode(ro, AUTHORING_MODE.SINGLE)).toBe(ro);
+    expect(canSwitchToStructured(ro)).toBe(false);
+    expect(switchMode(null, AUTHORING_MODE.SINGLE)).toBeNull();
+  });
+
+  it('a switch is an unsaved change, and the mode reaches the save request', () => {
+    let s = editSections(open(), filledSections);
+    s = applySaveResult(beginSave(s, { newRequestId: ID1 }).session, ok(1));
+    expect(hasUnsavedChanges(s)).toBe(false);
+
+    s = switchMode(s, AUTHORING_MODE.SINGLE);
+    // The bytes are the same, so there is nothing new to store…
+    expect(hasUnsavedChanges(s)).toBe(false);
+    // …but an edit afterwards saves under the NEW mode.
+    s = editRaw(s, currentBody(s) + '\n\nMore.');
+    const req = beginSave(s, { newRequestId: ID2 }).request;
+    expect(req.authoringMode).toBe(AUTHORING_MODE.SINGLE);
+  });
+
+  it('the mode is part of what makes a retry exact', () => {
+    let s = editSections(open(), filledSections);
+    let r = beginSave(s, { newRequestId: ID1 });
+    expect(r.request.authoringMode).toBe(AUTHORING_MODE.STRUCTURED);
+    s = applySaveResult(r.session, { result: DRAFT_SAVE_RESULT.NETWORK });
+
+    // Same text, different mode → a DIFFERENT request, so a new identifier.
+    const switched = switchMode(s, AUTHORING_MODE.SINGLE);
+    r = beginSave(switched, { newRequestId: ID2 });
+    expect(r.request.requestId).toBe(ID2);
+
+    // Same text, same mode → the same identifier.
+    r = beginSave(s, { newRequestId: ID2 });
+    expect(r.request.requestId).toBe(ID1);
+  });
+});
+
+describe('B3.2 — reopening a version across sessions', () => {
+  it('opens a version in the mode it recorded, whatever its text looks like', () => {
+    // The exact shape that used to break: a single document whose text
+    // happens to match the structured layout.
+    const body = '## Matters under investigation\n\nFoo.\n\n## Overall summary\n\nBar.';
+    const asSaved = createDraftSession({ caseId: CASE, baseVersion: 2, canSave: true, body, mode: AUTHORING_MODE.SINGLE });
+    expect(asSaved.mode).toBe(AUTHORING_MODE.SINGLE);
+    expect(asSaved.rawMode).toBe(true);
+    expect(asSaved.raw).toBe(body);
+    expect(asSaved.sections).toEqual(emptyReportSections());
+    // …and this now survives a refresh, because the mode came from the row
+    // rather than from the session that happened to be open.
+  });
+
+  it('a version with NO recorded mode is not guessed into structured', () => {
+    // authoring_mode is null for anything written before the column existed.
+    // The caller decides what to do; the session never invents provenance.
+    const legacy = 'INVESTIGATION REPORT\n\nNo headings.';
+    const s = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body: legacy, mode: AUTHORING_MODE.SINGLE });
+    expect(s.mode).toBe(AUTHORING_MODE.SINGLE);
+    expect(currentBody(s)).toBe(legacy);
+  });
+
+  it('the mode survives edits, saves and a conflict without being recomputed', () => {
+    let s = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, mode: AUTHORING_MODE.SINGLE });
+    s = editRaw(s, 'One document.');
+    expect(s.mode).toBe(AUTHORING_MODE.SINGLE);
+    s = applySaveResult(beginSave(s, { newRequestId: ID1 }).session, { result: DRAFT_SAVE_RESULT.STALE });
+    expect(s.mode).toBe(AUTHORING_MODE.SINGLE);
+    s = conflictLatestLoaded(s, { id: 'v9', versionNo: 9, createdAt: 'T', createdBy: 'u', authorKind: 'user' });
+    s = confirmRebase(s);
+    expect(s.mode).toBe(AUTHORING_MODE.SINGLE);
+    s = applySaveResult(beginSave(s, { newRequestId: ID2 }).session, ok(10));
+    expect(s.mode).toBe(AUTHORING_MODE.SINGLE);
+    expect(currentBody(s)).toBe('One document.');
   });
 });

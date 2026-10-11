@@ -190,6 +190,7 @@ export function readSavedVersion(data) {
     createdBy: row.created_by ?? null,
     authorKind: row.author_kind || null,
     requestId: row.request_id ?? null,
+    authoringMode: row.authoring_mode ?? null,
     // A draft is never adopted at save time — the author guard forces these
     // null. Carried through so the editor can assert it rather than assume it.
     adoptedAt: row.adopted_at || null,
@@ -212,7 +213,7 @@ export function readSavedVersion(data) {
  */
 export async function saveReportDraft({
   supabase, caseId, body, requestId, expectedBaseVersion,
-  source = 'edited', hrReason = null,
+  source = 'edited', hrReason = null, authoringMode = null,
 } = {}) {
   if (!supabase) return { result: DRAFT_SAVE_RESULT.INVALID, reason: 'no_client' };
   if (typeof caseId !== 'string' || caseId.trim() === '') {
@@ -227,6 +228,12 @@ export async function saveReportDraft({
   if (typeof body !== 'string' || body.trim() === '') {
     return { result: DRAFT_SAVE_RESULT.INVALID, reason: 'empty_body' };
   }
+  // Every new version states how it was written. The RPC refuses a missing or
+  // unrecognised mode outright; refusing here too means the editor does not
+  // spend a request identifier discovering a client defect.
+  if (authoringMode !== 'structured_sections' && authoringMode !== 'single_document') {
+    return { result: DRAFT_SAVE_RESULT.INVALID, reason: 'no_authoring_mode' };
+  }
 
   try {
     const { data, error } = await supabase.rpc(RPC, {
@@ -239,6 +246,7 @@ export async function saveReportDraft({
       // as absent, and sending '   ' would make the digest of a retry differ
       // from the digest of the save it is retrying.
       p_hr_reason: typeof hrReason === 'string' && hrReason.trim() !== '' ? hrReason.trim() : null,
+      p_authoring_mode: authoringMode,
     });
 
     if (error) {

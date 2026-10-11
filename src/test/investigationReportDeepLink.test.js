@@ -215,11 +215,20 @@ describe('B3.2 — the wiring, asserted against the source', () => {
 describe('B3.2 — opening a saved version preserves the editing mode', () => {
   const view = () => readFileSync('src/screens/CaseViewScreen.jsx', 'utf8');
 
-  it('“Continue from this version” carries the current mode forward', () => {
-    // Without this the investigator could be moved from one document into
-    // seven boxes by opening a version whose text happened to match the
-    // structured shape. reportDraftSession.test.js covers the behaviour; this
-    // asserts the screen actually passes the hint.
-    expect(view()).toMatch(/preferRaw: prev\.rawMode/);
+  it('“Continue from this version” opens it in the mode it RECORDED', () => {
+    // B3.2 replaced the session-sticky hint with the version's own
+    // authoring_mode. A version that records nothing — anything written
+    // before the column existed — falls back to the mode the investigator is
+    // already in, rather than being guessed at from its text.
+    expect(view()).toMatch(/mode: v\.authoringMode \|\| prev\.mode/);
+    expect(view()).not.toMatch(/preferRaw/);
+  });
+
+  it('the screen offers a mode switch that goes through the session machine', () => {
+    const v = view();
+    expect(v).toMatch(/onSwitchMode=\{onDraftSwitchMode\}/);
+    expect(v).toMatch(/switchMode\(commitLive\(cur, live\), nextMode\)/);
+    // The live text is committed first, so a switch cannot drop keystrokes.
+    expect(v).toMatch(/const onDraftSwitchMode = \(caseId, nextMode, live\)/);
   });
 });

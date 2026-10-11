@@ -3,6 +3,7 @@ import { COLOR, TYPE, BUTTON, RADIUS } from '../../styles/tokens';
 import { REPORT_SECTIONS, composeReportBody, sectionHeadingCollisions } from '../../lib/reportDraftComposer';
 import {
   DRAFT_STATE, READ_ONLY_REASON, describeDraftState, canConfirmRebase,
+  AUTHORING_MODE, canSwitchToStructured, previewStructuredSplit,
 } from '../../lib/reportDraftSession';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -126,6 +127,14 @@ function History({ versions, versionsLoading, versionsUnreadable, authorNameFor,
               {v.adoptedAt && !v.isCurrent && <Pill tone="neutral">Previously adopted</Pill>}
               {!v.adoptedAt && <Pill tone="neutral">Draft</Pill>}
               {v.adoptionBasis === 'hr_exception' && <Pill tone="amber">Adopted under HR exception</Pill>}
+              {/* How it was written. Null is 'not recorded' — true of every
+                  version saved before the column existed, and never guessed
+                  from the text. */}
+              <Pill tone="neutral">
+                {v.authoringMode === AUTHORING_MODE.STRUCTURED ? 'Seven sections'
+                  : v.authoringMode === AUTHORING_MODE.SINGLE ? 'One document'
+                    : 'Mode not recorded'}
+              </Pill>
             </div>
             <p style={{ ...metaRow, margin: "4px 0 0" }}>
               {author} &middot; {fmtDate(v.createdAt) || "date not recorded"}
@@ -221,6 +230,112 @@ function ConflictReview({ session, authorNameFor, fmtDate, onReviewLatestBody, o
   );
 }
 
+/**
+ * How the report is written — an explicit, visible, reversible choice.
+ *
+ * NOT inferred, and never changed as a side effect of typing. Going to one
+ * document is always available and always lossless: the text becomes exactly
+ * what would have been saved, in the same order. Going the other way moves
+ * content between boxes, so it asks first and shows the split it would make —
+ * and when the text cannot be split without changing a byte, it says so
+ * rather than hiding the option.
+ */
+function ModeChooser({ session, pendingSwitch, onRequestSwitch, onCancelSwitch, onConfirmSwitch }) {
+  const isStructured = session.mode === AUTHORING_MODE.STRUCTURED;
+  const canGoStructured = canSwitchToStructured(session);
+  const preview = pendingSwitch === AUTHORING_MODE.STRUCTURED ? previewStructuredSplit(session) : null;
+
+  const option = (mode, label, hint, enabled) => {
+    const selected = session.mode === mode;
+    return (
+      <div
+        key={mode}
+        style={{
+          display: 'flex', gap: 8, alignItems: 'flex-start', padding: '8px 10px',
+          border: `1px solid ${selected ? COLOR.purple : COLOR.border}`,
+          background: selected ? COLOR.purpleTint : COLOR.surface,
+          borderRadius: RADIUS.surface, opacity: enabled ? 1 : 0.55, flex: '1 1 240px',
+        }}
+      >
+        {/* The radio carries its own accessible name, so the option is
+            operable and announced without depending on a <label> whose text
+            is entirely dynamic — which jsx-a11y cannot verify statically and
+            which a screen reader would read as the hint as well as the name. */}
+        <input
+          id={`report-authoring-mode-${mode}`}
+          type="radio" name="report-authoring-mode" value={mode} checked={selected}
+          aria-label={label}
+          aria-describedby={`report-authoring-mode-${mode}-hint`}
+          disabled={!enabled} onChange={() => onRequestSwitch(mode)}
+          style={{ marginTop: 3, cursor: enabled ? 'pointer' : 'not-allowed' }}
+        />
+        <span>
+          <span style={{ ...TYPE.rowContext, color: COLOR.ink, display: 'block' }}>{label}</span>
+          <span id={`report-authoring-mode-${mode}-hint`} style={{ ...TYPE.metadata, color: COLOR.inkQuiet, lineHeight: 1.5 }}>{hint}</span>
+        </span>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <p style={{ ...TYPE.micro, color: COLOR.inkQuiet, margin: '0 0 6px' }}>HOW THIS REPORT IS WRITTEN</p>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {option(AUTHORING_MODE.STRUCTURED, 'Seven guided sections',
+          'Matters, evidence, accounts, assessment, positions, uncertainties, summary.',
+          isStructured || canGoStructured)}
+        {option(AUTHORING_MODE.SINGLE, 'One document',
+          'Write it your own way, in a single piece of text.', true)}
+      </div>
+
+      {!isStructured && !canGoStructured && (
+        <p style={{ ...TYPE.metadata, color: COLOR.inkQuiet, margin: '6px 0 0', lineHeight: 1.6 }}>
+          Compass cannot split this text into the seven sections without changing where your words sit, so that option
+          is unavailable for this report. Nothing is lost — it stays exactly as you wrote it.
+        </p>
+      )}
+
+      {pendingSwitch === AUTHORING_MODE.SINGLE && (
+        <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: RADIUS.surface, background: COLOR.rail, border: `1px solid ${COLOR.border}` }}>
+          <p style={{ ...TYPE.body, color: COLOR.ink, margin: '0 0 6px', lineHeight: 1.6 }}>
+            Switch to one document?
+          </p>
+          <p style={{ ...TYPE.metadata, color: COLOR.inkSoft, margin: '0 0 8px', lineHeight: 1.6 }}>
+            Your seven sections become a single piece of text, in the same order, with the same words. Nothing is
+            rewritten and nothing is removed. You can switch back.
+          </p>
+          <button type="button" style={{ ...BUTTON.primary, height: 36 }} onClick={onConfirmSwitch}>Switch to one document</button>
+          <button type="button" style={{ ...BUTTON.secondary, height: 36, marginLeft: 8 }} onClick={onCancelSwitch}>Keep seven sections</button>
+        </div>
+      )}
+
+      {pendingSwitch === AUTHORING_MODE.STRUCTURED && preview && (
+        <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: RADIUS.surface, background: COLOR.rail, border: `1px solid ${COLOR.border}` }}>
+          <p style={{ ...TYPE.body, color: COLOR.ink, margin: '0 0 6px', lineHeight: 1.6 }}>
+            Switch to seven guided sections?
+          </p>
+          <p style={{ ...TYPE.metadata, color: COLOR.inkSoft, margin: '0 0 8px', lineHeight: 1.6 }}>
+            Every word is kept, but your text will be split across the boxes below. This is exactly where each part
+            would go. You can switch back.
+          </p>
+          <div style={{ maxHeight: 260, overflowY: 'auto', marginBottom: 8 }}>
+            {REPORT_SECTIONS.map(sec => (
+              <div key={sec.id} style={{ borderTop: `1px solid ${COLOR.borderFaint}`, paddingTop: 6, marginTop: 6 }}>
+                <p style={{ ...TYPE.micro, color: COLOR.inkQuiet, margin: 0 }}>{sec.label.toUpperCase()}</p>
+                <p style={{ ...TYPE.metadata, color: (preview[sec.id] || '').trim() ? COLOR.inkSoft : COLOR.inkFaint, margin: '2px 0 0', whiteSpace: 'pre-wrap' }}>
+                  {(preview[sec.id] || '').trim() || 'nothing would go here'}
+                </p>
+              </div>
+            ))}
+          </div>
+          <button type="button" style={{ ...BUTTON.primary, height: 36 }} onClick={onConfirmSwitch}>Split into seven sections</button>
+          <button type="button" style={{ ...BUTTON.secondary, height: 36, marginLeft: 8 }} onClick={onCancelSwitch}>Keep one document</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function InvestigationReportEditor({
   session,
   versions = [],
@@ -233,6 +348,7 @@ export function InvestigationReportEditor({
   onReviewLatestBody = () => {},
   onConfirmAndSave = () => {},
   onContinueFrom = () => {},
+  onSwitchMode = () => {},
   busyVersionId = null,
 }) {
   const caseId = session?.caseId ?? null;
@@ -241,6 +357,8 @@ export function InvestigationReportEditor({
   // Local, so typing is immediate and cheap. `liveRef` is updated
   // synchronously alongside it and is what Save reads, so the saved bytes
   // never depend on a render or an event having happened first.
+  // Which switch the investigator has asked for but not yet confirmed.
+  const [pendingSwitch, setPendingSwitch] = useState(null);
   const [live, setLive] = useState(() => ({
     sections: session?.sections || {},
     raw: session?.raw || '',
@@ -399,6 +517,14 @@ export function InvestigationReportEditor({
             )}
           </div>
         )}
+
+        <ModeChooser
+          session={session}
+          pendingSwitch={pendingSwitch}
+          onRequestSwitch={(m) => { commit(); setPendingSwitch(m); }}
+          onCancelSwitch={() => setPendingSwitch(null)}
+          onConfirmSwitch={() => { commit(); onSwitchMode(caseId, pendingSwitch, liveRef.current); setPendingSwitch(null); }}
+        />
 
         {/* ── A HEADING THAT COMPASS WILL READ AS A SECTION BOUNDARY ──────
             Warned, never rewritten, and never a reason to refuse the save.

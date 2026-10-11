@@ -34,6 +34,7 @@ import {
   createDraftSession, commitLive, beginSave, applySaveResult, confirmRebase,
   conflictLatestLoaded, conflictUnavailable, conflictBodyLoading, conflictBodyLoaded,
   conflictBodyUnavailable, hasUnsavedChanges, READ_ONLY_REASON, DRAFT_STATE,
+  switchMode, AUTHORING_MODE,
 } from '../lib/reportDraftSession';
 import { supabase } from '../supabase';
 import { CompassAnalysisPanel } from '../components/caseTabs/CompassAnalysisPanel';
@@ -726,12 +727,20 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
         canSave: prev.canSave,
         readOnlyReason: prev.readOnlyReason,
         requiresHrReason: prev.requiresHrReason,
-        // The investigator stays in the editor they are already using. Opening
-        // a version must not move someone working on one document into seven
-        // boxes because its text happened to match the structured shape.
-        preferRaw: prev.rawMode,
+        // Opened the way it was WRITTEN, from the version's own recorded
+        // mode. When a version predates the column it records nothing, and
+        // rather than guess from its text the editor keeps the investigator
+        // in the mode they are already using — which is the B3.2 session
+        // behaviour, now the fallback rather than the rule.
+        mode: v.authoringMode || prev.mode,
       }));
     });
+  };
+
+  /** Change how the report is written. Text is carried across unchanged. */
+  const onDraftSwitchMode = (caseId, nextMode, live) => {
+    if (nextMode !== AUTHORING_MODE.STRUCTURED && nextMode !== AUTHORING_MODE.SINGLE) return;
+    patchDraft(caseId, cur => switchMode(commitLive(cur, live), nextMode));
   };
 
   const authorNameForVersion = (userId) => (userId
@@ -1987,6 +1996,7 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
                 onReviewLatestBody={onDraftReviewLatestBody}
                 onConfirmAndSave={onDraftConfirmAndSave}
                 onContinueFrom={onDraftContinueFrom}
+                onSwitchMode={onDraftSwitchMode}
               />
               <InvestigationReportTab
                 model={reportWorkspace} fmtDate={fmtDate}
