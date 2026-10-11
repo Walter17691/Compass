@@ -87,16 +87,35 @@ export function createDraftSession({
   canSave = false,
   readOnlyReason = null,
   requiresHrReason = false,
+  preferRaw = false,
 } = {}) {
   const startBody = typeof body === 'string' ? body : '';
-  const exact = startBody.trim() === '' ? true : bodyRoundTripsExactly(startBody);
-  const parsed = exact ? parseReportBody(startBody) : null;
+  // CAN this text be shown as seven boxes without changing a byte? Empty text
+  // trivially can; anything else has to survive decompose-then-recompose.
+  const canBeStructured = startBody.trim() === '' ? true : bodyRoundTripsExactly(startBody);
+  // ── WHY THE MODE IS NOT INFERRED FROM CONTENT ALONE ────────────────────
+  //
+  // It used to be, and that was wrong in one direction. An investigator
+  // working on a legacy report is in RAW mode — one document, as they wrote
+  // it. If the text they end up with happens to match the structured shape
+  // (it begins with a Compass heading, uses only our headings, in order), the
+  // next open would decide it was a structured report and split it into
+  // boxes. No character was lost, but the author's single document silently
+  // became seven, which is the "do not silently redistribute" rule broken by
+  // a different route than the parser.
+  //
+  // So the caller may say which mode the investigator is ALREADY in, and raw
+  // stays raw. Structure is still forced where the content cannot be shown
+  // any other way — a legacy report can only be raw — so the hint can keep
+  // someone in raw, never put them into structured against the text.
+  const useRaw = !!preferRaw || !canBeStructured;
+  const parsed = useRaw ? null : parseReportBody(startBody);
   return Object.freeze({
     caseId,
     baseVersion: Number.isInteger(baseVersion) ? baseVersion : null,
-    sections: exact ? (parsed?.sections || emptyReportSections()) : emptyReportSections(),
-    raw: exact ? '' : startBody,
-    rawMode: !exact,
+    sections: useRaw ? emptyReportSections() : (parsed?.sections || emptyReportSections()),
+    raw: useRaw ? startBody : '',
+    rawMode: useRaw,
     // What the server is known to hold for this base. Used to tell a genuine
     // edit from a reopened editor, so an untouched session is never DIRTY.
     savedBody: startBody,
@@ -152,9 +171,19 @@ function afterEdit(session, patch) {
   });
 }
 
-/** Edit one or more of the seven sections. */
+/**
+ * Edit one or more of the seven sections.
+ *
+ * Refused in raw mode, mirroring editRaw's refusal in structured mode. The
+ * asymmetry was latent rather than live — the editor only renders section
+ * boxes in structured mode, and commitLive already ignored section patches in
+ * raw — but a stray call would have written into hidden state that became
+ * visible the moment the mode changed. Same reason as editRaw: the two
+ * editors must not be able to fight.
+ */
 export function editSections(session, sections) {
   if (!session || session.state === DRAFT_STATE.READ_ONLY) return session;
+  if (session.rawMode) return session;
   return afterEdit(session, { sections: normaliseSections({ ...session.sections, ...(sections || {}) }) });
 }
 

@@ -211,3 +211,15 @@ describe('B3.2 — the wiring, asserted against the source', () => {
       .toBeLessThan(v.indexOf('const activeDestination ='));
   });
 });
+
+describe('B3.2 — opening a saved version preserves the editing mode', () => {
+  const view = () => readFileSync('src/screens/CaseViewScreen.jsx', 'utf8');
+
+  it('“Continue from this version” carries the current mode forward', () => {
+    // Without this the investigator could be moved from one document into
+    // seven boxes by opening a version whose text happened to match the
+    // structured shape. reportDraftSession.test.js covers the behaviour; this
+    // asserts the screen actually passes the hint.
+    expect(view()).toMatch(/preferRaw: prev\.rawMode/);
+  });
+});

@@ -726,6 +726,10 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
         canSave: prev.canSave,
         readOnlyReason: prev.readOnlyReason,
         requiresHrReason: prev.requiresHrReason,
+        // The investigator stays in the editor they are already using. Opening
+        // a version must not move someone working on one document into seven
+        // boxes because its text happened to match the structured shape.
+        preferRaw: prev.rawMode,
       }));
     });
   };

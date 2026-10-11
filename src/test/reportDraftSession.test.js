@@ -614,3 +614,98 @@ describe('B3.2-1 — the stale-version review', () => {
     expect(canConfirmRebase(null)).toBe(false);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// B3.2 — RAW STRUCTURAL INTEGRITY.
+//
+// The defect: an investigator working on a legacy report is in RAW mode, one
+// document as they wrote it. If their text ends up matching the structured
+// shape, the next open decided it was a structured report and split it into
+// seven boxes. Not one character was lost — and the author's single document
+// silently became seven, which breaks "do not silently redistribute" by a
+// different route than the parser.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('B3.2 — the editing mode is remembered, not re-guessed', () => {
+  const rawAuthoredButStructuredShaped =
+    '## Matters under investigation\n\nFoo.\n\n## Overall summary\n\nBar.';
+
+  it('REGRESSION — without the hint, a raw-authored body reopens split across boxes', () => {
+    // The behaviour being corrected, pinned so it cannot come back by default.
+    const inferred = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body: rawAuthoredButStructuredShaped });
+    expect(inferred.rawMode).toBe(false);
+    expect(inferred.sections.matters).toBe('Foo.');
+    expect(inferred.sections.summary).toBe('Bar.');
+    // The text itself was never at risk.
+    expect(currentBody(inferred)).toBe(rawAuthoredButStructuredShaped);
+  });
+
+  it('keeps the investigator in RAW mode when they already are', () => {
+    const kept = createDraftSession({
+      caseId: CASE, baseVersion: 1, canSave: true,
+      body: rawAuthoredButStructuredShaped, preferRaw: true,
+    });
+    expect(kept.rawMode).toBe(true);
+    expect(kept.raw).toBe(rawAuthoredButStructuredShaped);
+    expect(kept.sections).toEqual(emptyReportSections());
+    // Byte-for-byte the same text, in one box instead of two.
+    expect(currentBody(kept)).toBe(rawAuthoredButStructuredShaped);
+    expect(hasUnsavedChanges(kept)).toBe(false);
+  });
+
+  it('never forces structured ONTO text that cannot take it', () => {
+    const legacy = 'INVESTIGATION REPORT\n\nWritten before Compass had sections.';
+    for (const preferRaw of [true, false]) {
+      const s = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body: legacy, preferRaw });
+      expect(s.rawMode, `preferRaw=${preferRaw}`).toBe(true);
+      expect(currentBody(s), `preferRaw=${preferRaw}`).toBe(legacy);
+    }
+  });
+
+  it('the hint can only keep someone in raw — it cannot put them into structured', () => {
+    // There is no preferStructured, by design: content decides whether seven
+    // boxes are possible at all, and the hint only ever withholds them.
+    const legacy = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body: 'No headings.', preferRaw: false });
+    expect(legacy.rawMode).toBe(true);
+  });
+
+  it('a structured session opening a structured version stays structured', () => {
+    const body = composeReportBody({ ...emptyReportSections(), summary: 'A summary.' });
+    const s = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body, preferRaw: false });
+    expect(s.rawMode).toBe(false);
+    expect(s.sections.summary).toBe('A summary.');
+  });
+
+  it('an empty session honours the hint, so a raw author gets one empty box', () => {
+    const s = createDraftSession({ caseId: CASE, baseVersion: 0, canSave: true, preferRaw: true });
+    expect(s.rawMode).toBe(true);
+    expect(currentBody(s)).toBe('');
+    expect(hasUnsavedChanges(s)).toBe(false);
+  });
+
+  it('raw mode survives a save and keeps surviving edits', () => {
+    let s = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body: 'Legacy body.', preferRaw: false });
+    expect(s.rawMode).toBe(true);
+    s = editRaw(s, 'Legacy body, amended.');
+    s = applySaveResult(beginSave(s, { newRequestId: ID1 }).session, ok(2));
+    expect(s.rawMode).toBe(true);
+    expect(currentBody(s)).toBe('Legacy body, amended.');
+    // And a structured edit still cannot reach it.
+    expect(editSections(s, { summary: 'nope' })).toBe(s);
+  });
+
+  it('the mode does not change what is stored — only how it is shown', () => {
+    const body = rawAuthoredButStructuredShaped;
+    const asRaw = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body, preferRaw: true });
+    const asStructured = createDraftSession({ caseId: CASE, baseVersion: 1, canSave: true, body, preferRaw: false });
+    expect(currentBody(asRaw)).toBe(body);
+    expect(currentBody(asStructured)).toBe(body);
+    expect(currentBody(asRaw)).toBe(currentBody(asStructured));
+  });
+
+  it('is total on a rubbish hint', () => {
+    for (const v of [null, undefined, 0, 1, 'yes', {}]) {
+      expect(() => createDraftSession({ caseId: CASE, baseVersion: 0, canSave: true, preferRaw: v })).not.toThrow();
+    }
+  });
+});
