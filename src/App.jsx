@@ -12639,6 +12639,11 @@ Please produce:
         switchOrg={switchOrg}
         onJoinAnotherOrg={onJoinAnotherOrg}
         currentUser={currentUser}
+        // Straight from the Supabase session user, not from currentUser and
+        // not from the employee record — so the sidebar shows the address
+        // you are actually signed in as. Null when there is no session,
+        // which the sidebar renders as no line at all.
+        authEmail={user?.email || null}
         auditLog={auditLog}
         onSignOut={onSignOut}
         isHR={isHR}

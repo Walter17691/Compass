@@ -247,7 +247,15 @@ function SidebarGroup({ label, items, screen, goToScreen, expanded, onToggle }) 
 // secondary text under the name, not a separate beige badge — it reads
 // as "part of who I am here," which is what it actually is, rather than
 // a distinct clickable object competing for attention next to the name.
-function AccountMenu({ currentUser, org, availableOrgs=[], switchOrg, onJoinAnotherOrg, onSignOut, onOpenSettings }) {
+// authEmail is the AUTHENTICATED address, threaded from the Supabase session
+// user rather than read off currentUser or the employee record. currentUser
+// does carry an `email` today, but it is assembled in App.jsx from one of
+// three branches — one of which is a legacy localStorage blob — so taking it
+// from there would make "whose email is this?" depend on which branch ran.
+// A separate prop fed by `user?.email` answers that at the call site, and a
+// signed-out shell has nothing to pass, which is the behaviour we want:
+// no address rather than a stale one.
+function AccountMenu({ currentUser, authEmail=null, org, availableOrgs=[], switchOrg, onJoinAnotherOrg, onSignOut, onOpenSettings }) {
   const [show, setShow] = useState(false);
   const ref = useRef(null);
   const btnRef = useRef(null);
@@ -286,6 +294,18 @@ function AccountMenu({ currentUser, org, availableOrgs=[], switchOrg, onJoinAnot
         <span style={railIconBoxStyle}><div style={{width:28,height:28,borderRadius:"50%",background:COLOR.purpleTint,color:COLOR.purpleDeep,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,flexShrink:0}}>{initials}</div></span>
         <div className="rail-label" style={{minWidth:0,flex:1}}>
           <div title={currentUser?.name||undefined} style={{fontSize:13,fontWeight:600,color:COLOR.ink,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentUser?.name||"Account"}</div>
+          {/* Three lines now live inside a button whose height is a FIRM
+              RAIL_HIT (see the geometry comment above RAIL_HIT: the icon
+              box's height:"100%" only resolves against a definite height,
+              so this cannot become minHeight). The budget is therefore real:
+              13×1.3 + 11×1.2 + 11×1.3 + 1 = 45.4px inside 48px. This line
+              uses 1.2 and no marginTop to buy that headroom, which is also
+              why the name and organisation lines are left exactly as they
+              were — adding a line must not restyle the two already here.
+              inkSoft sits between the name's ink and the organisation's
+              inkFaint, so the stack reads name → email → org in priority
+              order rather than two indistinguishable grey lines. */}
+          {authEmail&&<div title={authEmail} style={{fontSize:11,color:COLOR.inkSoft,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{authEmail}</div>}
           {org?.name&&<div title={org.name} style={{fontSize:11,color:COLOR.inkFaint,lineHeight:1.3,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{org.name}</div>}
         </div>
         <svg className="rail-label" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
@@ -338,7 +358,7 @@ function AccountMenu({ currentUser, org, availableOrgs=[], switchOrg, onJoinAnot
 // opens it is wired independently at the App.jsx document-keydown level
 // (see the `metaKey||ctrlKey` handler there) and needs nothing from this
 // component to keep working.
-export function AppSidebar({ screen, setScreen, canAdministerDsar = false, isMobile, showMobileNav, setShowMobileNav, meetingType, caseInfo, org, availableOrgs, switchOrg, onJoinAnotherOrg, currentUser, auditLog, onSignOut, isHR, dataLoadIssues=[], loadBannerDismissed, onRetryLoad, onDismissLoadBanner, createMenuProps }) {
+export function AppSidebar({ screen, setScreen, canAdministerDsar = false, isMobile, showMobileNav, setShowMobileNav, meetingType, caseInfo, org, availableOrgs, switchOrg, onJoinAnotherOrg, currentUser, authEmail=null, auditLog, onSignOut, isHR, dataLoadIssues=[], loadBannerDismissed, onRetryLoad, onDismissLoadBanner, createMenuProps }) {
   const goToScreen = (s) => { setScreen(s); setShowMobileNav(false); };
 
   // Home Experience Redesign, §10 — "56 total cases" is database
@@ -579,7 +599,7 @@ export function AppSidebar({ screen, setScreen, canAdministerDsar = false, isMob
       {/* Sidebar footer composition pass, Part 6 — the healthy-state
           footer now contains exactly one thing: account identity. */}
       <div style={{borderTop:`1px solid ${COLOR.borderFaint}`,paddingTop:SPACE.sm,paddingBottom:2,flexShrink:0}}>
-        <AccountMenu currentUser={currentUser} org={org} availableOrgs={availableOrgs} switchOrg={switchOrg}
+        <AccountMenu currentUser={currentUser} authEmail={authEmail} org={org} availableOrgs={availableOrgs} switchOrg={switchOrg}
           onJoinAnotherOrg={onJoinAnotherOrg} onSignOut={onSignOut} onOpenSettings={()=>goToScreen(SCREENS.SETTINGS)}/>
       </div>
     </>
@@ -625,7 +645,7 @@ export function AppSidebar({ screen, setScreen, canAdministerDsar = false, isMob
                 organisation/Settings/Sign out), so mobile isn't left
                 with a lesser, name-plus-Sign-out-only account area. */}
             <div style={{borderTop:`1px solid ${COLOR.borderFaint}`,marginTop:6,padding:"8px 10px 4px"}}>
-              <AccountMenu currentUser={currentUser} org={org} availableOrgs={availableOrgs} switchOrg={switchOrg}
+              <AccountMenu currentUser={currentUser} authEmail={authEmail} org={org} availableOrgs={availableOrgs} switchOrg={switchOrg}
                 onJoinAnotherOrg={onJoinAnotherOrg} onSignOut={onSignOut} onOpenSettings={()=>{setShowMobileNav(false);goToScreen(SCREENS.SETTINGS);}}/>
             </div>
           </nav>

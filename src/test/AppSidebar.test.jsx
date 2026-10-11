@@ -613,3 +613,137 @@ describe('AppSidebar — Create/Search icons protected from flex-shrink at rest 
     expect(icon.style.flexShrink).toBe('0');
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// Account menu — the authenticated email line.
+//
+// WHY THE SOURCE IS ASSERTED AND NOT JUST THE TEXT. The sidebar must show
+// the address you are SIGNED IN AS. currentUser also carries an `email`,
+// assembled in App.jsx from one of three branches (member row, auth user,
+// or a legacy localStorage blob), so a component reading it there would be
+// correct only as long as that assembly stays correct. These tests pin the
+// behaviour that matters: the line comes from `authEmail`, and an employee
+// record's address on currentUser is NOT a substitute for it.
+//
+// The geometry is asserted too, because the trigger's height is a firm 48px
+// (see RAIL_HIT): the three lines have a real budget of
+// 13×1.3 + 11×1.2 + 11×1.3 + 1 = 45.4px, and a future change that bumps this
+// line's line-height or gives it a margin would overflow the row silently.
+describe('AppSidebar — account menu shows the authenticated email', () => {
+  const findLine = (text) => screen.getByTitle(text);
+
+  it('displays the authenticated email between the display name and the organisation', () => {
+    render(<AppSidebar {...baseProps} isHR={true}
+      currentUser={{ name: 'Priya Shah' }} authEmail="priya.shah@acme.co.uk"
+      org={{ id: 'org1', name: 'Acme Ltd' }} />);
+
+    expect(screen.getByText('priya.shah@acme.co.uk')).toBeInTheDocument();
+
+    // Order matters: name, then email, then organisation.
+    const label = screen.getByRole('button', { name: 'Account menu' }).querySelector('.rail-label');
+    const lines = [...label.children].map(el => el.textContent);
+    expect(lines).toEqual(['Priya Shah', 'priya.shah@acme.co.uk', 'Acme Ltd']);
+  });
+
+  it('omits the line entirely when there is no authenticated email, rather than showing a placeholder', () => {
+    render(<AppSidebar {...baseProps} isHR={true}
+      currentUser={{ name: 'Priya Shah' }} org={{ id: 'org1', name: 'Acme Ltd' }} />);
+
+    const label = screen.getByRole('button', { name: 'Account menu' }).querySelector('.rail-label');
+    expect([...label.children].map(el => el.textContent)).toEqual(['Priya Shah', 'Acme Ltd']);
+    // No empty element, no dash, no "No email" wording standing in for it.
+    expect(label.textContent).toBe('Priya ShahAcme Ltd');
+  });
+
+  it.each([null, undefined, ''])('treats %p as no email', (value) => {
+    render(<AppSidebar {...baseProps} isHR={true}
+      currentUser={{ name: 'Priya Shah' }} authEmail={value} org={{ id: 'org1', name: 'Acme Ltd' }} />);
+    const label = screen.getByRole('button', { name: 'Account menu' }).querySelector('.rail-label');
+    expect([...label.children].map(el => el.textContent)).toEqual(['Priya Shah', 'Acme Ltd']);
+  });
+
+  it('does NOT fall back to an employee-record email carried on currentUser', () => {
+    // currentUser.email is deliberately a DIFFERENT address here. If the
+    // component ever reads it, this test fails and says why.
+    render(<AppSidebar {...baseProps} isHR={true}
+      currentUser={{ name: 'Priya Shah', email: 'hr-record@employee-file.example' }}
+      org={{ id: 'org1', name: 'Acme Ltd' }} />);
+    expect(screen.queryByText('hr-record@employee-file.example')).not.toBeInTheDocument();
+  });
+
+  it('contains a long address without overflowing: ellipsis, no wrap, and the full value on hover', () => {
+    const long = 'a.very.long.firstname.lastname+investigations-team@some-extremely-long-subdomain.example.co.uk';
+    render(<AppSidebar {...baseProps} isHR={true}
+      currentUser={{ name: 'Priya Shah' }} authEmail={long} org={{ id: 'org1', name: 'Acme Ltd' }} />);
+
+    const line = findLine(long);
+    expect(line.style.overflow).toBe('hidden');
+    expect(line.style.textOverflow).toBe('ellipsis');
+    expect(line.style.whiteSpace).toBe('nowrap');
+    // The untruncated address stays reachable without selecting the text.
+    expect(line).toHaveAttribute('title', long);
+    // The row itself must not be widened by the long value — width is the
+    // rail's, and .rail-label caps the reveal at 200px in CSS.
+    expect(line.textContent).toBe(long);
+  });
+
+  it('keeps the three lines inside the firm 48px row by using a tighter line-height and no margin', () => {
+    const email = 'priya.shah@acme.co.uk';
+    render(<AppSidebar {...baseProps} isHR={true}
+      currentUser={{ name: 'Priya Shah' }} authEmail={email} org={{ id: 'org1', name: 'Acme Ltd' }} />);
+
+    const line = findLine(email);
+    expect(line.style.fontSize).toBe('11px');
+    expect(line.style.lineHeight).toBe('1.2');
+    expect(line.style.marginTop).toBe('');
+
+    // And the two lines that were already there are untouched.
+    const name = findLine('Priya Shah');
+    expect(name.style.fontSize).toBe('13px');
+    expect(name.style.lineHeight).toBe('1.3');
+    const org = findLine('Acme Ltd');
+    expect(org.style.fontSize).toBe('11px');
+    expect(org.style.lineHeight).toBe('1.3');
+    expect(org.style.marginTop).toBe('1px');
+
+    // 13*1.3 + 11*1.2 + 11*1.3 + 1 = 45.4 <= 48
+    const budget = 13 * 1.3 + 11 * 1.2 + 11 * 1.3 + 1;
+    expect(budget).toBeLessThanOrEqual(48);
+  });
+
+  it('ranks the email above the organisation in the grey hierarchy', () => {
+    // jsdom normalises a hex colour to rgb(), so compare in that space
+    // rather than asserting the literal token string.
+    const asRgb = (hex) => {
+      const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+      return `rgb(${r}, ${g}, ${b})`;
+    };
+    const email = 'priya.shah@acme.co.uk';
+    render(<AppSidebar {...baseProps} isHR={true}
+      currentUser={{ name: 'Priya Shah' }} authEmail={email} org={{ id: 'org1', name: 'Acme Ltd' }} />);
+    expect(findLine(email).style.color).toBe(asRgb(COLOR.inkSoft));
+    expect(findLine('Acme Ltd').style.color).toBe(asRgb(COLOR.inkFaint));
+    // The two greys must stay distinguishable from each other.
+    expect(findLine(email).style.color).not.toBe(findLine('Acme Ltd').style.color);
+  });
+
+  it('shows the email on the mobile account menu too, not only the desktop rail', () => {
+    render(<AppSidebar {...baseProps} isHR={true} isMobile={true} showMobileNav={true}
+      currentUser={{ name: 'Priya Shah' }} authEmail="priya.shah@acme.co.uk"
+      org={{ id: 'org1', name: 'Acme Ltd' }} />);
+    expect(screen.getAllByText('priya.shah@acme.co.uk').length).toBeGreaterThan(0);
+  });
+
+  it('adds no new control to the account popover, so sign-out and org switching are unchanged', () => {
+    const onSignOut = vi.fn();
+    render(<AppSidebar {...baseProps} isHR={true} onSignOut={onSignOut}
+      currentUser={{ name: 'Priya Shah' }} authEmail="priya.shah@acme.co.uk"
+      org={{ id: 'org1', name: 'Acme Ltd' }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
+    const menu = screen.getByRole('menu', { name: 'Account' });
+    // The email is identity shown on the trigger, not an item in the menu.
+    expect(menu.textContent).not.toContain('priya.shah@acme.co.uk');
+    fireEvent.click(screen.getByText('Sign out'));
+    expect(onSignOut).toHaveBeenCalledTimes(1);
+  });
+});
