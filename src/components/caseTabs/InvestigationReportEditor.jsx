@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { COLOR, TYPE, BUTTON, RADIUS } from '../../styles/tokens';
-import { REPORT_SECTIONS, composeReportBody } from '../../lib/reportDraftComposer';
+import { REPORT_SECTIONS, composeReportBody, sectionHeadingCollisions } from '../../lib/reportDraftComposer';
 import {
   DRAFT_STATE, READ_ONLY_REASON, describeDraftState, canConfirmRebase,
 } from '../../lib/reportDraftSession';
@@ -273,6 +273,10 @@ export function InvestigationReportEditor({
   const liveBody = session.rawMode ? (live.raw || '') : composeReportBody(live.sections);
   const liveUnsaved = !readOnly && liveBody !== (session.savedBody || '');
   const liveReason = (live.hrReason || '').trim();
+  // Computed from the LIVE text, so the warning appears as the line is typed
+  // rather than after a save has already stored it. Meaningless in raw mode,
+  // where there are no section boundaries to collide with.
+  const headingCollisions = session.rawMode ? [] : sectionHeadingCollisions(live.sections);
 
   // ── Read-only, nothing written: explain and offer no boxes ─────────────
   if (readOnly && (session.savedBody || '').trim() === '' && liveBody.trim() === '') {
@@ -393,6 +397,38 @@ export function InvestigationReportEditor({
                 Trying again repeats the same request, so it cannot create a duplicate version.
               </span>
             )}
+          </div>
+        )}
+
+        {/* ── A HEADING THAT COMPASS WILL READ AS A SECTION BOUNDARY ──────
+            Warned, never rewritten, and never a reason to refuse the save.
+            The investigator's words are stored exactly as typed; what changes
+            is where they reappear when the report is next opened. */}
+        {headingCollisions.length > 0 && (
+          <div
+            role="status"
+            aria-live="polite"
+            style={{
+              marginTop: 12, padding: "10px 12px", borderRadius: RADIUS.surface,
+              background: COLOR.amberTint, border: `1px solid ${COLOR.amber}33`,
+            }}
+          >
+            <p style={{ ...TYPE.micro, color: COLOR.amber, margin: "0 0 6px" }}>
+              A HEADING YOU HAVE TYPED MATCHES A COMPASS SECTION
+            </p>
+            <ul style={{ ...TYPE.metadata, color: COLOR.inkSoft, margin: "0 0 6px", paddingLeft: 18, lineHeight: 1.6 }}>
+              {headingCollisions.map((c, i) => (
+                <li key={`${c.sectionId}-${i}`}>
+                  <strong>{c.sectionLabel}</strong> contains the line &ldquo;{c.line}&rdquo;, which Compass reads as the
+                  start of {c.selfReference ? 'this same section' : `“${c.headingLabel}”`}.
+                </li>
+              ))}
+            </ul>
+            <p style={{ ...TYPE.metadata, color: COLOR.inkSoft, margin: 0, lineHeight: 1.6 }}>
+              You can save exactly as it is and every word will be kept — but when this report is reopened, the text
+              after that line may appear in a different box, or the whole report may open as one block of text instead
+              of seven sections. Changing the line, or removing the two hashes in front of it, avoids that.
+            </p>
           </div>
         )}
 

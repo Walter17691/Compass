@@ -11,7 +11,7 @@ import { resolveNextStepMeeting, describeUnresolvedNextStep, NEXT_STEP_TARGET } 
 import { hasGuidedProcess } from '../lib/nextStep';
 import { caseStatusLabel, isClosedStage, describeWhatIsHappening } from '../lib/caseViewSummary';
 import { reasonForDefaultSurface, scheduledMeetingWhen, hasSubstantiveContext, hasCaseInformation } from '../lib/caseSurface';
-import { caseWorkspaceDestinations, destinationForLegacyTab, DEFAULT_DESTINATION } from '../lib/caseWorkspace';
+import { caseWorkspaceDestinations, destinationForLegacyTab, DEFAULT_DESTINATION, isWorkspaceDestination } from '../lib/caseWorkspace';
 import { canRecordOutcome, hasReachedOutcomeStage } from '../lib/outcomeReachability';
 import { hasGuidedStages } from '../lib/processStages';
 import { CaseWorkspaceNav } from '../components/CaseWorkspaceNav';
@@ -101,7 +101,7 @@ const DRAFTED_TYPE_LABELS = { invite:"invitation letter", outcome:"outcome lette
 // themesTab/aiTab) are referenced as group.field only at that tab's own
 // single JSX call site, same pattern as OverviewTab/SettingsScreen.
 export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPrepareScheduledMeeting, onOpenReviewForMeeting, onCancelScheduledMeeting, onRescheduleMeeting,
-  shell = {}, header = {}, initialTab, clearInitialTab, deleteCaseTask,
+  shell = {}, header = {}, initialTab, urlTab, clearInitialTab, deleteCaseTask,
   overview = {}, timeline = {}, allegationsTab = {}, meetingsTab = {},
   evidenceTab = {}, documentsTab = {}, themesTab = {}, aiTab = {},
 }) {
@@ -150,7 +150,15 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   // Wave B.2 corrective — the workspace below the case always has a destination
   // open. That is the point of horizontal navigation: there is no "everything
   // closed" state to scroll past, and no row to open before anything is visible.
-  const [activeTab, setActiveTab] = useState(DEFAULT_DESTINATION);
+  // Seeded from the URL at mount rather than applied in an effect, so there
+  // is no cascading render and no window in which the wrong destination is
+  // shown first. destinationForLegacyTab returns null for anything it does
+  // not recognise, so rubbish in the URL simply leaves the default.
+  const [activeTab, setActiveTab] = useState(() => destinationForLegacyTab(urlTab) || DEFAULT_DESTINATION);
+  // Whether the CURRENT destination came from the URL. Only a URL-sourced
+  // destination is validated against what the case offers; in-app navigation
+  // keeps its existing right to open an empty one.
+  const [tabFromUrl, setTabFromUrl] = useState(() => !!destinationForLegacyTab(urlTab));
   // "View full record" used to set a section that withRequestedSection appended
   // to the END of a long accordion — it opened correctly, a thousand pixels
   // below the fold, so clicking it appeared to do nothing. The workspace is now
@@ -158,6 +166,7 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   const workspaceRef = useRef(null);
   const goToDestination = (id) => {
     setActiveTab(id);
+    setTabFromUrl(false);
     requestAnimationFrame(() => {
       const el = workspaceRef.current;
       if (!el) return;
@@ -209,7 +218,7 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   // hand right after landing here.
   // Deep links speak the OLD section vocabulary and must still land.
   // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- one-time, prop-driven sync on a genuine value change, same shape as this file's own changesBannerDismissed effect and the mailParam/calendarParam effects in App.jsx that this rule doesn't flag consistently.
-  useEffect(() => { if(initialTab) { setActiveTab(destinationForLegacyTab(initialTab) || DEFAULT_DESTINATION); clearInitialTab?.(); } }, [initialTab]);
+  useEffect(() => { if(initialTab) { setActiveTab(destinationForLegacyTab(initialTab) || DEFAULT_DESTINATION); setTabFromUrl(false); clearInitialTab?.(); } }, [initialTab]);
 
   // ── B3.2-0 — the case's saved report versions, READ ONLY ────────────────
   //
@@ -775,7 +784,27 @@ export function CaseViewScreen({ onResumeMeeting, onStartScheduledMeeting, onPre
   });
   // activeTab still carries the value every existing deep link sets, translated
   // into the destination vocabulary so no saved link breaks.
-  const activeDestination = destinationForLegacyTab(activeTab) || DEFAULT_DESTINATION;
+  //
+  // B3.2 — AND, WHEN IT CAME FROM THE URL, VALIDATED AGAINST WHAT THIS CASE
+  // OFFERS. ?tab=inv_report on a case that is not investigating, or
+  // ?tab=themes for a non-HR viewer, would otherwise render a panel the
+  // workspace deliberately withholds. isWorkspaceDestination has existed in
+  // caseWorkspace.js since B3.2-0 for exactly this and was never wired up.
+  //
+  // ONLY URL-SOURCED DESTINATIONS ARE VALIDATED, and that distinction is the
+  // whole point. An in-app link may open a destination that is merely EMPTY —
+  // "Case information" on a case with none, "Outcome" before there is one —
+  // which is the principle withRequestedSection used to carry and which the
+  // tab smoke tests lock in. Validating those too would have quietly broken
+  // deep links the product relies on. A URL is a string from outside and gets
+  // no such latitude.
+  //
+  // This is NOT the access boundary — RLS is, and every panel renders only
+  // data this user already loaded. It is the visibility boundary.
+  const requestedDestination = destinationForLegacyTab(activeTab) || DEFAULT_DESTINATION;
+  const activeDestination = (tabFromUrl && !isWorkspaceDestination(requestedDestination, workspaceDestinations))
+    ? DEFAULT_DESTINATION
+    : requestedDestination;
 
   const handleNextStepAction = () => {
     if(!nextStep) return;

@@ -92,6 +92,27 @@ export const REPORT_SECTION_IDS = Object.freeze(REPORT_SECTIONS.map(s => s.id));
 
 const HEADING_TO_ID = new Map(REPORT_SECTIONS.map(s => [s.heading.toLowerCase(), s.id]));
 
+/**
+ * Does this ONE line start a Compass section, and if so which?
+ *
+ * THE SINGLE DEFINITION, used by the parser below and by
+ * sectionHeadingCollisions. They have to agree: a warning that fired on a
+ * different rule from the one the parser applies would be worse than no
+ * warning, because it would be confidently wrong in both directions — telling
+ * an investigator their text will move when it will not, and staying silent
+ * when it will. Sharing the function makes disagreement impossible rather
+ * than unlikely, and a test asserts the two stay in step.
+ *
+ * Only a line START counts, the match is on the whole line, and the
+ * comparison is case-insensitive because that is what the parser does.
+ */
+export function sectionIdForHeadingLine(line) {
+  if (typeof line !== 'string') return null;
+  const m = /^##\s+(.+?)\s*$/.exec(line);
+  if (!m) return null;
+  return HEADING_TO_ID.get(m[1].toLowerCase()) || null;
+}
+
 /** An empty set of sections. Every id present, every value an empty string. */
 export function emptyReportSections() {
   const out = {};
@@ -171,12 +192,12 @@ export function parseReportBody(body) {
   let preamble = '';
 
   for (let i = 0; i < lines.length; i += 1) {
-    const m = /^##\s+(.+?)\s*$/.exec(lines[i]);
-    if (!m) {
+    const isHeadingShaped = /^##\s+.+?\s*$/.test(lines[i]);
+    if (!isHeadingShaped) {
       if (found.length === 0) preamble += (preamble === '' ? '' : '\n') + lines[i];
       continue;
     }
-    const id = HEADING_TO_ID.get(m[1].toLowerCase());
+    const id = sectionIdForHeadingLine(lines[i]);
     // AN UNRECOGNISED h2 IS ORDINARY TEXT, NOT A REASON TO GIVE UP.
     //
     // This started out as a bail-out, and that was wrong in the most ordinary
@@ -240,4 +261,49 @@ export function bodyRoundTripsExactly(body) {
   const parsed = parseReportBody(body);
   if (!parsed.exact) return false;
   return composeReportBody(parsed.sections) === (typeof body === 'string' ? body : '');
+}
+
+/**
+ * Lines in a section that the PARSER would read as the start of a Compass
+ * section — so the investigator can be told before they save.
+ *
+ * WHY WARN RATHER THAN FIX. Three options were available and two are wrong.
+ * Rewriting the line (escaping the hashes) would edit somebody's report
+ * without asking, which is the one thing this editor must never do. Refusing
+ * the save would block a legitimate, if awkward, draft — and incomplete and
+ * awkward drafts are expressly allowed. So the text is stored exactly as
+ * typed and the investigator is told what will happen to its PLACEMENT.
+ *
+ * NOTHING IS LOST IN EITHER OUTCOME. If the heading belongs to a later
+ * section, the text after it reopens in that section's box. If it belongs to
+ * an earlier one, or repeats this section's own heading, the document no
+ * longer round-trips and reopens as a single raw text box. Both preserve
+ * every character — bodyRoundTripsExactly is what guarantees it — and both
+ * change where the words appear, which is exactly what the warning says.
+ *
+ * Returns one entry per offending line, in document order, so a draft with
+ * several is reported in full rather than one at a time.
+ */
+export function sectionHeadingCollisions(sections) {
+  const s = normaliseSections(sections);
+  const out = [];
+  for (const section of REPORT_SECTIONS) {
+    const lines = s[section.id].split('\n');
+    for (let i = 0; i < lines.length; i += 1) {
+      const headingId = sectionIdForHeadingLine(lines[i]);
+      if (!headingId) continue;
+      const target = REPORT_SECTIONS.find(x => x.id === headingId);
+      out.push({
+        sectionId: section.id,
+        sectionLabel: section.label,
+        headingId,
+        headingLabel: target ? target.label : headingId,
+        line: lines[i].trim(),
+        // True when the line repeats the heading of the very section it sits
+        // in, which is the shape that forces raw mode rather than a move.
+        selfReference: headingId === section.id,
+      });
+    }
+  }
+  return out;
 }

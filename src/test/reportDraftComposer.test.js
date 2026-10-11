@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   REPORT_SECTIONS, REPORT_SECTION_IDS, emptyReportSections, normaliseSections,
   sectionsAreEmpty, emptySectionIds, composeReportBody, parseReportBody,
-  bodyRoundTripsExactly,
+  bodyRoundTripsExactly, sectionHeadingCollisions, sectionIdForHeadingLine,
 } from '../lib/reportDraftComposer.js';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -239,5 +239,163 @@ describe('B3.2-1 — emptiness is reported, never filled in', () => {
   it('invents no text for an empty section — every value is the empty string', () => {
     const e = emptyReportSections();
     for (const id of REPORT_SECTION_IDS) expect(e[id]).toBe('');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// B3.2 PRE-ACTIVATION — THE HEADING-COLLISION WARNING.
+//
+// The predicate must agree with the PARSER exactly. A warning computed from a
+// different rule would be confidently wrong in both directions: promising a
+// move that will not happen, and staying silent about one that will. Both
+// now call sectionIdForHeadingLine, and the first test below is the one that
+// keeps them honest.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('B3.2 — sectionHeadingCollisions agrees with the parser', () => {
+  it('uses the SAME rule the parser uses, line for line', () => {
+    const probes = [
+      '## Overall summary', '##   Overall summary  ', '## OVERALL SUMMARY',
+      '## overall summary', '## Appendices', '  ## Overall summary',
+      '### Overall summary', '#Overall summary', 'Overall summary',
+      '> ## Overall summary', '"## Overall summary"', '## Overall summary extra',
+      '## 7. Overall summary', '',
+    ];
+    for (const line of probes) {
+      const viaHelper = sectionIdForHeadingLine(line);
+      // What the parser does with a one-section document made of this line.
+      const parsed = parseReportBody(`${line}\nbody text`);
+      const parserTreatedItAsSummary = parsed.exact && parsed.sections.summary === 'body text';
+      expect(parserTreatedItAsSummary, `parser vs helper disagree on ${JSON.stringify(line)}`)
+        .toBe(viaHelper === 'summary');
+    }
+  });
+
+  it('is total on rubbish', () => {
+    for (const v of [null, undefined, 42, {}, []]) expect(sectionIdForHeadingLine(v)).toBeNull();
+  });
+});
+
+describe('B3.2 — every Compass heading is detected, wherever it is typed', () => {
+  it('detects all seven headings typed inside another section', () => {
+    for (const target of REPORT_SECTIONS) {
+      const host = REPORT_SECTIONS.find(s => s.id !== target.id);
+      const sections = { ...emptyReportSections(), [host.id]: `Context.\n## ${target.heading}\nMore.` };
+      const hits = sectionHeadingCollisions(sections);
+      expect(hits, target.id).toHaveLength(1);
+      expect(hits[0].sectionId, target.id).toBe(host.id);
+      expect(hits[0].headingId, target.id).toBe(target.id);
+      expect(hits[0].sectionLabel, target.id).toBe(host.label);
+      expect(hits[0].selfReference, target.id).toBe(false);
+    }
+  });
+
+  it('detects a section that repeats its OWN heading, and marks it as such', () => {
+    const hits = sectionHeadingCollisions({ ...emptyReportSections(), summary: 'A.\n## Overall summary\nB.' });
+    expect(hits).toHaveLength(1);
+    expect(hits[0].selfReference).toBe(true);
+    expect(hits[0].headingId).toBe('summary');
+  });
+
+  it('matches case-insensitively and tolerates surrounding whitespace, as the parser does', () => {
+    for (const line of ['## OVERALL SUMMARY', '## overall summary', '##    Overall summary   ']) {
+      const hits = sectionHeadingCollisions({ ...emptyReportSections(), matters: `x\n${line}\ny` });
+      expect(hits, line).toHaveLength(1);
+      expect(hits[0].headingId, line).toBe('summary');
+    }
+  });
+
+  it('reports MULTIPLE collisions, in document order, across sections', () => {
+    const hits = sectionHeadingCollisions({
+      ...emptyReportSections(),
+      matters: 'a\n## Evidence considered\nb\n## Overall summary\nc',
+      assessment: 'd\n## Position on each matter\ne',
+    });
+    expect(hits).toHaveLength(3);
+    expect(hits.map(h => [h.sectionId, h.headingId])).toEqual([
+      ['matters', 'evidence'],
+      ['matters', 'summary'],
+      ['assessment', 'positions'],
+    ]);
+  });
+});
+
+describe('B3.2 — no false warning for ordinary investigator text', () => {
+  it('stays silent for a clean report', () => {
+    expect(sectionHeadingCollisions(filled())).toEqual([]);
+    expect(sectionHeadingCollisions(emptyReportSections())).toEqual([]);
+  });
+
+  it('stays silent for NUMBERED heading variants, which the parser does not match', () => {
+    // The house idiom in the 50 legacy reports is "## 4. Evidence reviewed".
+    // None of these is a Compass marker, so none may be warned about.
+    for (const line of [
+      '## 1. Matters under investigation', '## 2. Evidence considered',
+      '## 7. Overall summary', '## Section 5: Findings', '## PART 1 — Evidence on Record',
+    ]) {
+      const sections = { ...emptyReportSections(), matters: `x\n${line}\ny` };
+      expect(sectionHeadingCollisions(sections), line).toEqual([]);
+      // And the parser really does leave them as content.
+      const body = composeReportBody(sections);
+      expect(parseReportBody(body).exact, line).toBe(true);
+      expect(bodyRoundTripsExactly(body), line).toBe(true);
+    }
+  });
+
+  it('stays silent for a heading QUOTED inside evidence, which is not a heading', () => {
+    for (const line of [
+      '> ## Overall summary',                      // blockquote
+      '"## Overall summary"',                      // quoted
+      'The email said "## Overall summary".',      // inline
+      '    ## Overall summary',                    // indented code-ish
+      '#### Overall summary',                      // h4, not h2
+      '##Overall summary',                         // no space
+    ]) {
+      const sections = { ...emptyReportSections(), evidence: `Exhibit 3 reads:\n${line}\nEnds.` };
+      expect(sectionHeadingCollisions(sections), line).toEqual([]);
+    }
+  });
+
+  it('stays silent for ordinary headings an investigator would plausibly write', () => {
+    for (const line of ['## Appendices', '## Background', '## Findings', '## Evidence reviewed', '## Conclusion']) {
+      expect(sectionHeadingCollisions({ ...emptyReportSections(), matters: `x\n${line}\ny` }), line).toEqual([]);
+    }
+  });
+
+  it('is total on rubbish input and never throws', () => {
+    for (const v of [null, undefined, 42, 'str', [], { matters: 7 }]) {
+      expect(() => sectionHeadingCollisions(v)).not.toThrow();
+      expect(Array.isArray(sectionHeadingCollisions(v))).toBe(true);
+    }
+  });
+});
+
+describe('B3.2 — the warning changes nothing about the text', () => {
+  it('a colliding draft still round-trips byte-exactly when the heading moves text', () => {
+    // Heading of a LATER section: the document still recomposes identically.
+    const sections = { ...emptyReportSections(), matters: 'Context.\n\n## Overall summary\n\nMore.' };
+    const body = composeReportBody(sections);
+    expect(sectionHeadingCollisions(sections)).toHaveLength(1);
+    expect(bodyRoundTripsExactly(body)).toBe(true);
+    const back = parseReportBody(body);
+    expect(composeReportBody(back.sections)).toBe(body);     // not one byte lost
+  });
+
+  it('a self-referencing collision falls to raw mode, still losing nothing', () => {
+    const sections = { ...emptyReportSections(), summary: 'A.\n\n## Overall summary\n\nB.' };
+    const body = composeReportBody(sections);
+    expect(sectionHeadingCollisions(sections)[0].selfReference).toBe(true);
+    // Duplicate heading => not our document => raw, with the text intact.
+    expect(bodyRoundTripsExactly(body)).toBe(false);
+    expect(parseReportBody(body).raw).toBe(body);
+    expect(parseReportBody(body).raw).toContain('A.');
+    expect(parseReportBody(body).raw).toContain('B.');
+  });
+
+  it('detecting a collision does not alter the sections it was given', () => {
+    const sections = { ...emptyReportSections(), matters: 'x\n## Overall summary\ny' };
+    const snapshot = JSON.stringify(sections);
+    sectionHeadingCollisions(sections);
+    expect(JSON.stringify(sections)).toBe(snapshot);
   });
 });

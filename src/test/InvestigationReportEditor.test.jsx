@@ -622,3 +622,104 @@ describe('B3.2-1 — no real organisation can reach an editable field', () => {
     expect(beginSave(session, { newRequestId: 'r1' }).request).toBeNull();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// B3.2 PRE-ACTIVATION — THE HEADING-COLLISION WARNING ON SCREEN.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('B3.2 — the heading warning is shown, accessible, and never blocking', () => {
+  const colliding = () => editSections(open(), { matters: 'Context.\n## Overall summary\nMore.' });
+
+  it('names the affected section, the line, and what Compass will read it as', () => {
+    renderEditor({ session: colliding() });
+    expect(screen.getByText(/A HEADING YOU HAVE TYPED MATCHES A COMPASS SECTION/i)).toBeTruthy();
+    const item = screen.getByText(/which Compass reads as the start of/i);
+    expect(item.textContent).toMatch(/Matters under investigation/);
+    expect(item.textContent).toMatch(/## Overall summary/);
+    expect(item.textContent).toMatch(/Overall investigation summary/);
+  });
+
+  it('promises the text is kept and says only the placement may change', () => {
+    renderEditor({ session: colliding() });
+    const note = screen.getByText(/every word will be kept/i).textContent;
+    expect(note).toMatch(/save exactly as it is/i);
+    expect(note).toMatch(/may appear in a different box/i);
+    expect(note).toMatch(/one block of text instead/i);
+  });
+
+  it('is announced to assistive technology', () => {
+    const { container } = render(
+      <InvestigationReportEditor session={colliding()} authorNameFor={authorNameFor} fmtDate={fmtDate} />,
+    );
+    const live = container.querySelector('[role="status"]');
+    expect(live).toBeTruthy();
+    expect(live.getAttribute('aria-live')).toBe('polite');
+  });
+
+  it('does NOT block saving', () => {
+    renderEditor({ session: colliding() });
+    expect(screen.getByRole('button', { name: /Save a version/i }).disabled).toBe(false);
+  });
+
+  it('sends the text UNCHANGED when saved despite the warning', async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderEditor({ session: colliding() });
+    await user.click(screen.getByRole('button', { name: /Save a version/i }));
+    expect(onSave.mock.calls[0][1].sections.matters).toBe('Context.\n## Overall summary\nMore.');
+  });
+
+  it('describes a self-referencing heading as this same section', () => {
+    renderEditor({ session: editSections(open(), { summary: 'A.\n## Overall summary\nB.' }) });
+    expect(screen.getByText(/which Compass reads as the start of this same section/i)).toBeTruthy();
+  });
+
+  it('lists every collision when there are several', () => {
+    renderEditor({ session: editSections(open(), {
+      matters: 'a\n## Evidence considered\nb',
+      assessment: 'c\n## Position on each matter\nd',
+    }) });
+    expect(screen.getAllByText(/which Compass reads as the start of/i)).toHaveLength(2);
+  });
+
+  it('appears as the line is TYPED, before any save or blur', async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    expect(screen.queryByText(/MATCHES A COMPASS SECTION/i)).toBeNull();
+    const box = screen.getByLabelText(REPORT_SECTIONS[0].label);
+    await user.click(box);
+    await user.type(box, '## Overall summary');
+    expect(box).toHaveFocus();
+    expect(screen.getByText(/MATCHES A COMPASS SECTION/i)).toBeTruthy();
+  });
+
+  it('disappears when the line is changed', async () => {
+    const user = userEvent.setup();
+    renderEditor({ session: colliding() });
+    expect(screen.getByText(/MATCHES A COMPASS SECTION/i)).toBeTruthy();
+    const box = screen.getByLabelText(REPORT_SECTIONS[0].label);
+    await user.clear(box);
+    await user.type(box, 'Context. Overall summary follows.');
+    expect(screen.queryByText(/MATCHES A COMPASS SECTION/i)).toBeNull();
+  });
+
+  it('stays silent for ordinary text, numbered headings and quoted headings', () => {
+    renderEditor({ session: editSections(open(), {
+      matters: 'x\n## 1. Matters under investigation\ny',
+      evidence: 'Exhibit 3 reads:\n> ## Overall summary\nEnds.',
+      summary: '## Appendices',
+    }) });
+    expect(screen.queryByText(/MATCHES A COMPASS SECTION/i)).toBeNull();
+  });
+
+  it('is not shown in raw mode, where there are no section boundaries', () => {
+    renderEditor({ session: open({ body: 'Legacy report.\n## Overall summary\nMore.' }) });
+    expect(screen.queryByText(/MATCHES A COMPASS SECTION/i)).toBeNull();
+  });
+
+  it('is not shown on a read-only editor', () => {
+    renderEditor({ session: createDraftSession({
+      caseId: CASE, baseVersion: 0, canSave: false, readOnlyReason: READ_ONLY_REASON.NOT_ACTIVATED,
+    }) });
+    expect(screen.queryByText(/MATCHES A COMPASS SECTION/i)).toBeNull();
+  });
+});

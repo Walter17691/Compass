@@ -188,8 +188,17 @@ export function caseWorkspaceDestinations({
 // Every destination id the workspace can render, so a deep link or a restored
 // tab can be validated without the caller knowing the shape.
 export function isWorkspaceDestination(id, dests) {
-  if (!id || !dests) return false;
-  return [...dests.primary, ...dests.secondary].some(d => d.id === id);
+  if (!id || typeof id !== 'string' || !dests || typeof dests !== 'object') return false;
+  // Normalising rather than trusting the shape. B3.2 made this load-bearing:
+  // it now gates which destination a URL may open, so it runs on every case
+  // render. Spreading a missing `primary` threw a TypeError and would have
+  // taken the whole case view down instead of falling back to the default —
+  // the same reason hasInvestigationSignal above normalises its inputs. A
+  // predicate that decides whether a destination appears must answer, not
+  // throw.
+  const primary = Array.isArray(dests.primary) ? dests.primary : [];
+  const secondary = Array.isArray(dests.secondary) ? dests.secondary : [];
+  return [...primary, ...secondary].some(d => d && d.id === id);
 }
 
 // Responsive overflow. The navigation must never wrap into an unusable bar and

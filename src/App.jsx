@@ -348,6 +348,14 @@ export default function Compass({ user=null, org=null, member=null, availableOrg
       caseId: params.get('case') || null,
       employeeId: params.get('employee') || null,
       employeeTab: params.get('tab') || null,
+      // B3.2 — the SAME `tab` parameter, read for the case workspace too.
+      // It was only ever wired to the Employee File, so ?screen=case_view&
+      // tab=inv_report silently opened the default destination instead. Both
+      // readings are kept because only one screen consumes each, and the
+      // value is VALIDATED against the case's own authorised destination
+      // list in CaseViewScreen — a URL cannot conjure a destination the case
+      // does not offer this user.
+      caseTab: params.get('tab') || null,
       meetingId: params.get('meeting') || null,
       // Phase 4C.3 refresh fix — which store owns the meeting the URL names.
       // Explicit, so recovery never has to guess from a missing case.
@@ -7370,6 +7378,23 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   // choices), not just filed as a fresh, unrelated email.
   const [replyMatch, setReplyMatch] = useState(null); // {caseId, name, subject, recipient, rawText}
   const [caseViewInitialTab, setCaseViewInitialTab] = useState(null);
+  // B3.2 — the destination named by the URL, kept SEPARATE from the in-app
+  // initialTab above and never merged with it.
+  //
+  // The two have different trust. An in-app link is the product choosing a
+  // destination it knows about, and may open one that is merely empty — a
+  // deep link to Case information on a case with none must still land, which
+  // is the principle withRequestedSection used to carry. A URL is a string
+  // from outside, and must not be able to open a destination the workspace
+  // withholds. Keeping them apart is what lets CaseViewScreen validate one
+  // without changing the behaviour of the other.
+  //
+  // Read only when the URL is actually opening a case, so an Employee File
+  // ?tab= cannot leak into the case workspace.
+  const [caseUrlTab] = useState(() => {
+    const nav = readNavFromUrl();
+    return nav.screen === SCREENS.CASE_VIEW && nav.caseId ? nav.caseTab : null;
+  });
   const [replyAnalysis, setReplyAnalysis] = useState(null); // {isPostponementRequest, isNewIssue, summary}
   const [replyAnalysisLoading, setReplyAnalysisLoading] = useState(false);
   const clearReplyMatch = () => { setReplyMatch(null); setReplyAnalysis(null); setReplyAnalysisLoading(false); };
@@ -12906,6 +12931,7 @@ Please produce:
             changesSummaryLoading: changesSummaryLoading[activeCaseId],
           }}
           initialTab={caseViewInitialTab}
+          urlTab={caseUrlTab}
           clearInitialTab={()=>setCaseViewInitialTab(null)}
           deleteCaseTask={deleteCaseTask}
           overview={{
