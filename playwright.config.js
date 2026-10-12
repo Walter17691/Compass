@@ -1,4 +1,21 @@
 import { defineConfig, devices } from '@playwright/test';
+import { assertE2ESupabaseTarget } from './tests/e2e/supabaseTarget.js';
+
+// ── E2E PREFLIGHT, FAIL CLOSED ──
+//
+// Runs at config load, which is BEFORE Playwright starts the webServer
+// below and before it collects a single spec — so a wrong or missing
+// target stops the run outright rather than after `npm run dev` has
+// already booted the app against it. Throwing here is what makes the
+// production fallback in src/supabase.js unreachable from a test run:
+// that fallback only applies when VITE_SUPABASE_URL is absent, and an
+// absent VITE_SUPABASE_URL no longer gets this far.
+//
+// Identical in CI and locally, deliberately. There is no CI-only branch
+// and no opt-out env var: an escape hatch here would be the first thing
+// reached for in a hurry, which is exactly when it must not exist.
+// See tests/e2e/supabaseTarget.js for what is accepted and why.
+assertE2ESupabaseTarget();
 
 // E2E tests run against the local dev server, same as the app itself in
 // dev — this covers everything except /api/calendar, /api/portal and

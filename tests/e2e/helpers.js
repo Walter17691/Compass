@@ -1,4 +1,5 @@
 import { expect } from '@playwright/test';
+import { assertE2ESupabaseTarget } from './supabaseTarget.js';
 
 // Reads E2E_TEST_EMAIL/E2E_TEST_PASSWORD from the environment rather than
 // hardcoding credentials in spec files — set these against a dedicated
@@ -214,12 +215,17 @@ export async function logout(page) {
 // timestamp) targets the same project the app itself is pointed at —
 // npm run test:e2e loads .env via node's own --env-file flag before
 // Playwright starts, so these are populated the same way for both.
-// Falls back to production only so an existing local .env without these
-// two lines doesn't silently break; the whole point of this gate is that
-// CI and any properly-configured local run should set them to the
-// separate compass-e2e-test project instead.
-export const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://npeegfsoijhdnnvuqjin.supabase.co';
-export const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5wZWVnZnNvaWpoZG5udnVxamluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0NTU2MjYsImV4cCI6MjA5NzAzMTYyNn0.IPdANRIK94XdCWy7aK1MOiIVqYgPKmvN8_ZJ6LCENBI';
+//
+// E2E PREFLIGHT — these two used to end in `|| '<production URL>'` and
+// `|| '<production anon key>'`. That default was the bypass: any test
+// making a direct REST call with an unset VITE_SUPABASE_URL aimed it at
+// the live database, and the hardcoded production anon key meant the
+// request would actually be accepted. Both defaults are now gone and the
+// value comes from the same validated source the preflight in
+// playwright.config.js uses, so there is no longer any expression in this
+// file that can resolve to production. See tests/e2e/supabaseTarget.js.
+export const SUPABASE_URL = assertE2ESupabaseTarget();
+export const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
 
 // Reads the currently logged-in session's own access token out of
 // localStorage — the same RLS-scoped credential the app's own Supabase
