@@ -241,7 +241,7 @@ describe('NEW-44 — customer-data tables cannot silently lose RLS', () => {
     expect(missing, `Classified but absent from the RLS reading: ${missing.join(', ')}`).toEqual([]);
   });
 
-  it('RLS is enabled on all 47 tables, as measured', () => {
+  it('RLS is enabled on all 49 tables, every one measured against production', () => {
     // 43 before D4.2; case_decisions brings it to 44, with RLS enabled and two
     // policies (select inheriting case access, insert requiring decision authority).
     const enabled = Object.values(RECORDED_RLS_2026_10_03).filter(r => r.rls).length;
@@ -262,11 +262,11 @@ describe('NEW-44 — customer-data tables cannot silently lose RLS', () => {
     // pg_class and pg_policy were re-read after that application, so it enters
     // as a production-verified reading and PENDING_PRODUCTION_SCHEMA stays
     // empty — the same route investigation_report_versions took after B3.1.
-    expect(Object.keys(RECORDED_RLS_2026_10_03)).toHaveLength(47);
-    expect(enabled).toBe(47);
+    expect(Object.keys(RECORDED_RLS_2026_10_03)).toHaveLength(49);
+    expect(enabled).toBe(49);
     const verified = Object.keys(RECORDED_RLS_2026_10_03)
       .filter(t => !PENDING_PRODUCTION_SCHEMA.includes(t));
-    expect(verified, 'production-verified RLS readings').toHaveLength(47);
+    expect(verified, 'production-verified RLS readings').toHaveLength(49);
     expect(RECORDED_RLS_2026_10_03.case_decisions).toEqual({ rls: true, policies: 2 });
     // IR-REPORT-01b/B2: one SELECT policy and one RESTRICTIVE INSERT
     // `with check (false)`. No UPDATE or DELETE policy exists, deliberately.
@@ -314,10 +314,14 @@ describe('NEW-44D — structural tenancy is derived from the corpus', () => {
     // case_decisions from D4.2 = 38, + investigation_finding_revisions from
     // IR-REPORT-01b/B2 = 39, + investigation_report_versions from B3.1 = 40,
     // + organisation_report_settings from B3 A3a (applied 2026-10-11) = 41,
-    // where org_id is the PRIMARY KEY rather than a plain column.
+    // where org_id is the PRIMARY KEY rather than a plain column,
+    // + investigation_report_lifecycle_events and hr_review_clarifications
+    // from the B3 A3c candidate = 43. Those two are DECLARED but NOT applied;
+    // see PENDING_PRODUCTION_SCHEMA. The corpus replay counts what the
+    // repository declares, which is the point of the gate.
     // The parser is checked against production, not against another list in
     // this repository.
-    expect(tables).toHaveLength(41);
+    expect(tables).toHaveLength(43);
     for (const t of tables) expect(t.columns, `${t.name}`).toContain('org_id');
   });
 

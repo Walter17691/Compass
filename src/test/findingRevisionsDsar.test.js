@@ -92,7 +92,16 @@ describe('B2 — the revision table is registered, classified and erasable', () 
     //
     // Asserted as empty rather than deleted: "nothing is pending" is a claim
     // worth failing on the day it stops being true.
+    //
+    // It stopped being true for a day: the B3 A3c candidate declared two tables
+    // that were not yet applied, and this assertion named them. A3c was applied
+    // on 2026-10-12 at 11:01:33Z and its live posture confirmed, so both names
+    // moved into the VERIFIED reading and the list is empty again. The
+    // discharged claims above are untouched: every name listed there was
+    // genuinely applied and re-read, and none may reappear here.
     expect(PENDING_PRODUCTION_SCHEMA).not.toContain('investigation_report_versions');
+    expect(PENDING_PRODUCTION_SCHEMA).not.toContain('investigation_report_lifecycle_events');
+    expect(PENDING_PRODUCTION_SCHEMA).not.toContain('hr_review_clarifications');
     expect(PENDING_PRODUCTION_SCHEMA).toEqual([]);
   });
 });

@@ -154,6 +154,17 @@ export const CASCADE_COVERED_TABLES = [
   // handler's per-table delete would fail rather than clean up. Cascade is the
   // only route, and it is the one the guard is written to permit.
   'investigation_report_versions',
+  // B3 A3c (candidate 841322fe..., NOT APPLIED). Both carry
+  // (case_id, org_id) -> cases(id, org_id) NOT NULL ON DELETE CASCADE, so the
+  // handler's own `cases` delete erases them. Naming either in
+  // ORG_SCOPED_TABLES would be inert AND harmful: both have append-only
+  // guards, and a direct per-table DELETE would be refused while the parent
+  // case still exists. Cascade is the only route, and the guards are written
+  // to permit exactly it -- they allow a delete only once the parent case is
+  // already gone, which is the signature of an authorised erasure. A probe
+  // proved the unconditional form broke "Delete all data" outright.
+  'investigation_report_lifecycle_events',
+  'hr_review_clarifications',
 ];
 
 // Tables with an org_id column that are deliberately left alone by

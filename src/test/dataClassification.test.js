@@ -292,10 +292,26 @@ describe('NEW-44 — retention is recorded as unenforced, not invented', () => {
     // It flips to INCLUDED, and leaves this list, in B3.4.
     // B3.4 discharged investigation_report_versions' obligation by genuinely
     // reading the table (reportVersionGateway + compileSubjectData, proven by
-    // a wiring test on the downloaded bytes), so it left this list. team_invites
-    // is now the only accepted-but-unimplemented obligation again.
+    // a wiring test on the downloaded bytes), so it left this list.
+    //
+    // B3 A3c adds hr_review_clarifications on exactly the same terms, and
+    // declaring it here is the mechanism working rather than a regression. The
+    // table holds HR's questions and the investigator's answers about a named
+    // employee, so it is plainly owed to that subject -- but
+    // api/portal/_dsar-lookup.js does not read it, and it must never be
+    // released automatically: a clarification round can quote a witness or a
+    // third party, so it needs the same human review and redaction as a
+    // meeting record. Classifying it INCLUDED today would record an obligation
+    // no code performs. It flips to INCLUDED, and leaves this list, only when
+    // compileSubjectData genuinely reads it under human review.
+    //
+    // NOTE: the table is also PENDING_PRODUCTION_SCHEMA -- the A3c migration is
+    // not applied -- so this obligation is declared ahead of the data existing,
+    // which is the right order.
+    // Order follows TABLE_CLASSIFICATION's declaration order, not the alphabet.
     expect(unwired).toEqual([
       { table: 'team_invites', defect: 'NEW-45' },
+      { table: 'hr_review_clarifications', defect: 'A3c-DSAR' },
     ]);
     for (const row of unwired) {
       expect(row.defect, `${row.table} claims an unwired DSAR obligation with no defect reference`).toBeTruthy();

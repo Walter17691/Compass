@@ -112,8 +112,28 @@ export const SECURITY_POSTURE = Object.freeze({
 // │ together with its migration file and its entries below.                   │
 // └─────────────────────────────────────────────────────────────────────────┘
 export const PENDING_PRODUCTION_SCHEMA = Object.freeze([
-  // Empty, and that is a true statement rather than an oversight: every table
-  // this codebase declares now exists in production.
+  // EMPTY AGAIN, and it is a true statement. The two A3c tables sat here
+  // while the slice was a candidate; hr_review_lifecycle_mutex_2026-10-12.sql
+  // (SHA-256 a953483c...) was applied to production on 2026-10-12 at
+  // 11:01:33Z, pg_class and pg_policy were re-read afterwards (49 base tables,
+  // both tables present, RLS enabled, exactly one SELECT policy each, 0 rows),
+  // and both names moved into the VERIFIED live reading in
+  // src/test/schemaInventoryGate.test.js. The RLS entries below are therefore
+  // production-measured facts, not candidate readings.
+  //
+  // This list was EMPTY between 2026-10-09 and the A3c candidate. That history
+  // is kept because it is the useful part: investigation_report_versions (B3.1)
+  // was the previous entry, its posture had been measured on branch
+  // cjijgutnwpqovyjzdvrq rather than on production, and the entry said to
+  // remove it once applied and the live posture confirmed. The migration was
+  // applied on 2026-10-09, pg_class/pg_policies were re-read (46 base tables,
+  // RLS enabled, exactly two policies -- matching), and it moved into the
+  // verified live reading in src/test/schemaInventoryGate.test.js.
+  //
+  // Leaving it non-empty then would have been the cheaper lie. Adding to it now
+  // is the same discipline in the other direction: the two A3c tables are
+  // declared by the corpus and absent from production, so every gate that would
+  // otherwise assert a production fact about them reads this list instead.
   //
   // investigation_report_versions (B3.1) was the last entry. Its posture had
   // been measured on branch cjijgutnwpqovyjzdvrq rather than on production,
@@ -179,6 +199,15 @@ export const RECORDED_RLS_2026_10_03 = Object.freeze({
   org_events: { rls: true, policies: 4 },
   org_members: { rls: true, policies: 3 },
   org_roles: { rls: true, policies: 4 },
+  // B3 A3c, APPLIED to production 2026-10-12. One PERMISSIVE SELECT
+  // policy each, delegated to the caller's own `cases` RLS. No INSERT, UPDATE
+  // or DELETE policy and no table-level write grant for anon, authenticated
+  // OR service_role: the only writers are the SECURITY DEFINER triggers and
+  // RPCs, which run as postgres and so need no grant. A probe showed that
+  // leaving service_role's default grant in place let it INSERT a forged
+  // adoption event.
+  investigation_report_lifecycle_events: { rls: true, policies: 1 },
+  hr_review_clarifications: { rls: true, policies: 1 },
   // B3 A3a — applied to production 2026-10-11 and pg_class/pg_policy re-read
   // afterwards, so this is a measured production fact and not a branch
   // reading. One PERMISSIVE SELECT policy
@@ -387,6 +416,13 @@ export const TABLE_CLASSIFICATION = {
     { exclusionReason: 'Keyed to auth.users, not to an org. Erasing it would strip the acting HR Director\'s own identity while they remain an org_member.' }),
   platform_admins: t('Compass operator grants (granted/revoked by, when).', P, {}, D.NOT_APPLICABLE,
     { exclusionReason: 'A tenant-triggered write here would be a privilege-boundary change, which platform-admin isolation forbids.' }),
+
+  // ── B3 A3c, PENDING APPLICATION ──
+  hr_review_clarifications: t('HR\'s clarification questions on an investigation report and the investigator\'s answers.', C, { org: 1, person: 1, case_: 1 }, D.INCLUDED_NOT_WIRED,
+    { dsarDefect: 'A3c-DSAR',
+      dsarNote: 'Question-and-answer text about a named employee, so plainly owed to that subject -- but api/portal/_dsar-lookup.js does not read this table, and it must NEVER be released automatically: a clarification round can quote a witness or a third party, so it requires the same human review and redaction as a meeting record. Inventoried now so the gap is recorded rather than discovered after activation.' }),
+  investigation_report_lifecycle_events: t('Per-case ordering of report adoptions and formal HR returns.', C, { org: 1, case_: 1 }, D.INTERNAL_WITHHELD,
+    { dsarNote: 'Procedural metadata: which version was adopted or returned, when, and by which HR or investigator user. The actor is staff, not the employee subject, and it carries no report or employee content. The same facts reach a subject through audit_log, which records each adoption and return in its own right.' }),
   organisation_report_settings: t('Records that Compass switched an organisation to versioned report authoring.', P, { org: 1 }, D.NOT_APPLICABLE,
     { exclusionReason: 'Deleting it would silently revert the organisation to the legacy report regime — a configuration change only a Compass operator can make, via the SECURITY DEFINER activation RPC. CASCADEs from organisations, so it goes when the organisation genuinely goes. Not cascade-covered: that cascade runs from `cases`, which this handler deletes, whereas `organisations` survives it.',
       dsarNote: 'Holds org_id, two timestamps, and activated_by — a COMPASS OPERATOR\'s auth.users id, on the same footing as platform_admins. No employee or case content: verified live 2026-10-11 to carry neither employee_id nor case_id.' }),

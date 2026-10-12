@@ -181,10 +181,15 @@ describe('NEW-44 — the derived schema matches production', () => {
     'investigation_report_versions',
     // B3 A3a, applied 2026-10-11. Measured, not proposed: pg_class was re-read
     // after application (RLS enabled, exactly one SELECT policy, 0 rows), so it
-    // belongs in the VERIFIED reading rather than in PENDING_PRODUCTION_SCHEMA,
-    // which stays empty. Same route investigation_report_versions took after
-    // B3.1 was applied on 2026-10-09.
+    // belongs in the VERIFIED reading rather than in PENDING_PRODUCTION_SCHEMA.
+    // Same route investigation_report_versions took after B3.1 on 2026-10-09.
     'organisation_report_settings',
+    // B3 A3c, applied 2026-10-12 11:01:33Z by
+    // hr_review_lifecycle_mutex_2026-10-12.sql (a953483c...). Re-read from
+    // pg_class afterwards: both present, RLS enabled, one SELECT policy each,
+    // 0 rows, and no client write privilege on either (service_role included).
+    'investigation_report_lifecycle_events',
+    'hr_review_clarifications',
     'allegations', 'api_rate_limits', 'audit_log', 'calendar_connections',
     'calendar_synced_events', 'case_access', 'case_signals', 'case_tasks', 'case_themes',
     'case_decisions',
@@ -231,8 +236,9 @@ describe('NEW-44 — the derived schema matches production', () => {
       + 'A name belongs there only after it has been applied to production and read back '
       + 'out of pg_class.',
     ).toEqual([]);
-    // 47 since B3 A3a added organisation_report_settings on 2026-10-11.
-    expect(VERIFIED_LIVE_PUBLIC_TABLES_2026_10_02).toHaveLength(47);
+    // 47 after B3 A3a (2026-10-11); 49 since B3 A3c added the lifecycle event
+    // store and the clarification store on 2026-10-12.
+    expect(VERIFIED_LIVE_PUBLIC_TABLES_2026_10_02).toHaveLength(49);
   });
 
   it('proves no live table was created outside the migration corpus', () => {
