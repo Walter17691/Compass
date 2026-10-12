@@ -7,6 +7,7 @@ import { newId } from './lib/ids';
 import { addCalendarMonth, toISODateLocal } from './lib/dates';
 import { addWorkingDays } from './lib/dateMath';
 import { fetchAllPages } from './lib/paginatedFetch';
+import { decisionNoteMissing, decisionNoteRequirement } from './lib/approvals';
 import { ls, lsSet, orgScopedKey, clearAllOrgScopedData } from './lib/storage';
 import { findEmployeeByName, findEmployeeById, EMPLOYMENT_STATUSES, mapEmployeeRow } from './lib/employeeRecords';
 import { createEmployeeWrite, describeEmployeeCreateOutcome, EMPLOYEE_CREATE_RESULT } from './lib/employeeWrites';
@@ -5988,6 +5989,17 @@ Include all legally required elements. End with ## Next Steps checklist for HR.`
   const resolveInvestigationReview = async (reviewId, caseId, actionId, comments) => {
     const cs = cases.find(c=>c.id===caseId);
     if(!cs) return;
+    // Phase 0 stabilisation. The same rule the panel's disabled button states,
+    // enforced here so no caller can reach the database without it — the panel
+    // is the only caller today, but this handler is passed down through the
+    // overview prop bag and the case-level effects below run BEFORE the
+    // awaited write. Without this, an empty clarification request would revert
+    // the stage and write an audit event, then be refused by the A3c guard,
+    // leaving the case moved with no review row to match. Refuse first.
+    if(decisionNoteMissing(actionId, comments)) {
+      showToast(decisionNoteRequirement(actionId), "error");
+      return;
+    }
     // Case Closure Safety P0 remediation — this is the one closure route
     // that previously had neither confirmation nor a save-success check
     // before its audit call, even though it sits among five other equally-

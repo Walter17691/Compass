@@ -1,6 +1,6 @@
 import { COLOR, SPACE, TYPE } from '../styles/tokens';
 import { useState } from 'react';
-import { INVESTIGATION_REVIEW_STATUSES, investigationReviewStatusLabel } from '../lib/approvals';
+import { INVESTIGATION_REVIEW_STATUSES, investigationReviewStatusLabel, decisionNoteMissing, decisionNoteRequirement } from '../lib/approvals';
 
 // Manager Enablement (Phase 4, MP11, §17) — HR Review Gate. A separate
 // panel from ApprovalsPanel (P9's own approve/reject sign-off for
@@ -33,13 +33,39 @@ export function HrReviewGatePanel({ cs, hrReviewRequests, resolveInvestigationRe
             {r.status!=="pending"&&r.reviewed_by_name&&<div style={{fontSize:11,color:COLOR.inkFaint,marginTop:2}}>By {r.reviewed_by_name}{r.comments?": "+r.comments:""}</div>}
             {r.status==="pending"&&isHR&&r===pending&&(
               <div style={{marginTop:10}}>
-                <textarea aria-label="Review comments" value={comments} onChange={e=>setComments(e.target.value)} placeholder="Comments (optional)" rows={2}
+                {/* One field, two requirements. The note is optional for five of
+                    the six actions and mandatory for "Request clarification",
+                    so the label says both rather than claiming "(optional)" —
+                    which is what made the A3c guard look like a bug. */}
+                <textarea aria-label="Review comments" value={comments} onChange={e=>setComments(e.target.value)}
+                  aria-describedby={`hr-review-note-hint-${r.id}`}
+                  placeholder="Comments — required to request clarification, optional otherwise" rows={2}
                   style={{width:"100%",fontSize:12,border:`1px solid ${COLOR.border}`,borderRadius:6,padding:"6px 10px",color:COLOR.ink,boxSizing:"border-box",resize:"vertical",fontFamily:"DM Sans,system-ui,sans-serif",marginBottom:8}}/>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                  {INVESTIGATION_REVIEW_STATUSES.map(s=>(
-                    <button key={s.id} onClick={()=>{resolveInvestigationReview(r.id, cs.id, s.id, comments);setComments("");}}
-                      style={{fontSize:11,color:s.id==="approved"?"#FFFFFF":COLOR.inkSoft,background:s.id==="approved"?COLOR.green:"none",border:s.id==="approved"?"none":`1px solid ${COLOR.border}`,borderRadius:5,padding:"5px 10px",cursor:"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:s.id==="approved"?600:400}}>{s.actionLabel}</button>
-                  ))}
+                  {INVESTIGATION_REVIEW_STATUSES.map(s=>{
+                    // Real `disabled`, not just styling: that is what makes
+                    // Enter and Space on a focused button inert too, so the
+                    // keyboard path cannot bypass the rule.
+                    const blocked = decisionNoteMissing(s.id, comments);
+                    return (
+                      <button key={s.id} disabled={blocked} aria-disabled={blocked}
+                        title={blocked?decisionNoteRequirement(s.id):undefined}
+                        onClick={()=>{
+                          if(decisionNoteMissing(s.id, comments)) return;
+                          resolveInvestigationReview(r.id, cs.id, s.id, comments);setComments("");
+                        }}
+                        style={{fontSize:11,color:blocked?COLOR.inkFaint:s.id==="approved"?"#FFFFFF":COLOR.inkSoft,background:blocked?"none":s.id==="approved"?COLOR.green:"none",border:blocked?`1px dashed ${COLOR.borderFaint}`:s.id==="approved"?"none":`1px solid ${COLOR.border}`,borderRadius:5,padding:"5px 10px",cursor:blocked?"not-allowed":"pointer",fontFamily:"DM Sans,system-ui,sans-serif",fontWeight:s.id==="approved"&&!blocked?600:400}}>{s.actionLabel}</button>
+                    );
+                  })}
+                </div>
+                {/* Always rendered, so the textarea's aria-describedby always
+                    resolves. It explains the disabled button when one is
+                    disabled, and sets the expectation before the user types
+                    when none is. */}
+                <div id={`hr-review-note-hint-${r.id}`} style={{fontSize:11,color:COLOR.inkFaint,marginTop:6}}>
+                  {INVESTIGATION_REVIEW_STATUSES.some(s=>decisionNoteMissing(s.id, comments))
+                    ? decisionNoteRequirement("clarification_requested")
+                    : "A comment is optional for these decisions, except when requesting clarification."}
                 </div>
               </div>
             )}

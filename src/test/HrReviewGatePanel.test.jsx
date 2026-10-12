@@ -46,7 +46,11 @@ describe('HrReviewGatePanel', () => {
     const hrReviewRequests = [{ id: 'r1', case_id: 'c1', step: 'inv_report', status: 'pending', requested_at: '2026-08-14T10:00:00Z' }];
     render(<HrReviewGatePanel cs={cs} hrReviewRequests={hrReviewRequests} resolveInvestigationReview={resolveInvestigationReview} isHR={true} />);
 
-    await user.type(screen.getByPlaceholderText('Comments (optional)'), 'Needs more on the CCTV angle');
+    // Addressed by its aria-label, not its placeholder. The placeholder used
+    // to read "Comments (optional)", which Phase 0 corrected: the comment is
+    // mandatory for "Request clarification" since the A3c guard was applied.
+    // The label is the stable handle; the placeholder is copy.
+    await user.type(screen.getByLabelText('Review comments'), 'Needs more on the CCTV angle');
     await user.click(screen.getByRole('button', { name: 'Return for further investigation' }));
 
     expect(resolveInvestigationReview).toHaveBeenCalledWith('r1', 'c1', 'returned', 'Needs more on the CCTV angle');

@@ -72,3 +72,53 @@ export const INVESTIGATION_REVIEW_STATUSES = [
 export function investigationReviewStatusLabel(status) {
   return INVESTIGATION_REVIEW_STATUSES.find(s => s.id === status)?.statusLabel || "Awaiting HR review";
 }
+
+// ── Phase 0 stabilisation: which decisions need a written note ──
+//
+// B3 A3c (hr_review_lifecycle_mutex_2026-10-12.sql, applied to production
+// 2026-10-12) added this to hr_review_report_integrity_guard:
+//
+//     if new.status = 'clarification_requested' then
+//       if coalesce(btrim(new.comments), '') = '' then
+//         raise exception 'Requesting clarification needs a written question,
+//                          which is recorded on the case.'
+//
+// The guard's status branch has NO report_regime condition, so it governs
+// every case today, legacy included. The textarea meanwhile said "Comments
+// (optional)" for all six actions, so "Request clarification" with an empty
+// box went from working to failing with a database error. This states the
+// same rule where the user can act on it BEFORE the request is sent. It does
+// not replace the guard: the database stays the authority, and a caller that
+// skips this check is still refused there.
+//
+// DELIBERATELY STRICTER THAN THE DATABASE. Postgres btrim() with no second
+// argument strips SPACES ONLY — verified against production: btrim(E'\t') is
+// not '', so a tab-only or newline-only question SATISFIES the guard. JS
+// .trim() strips all whitespace, so this refuses inputs the database would
+// accept. Stricter is the safe direction (the user is asked for a real
+// question; nothing that would have been stored is now rejected by the
+// server), and it is the opposite of the mistranslation that caused the
+// adoption-predicate defect, where the SQL was LOOSER than the JS it was
+// copied from. The residual gap is the database's, not this module's, and is
+// recorded in docs/assessment-hr-review-decision-atomicity-2026-10-12.md
+// rather than patched here — closing it needs btrim(new.comments, E' \t\n\r')
+// in a migration, which this phase is not authorised to make.
+export const STATUSES_REQUIRING_A_WRITTEN_NOTE = Object.freeze(["clarification_requested"]);
+
+export function requiresWrittenNote(statusId) {
+  return STATUSES_REQUIRING_A_WRITTEN_NOTE.includes(statusId);
+}
+
+// The single predicate both the panel and the handler ask, so the disabled
+// button and the refusal can never disagree about what counts as empty.
+export function decisionNoteMissing(statusId, note) {
+  return requiresWrittenNote(statusId) && String(note ?? "").trim() === "";
+}
+
+// Why the button is disabled, in words, or null when it is not. Returned from
+// here rather than written into the component so the test asserts the rule and
+// the copy together.
+export function decisionNoteRequirement(statusId) {
+  if (!requiresWrittenNote(statusId)) return null;
+  return "Requesting clarification needs a written question — it is recorded on the case and sent to the investigator.";
+}
